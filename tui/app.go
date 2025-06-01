@@ -14,6 +14,7 @@ import (
 	"github.com/ionut-t/perp/pkg/clipboard"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/export"
+	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/llm/gemini"
 	"github.com/ionut-t/perp/pkg/server"
@@ -57,25 +58,27 @@ const (
 )
 
 type model struct {
-	width, height   int
-	serverSelection servers.Model
-	server          server.Server
-	db              *db.Database
-	err             error
-	loading         bool
-	viewport        viewport.Model
-	view            view
-	mode            mode
-	llm             llm.LLM
-	llmLogs         list.Model
-	logs            []chatLog
-	editor          editor.Model
-	sqlKeywords     map[string]lipgloss.Style
-	llmKeywords     map[string]lipgloss.Style
-	table           table.Model
-	dbSchema        string
-	message         string
-	queryResults    []map[string]any
+	width, height       int
+	serverSelection     servers.Model
+	server              server.Server
+	db                  *db.Database
+	err                 error
+	loading             bool
+	viewport            viewport.Model
+	view                view
+	mode                mode
+	llm                 llm.LLM
+	llmLogs             list.Model
+	logs                []chatLog
+	editor              editor.Model
+	sqlKeywords         map[string]lipgloss.Style
+	llmKeywords         map[string]lipgloss.Style
+	table               table.Model
+	dbSchema            string
+	message             string
+	queryResults        []map[string]any
+	historyLogs         []history.HistoryLog
+	currentHistoryIndex int
 }
 
 func New() model {
@@ -109,6 +112,11 @@ func New() model {
 	t.SetSize(80, 20)
 	t.SetSelectionMode(table.SelectionCell | table.SelectionRow)
 
+	historyLogs, err := history.Get()
+	if err != nil {
+		historyLogs = []history.HistoryLog{}
+	}
+
 	return model{
 		viewport:        viewport.New(0, 0),
 		llm:             gemini.New(apiKey),
@@ -119,6 +127,7 @@ func New() model {
 		table:           t,
 		mode:            modeInsert,
 		serverSelection: servers.New(),
+		historyLogs:     historyLogs,
 	}
 }
 
@@ -182,6 +191,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "alt+enter":
 			m.err = nil
 			m.message = ""
+			if logs, err := history.Add(m.editor.GetCurrentContent()); err == nil {
+				m.historyLogs = logs
+				m.currentHistoryIndex = 0
+			}
+
 			return m, m.sendQueryCmd()
 
 		case "esc":
@@ -265,6 +279,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					return m, exportCmd
 				}
+			}
+
+		case "shift+up":
+			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
+				lastQuery := m.historyLogs[m.currentHistoryIndex].Query
+
+				if m.currentHistoryIndex < len(m.historyLogs)-1 {
+					m.currentHistoryIndex++
+				} else {
+					m.currentHistoryIndex = 0
+				}
+
+				m.editor.SetContent(lastQuery)
+				m.editor.SetCursorPositionEnd()
+			}
+
+		case "shift+down":
+			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
+				lastQuery := m.historyLogs[m.currentHistoryIndex].Query
+
+				if m.currentHistoryIndex > 0 {
+					m.currentHistoryIndex--
+				} else {
+					m.currentHistoryIndex = len(m.historyLogs) - 1
+				}
+
+				m.editor.SetContent(lastQuery)
+				m.editor.SetCursorPositionEnd()
 			}
 		}
 
