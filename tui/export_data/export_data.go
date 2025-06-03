@@ -198,12 +198,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = nil
 			m.records, m.error = export.Load()
 			m.recordsMap = make(map[string]export.Record, len(m.records))
-			for _, r := range m.records {
-				m.recordsMap[r.Name] = r
+			for _, record := range m.records {
+				m.recordsMap[record.Name] = record
 			}
 
 			records := processRecords(m.records)
 			m.list.SetItems(records)
+			m.list.Select(0)
 		}
 
 	case editor.QuitMsg:
