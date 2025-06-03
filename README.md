@@ -19,15 +19,15 @@ go install github.com/ionut-t/perp
 
 ## Key Bindings
 
-| Key         | Action                      |
-| ----------- | --------------------------- |
-| `i`         | Enter insert mode           |
-| `esc`       | Return to normal mode       |
-| `alt+enter` | Send query                  |
-| `y`         | Yank/copy selected cell     |
-| `p`         | Paste in the editor         |
-| `e`         | Export selected row as JSON |
-| `E`         | Export all results as JSON  |
+| Key                 | Action                                    |
+| ------------------- | ----------------------------------------- |
+| `i`                 | Enter insert mode                         |
+| `esc`               | Return to normal mode                     |
+| `alt+enter`         | Send query                                |
+| `y`                 | Yank/copy selected cell                   |
+| `p`                 | Paste in the editor                       |
+| `export 1,2,3 data` | Export selected rows as JSON to data.json |
+| `export all data`   | Export all results as JSON to data.json   |
 
 ## Usage
 

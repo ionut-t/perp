@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -18,8 +19,11 @@ import (
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/llm/gemini"
 	"github.com/ionut-t/perp/pkg/server"
+	"github.com/ionut-t/perp/tui/command"
+	exportData "github.com/ionut-t/perp/tui/export_data"
 	"github.com/ionut-t/perp/tui/servers"
 	"github.com/ionut-t/perp/ui/list"
+	"github.com/ionut-t/perp/ui/styles"
 )
 
 const padding = 2
@@ -41,6 +45,8 @@ type queryFailureMsg struct {
 
 type clearYankMsg struct{}
 
+type clearNotificationMsg struct{}
+
 type view int
 
 const (
@@ -48,6 +54,7 @@ const (
 	viewMain
 	viewLLMLogs
 	viewDBSchema
+	viewExportData
 )
 
 type mode int
@@ -55,6 +62,15 @@ type mode int
 const (
 	modeNormal mode = iota
 	modeInsert
+)
+
+type focusedView int
+
+const (
+	focusedViewEditor focusedView = iota
+	focusedViewTable
+	focusedViewLLMLogs
+	focusedViewCommand
 )
 
 type model struct {
@@ -79,6 +95,10 @@ type model struct {
 	queryResults        []map[string]any
 	historyLogs         []history.HistoryLog
 	currentHistoryIndex int
+	exportData          exportData.Model
+	command             command.Model
+	focusedView         focusedView
+	notification        string
 }
 
 func New() model {
@@ -107,6 +127,7 @@ func New() model {
 
 	editor.SetInsertMode()
 	editor.Focus()
+	editor.DisableCommandMode(true)
 
 	t := table.New()
 	t.SetSize(80, 20)
@@ -125,6 +146,7 @@ func New() model {
 		sqlKeywords:     sqlKeywordsMap,
 		llmKeywords:     llmKeywordsMap,
 		table:           t,
+		command:         command.New(),
 		mode:            modeInsert,
 		serverSelection: servers.New(),
 		historyLogs:     historyLogs,
@@ -144,16 +166,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = msg.Width - padding*2
 		m.viewport.Height = msg.Height - padding*2
 
-		listHeight := max(m.height-lipgloss.Height(m.editor.View())-padding*2, 1)
+		height := max(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2, 1)
+
 		listWidth := max(m.width-padding*2, 1)
-		m.llmLogs.SetSize(listWidth, listHeight)
+		m.llmLogs.SetSize(listWidth, height)
 
-		tableHeight := max(m.height-lipgloss.Height(m.editor.View())-padding*2, 1)
-
-		m.table.SetSize(m.width-padding*2, tableHeight)
+		m.table.SetSize(m.width-padding*2, height)
 
 	case tea.KeyMsg:
-		if m.view == viewServers {
+		if m.focusedView == focusedViewCommand || m.view == viewServers || m.view == viewExportData {
 			break
 		}
 
@@ -171,6 +192,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.editor.IsNormalMode() {
 				db.Close(m.db)
 				return m, tea.Quit
+			}
+
+		case ":":
+			if m.editor.IsNormalMode() {
+				m.focusedView = focusedViewCommand
+				m.editor.Blur()
+				return m, cursor.Blink
 			}
 
 		case "S":
@@ -247,40 +275,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "e":
-			if m.mode == modeNormal {
-				if m.queryResults != nil {
-					idx := m.table.GetSelectedRow()
-
-					if idx >= 0 && idx < len(m.queryResults) {
-						row := m.queryResults[idx]
-
-						exportCmd, err := export.AsJson(row)
-
-						if err != nil {
-							m.err = err
-							return m, nil
-						}
-
-						return m, exportCmd
-					}
-				}
-			}
-
-		case "E":
-			if m.mode == modeNormal {
-				if m.queryResults != nil {
-					exportCmd, err := export.AsJson(m.queryResults)
-
-					if err != nil {
-						m.err = err
-						return m, nil
-					}
-
-					return m, exportCmd
-				}
-			}
-
 		case "shift+up":
 			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
 				lastQuery := m.historyLogs[m.currentHistoryIndex].Query
@@ -308,6 +302,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.SetContent(lastQuery)
 				m.editor.SetCursorPositionEnd()
 			}
+
+		case "g":
+			if m.mode == modeNormal {
+				m.message = ""
+				m.view = viewExportData
+				m.exportData = exportData.New(m.width, m.height)
+			}
 		}
 
 	case servers.SelectedServerMsg:
@@ -316,12 +317,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.server = msg.Server
 		m.db, m.err = db.Connect(m.server.ConnectionString())
 		if m.err == nil {
-			m.message = lipgloss.JoinVertical(
-				lipgloss.Left,
-				lipgloss.NewStyle().Render(fmt.Sprintf("Connected to server: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Name))),
-				lipgloss.NewStyle().Render(fmt.Sprintf("Database: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Database))),
-				lipgloss.NewStyle().Render(fmt.Sprintf("Host: %s", lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s:%d", m.server.Address, m.server.Port)))),
-			)
+			m.displayConnectionInfo()
 			return m, m.generateSchema()
 		}
 		m.loading = false
@@ -329,11 +325,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearYankMsg:
 		m.table.SetTheme(table.DefaultTheme())
 
-	case editor.SaveMsg:
-		return m, m.sendQueryCmd()
-
-	case editor.QuitMsg:
-		return m, tea.Quit
+	case clearNotificationMsg:
+		m.notification = ""
 
 	case schemaFetchedMsg:
 		m.dbSchema = string(msg)
@@ -385,31 +378,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		rows := [][]string{}
-
-		headers = append([]string{"#"}, headers...)
-
-		for i, row := range results {
-			rowData := make([]string, len(headers))
-			for j, header := range headers {
-				if val, ok := row[header]; ok {
-					rowData[j] = fmt.Sprintf("%v", val)
-				} else {
-					if header == "#" {
-						rowData[j] = fmt.Sprintf("%d", i+1)
-					} else {
-						rowData[j] = "NULL"
-					}
-				}
-			}
-			rows = append(rows, rowData)
-		}
+		rows, headers := m.buildDataTable(headers, results)
 
 		m.table.SetHeaders(headers)
 		m.table.SetRows(rows)
 		m.table.SetSelectedCell(0, 0)
 
 		m.mode = modeNormal
+		m.focusedView = focusedViewTable
 		m.editor.Blur()
 		m.editor.SetNormalMode()
 
@@ -441,6 +417,75 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.logs = append([]chatLog{newLog}, m.logs...)
 		m.llmLogs.SetItems(processLogs(m.logs))
+
+	case exportData.ClosedMsg:
+		m.view = viewMain
+		m.editor.SetContent("")
+		m.editor.Focus()
+
+		if m.queryResults == nil {
+			m.displayConnectionInfo()
+		}
+
+	case command.QuitMsg:
+		db.Close(m.db)
+		return m, tea.Quit
+
+	case command.CancelMsg:
+		m.focusedView = focusedViewEditor
+		m.editor.Focus()
+
+	case command.ExportMsg:
+		if m.queryResults != nil {
+			rows := msg.Rows
+			all := msg.All
+			fileName := msg.FileName
+
+			var data any
+
+			if len(rows) > 1 {
+				data = make([]map[string]any, 0)
+
+				for _, rowIdx := range rows {
+					idx := rowIdx - 1
+					if idx >= 0 && idx < len(m.queryResults) {
+						data = append(data.([]map[string]any), m.queryResults[idx])
+					}
+				}
+			} else if len(rows) == 1 {
+				idx := rows[0] - 1
+				if idx >= 0 && idx < len(m.queryResults) {
+					data = m.queryResults[idx]
+				}
+			}
+
+			if all {
+				data = make([]map[string]any, 0)
+				data = append(data.([]map[string]any), m.queryResults...)
+			}
+
+			err := export.AsJson(data, fileName)
+
+			if err != nil {
+				return m, m.errorNotification(err)
+			}
+
+			m.focusedView = focusedViewEditor
+			m.editor.Focus()
+			m.command.Reset()
+
+			return m, m.successNotification(
+				fmt.Sprintf("Data exported successfully to %s.json", fileName),
+			)
+		} else {
+		}
+
+		m.focusedView = focusedViewEditor
+		m.editor.Focus()
+		return m, m.errorNotification(fmt.Errorf("no query results to export"))
+
+	case command.ErrorMsg:
+		return m, m.errorNotification(msg.Err)
 	}
 
 	var cmds []tea.Cmd
@@ -452,7 +497,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.editor.SetHighlightedWords(m.setHighlightedKeywords())
-	if m.mode == modeNormal {
+
+	if m.focusedView == focusedViewTable && m.view == viewMain {
 		t, cmd := m.table.Update(msg)
 		m.table = t
 		cmds = append(cmds, cmd)
@@ -470,13 +516,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	if m.view == viewMain || m.view == viewLLMLogs {
+		editorModel, cmd := m.editor.Update(msg)
+		m.editor = editorModel.(editor.Model)
+		cmds = append(cmds, cmd)
+	}
+
 	if m.view == viewServers {
 		s, cmd := m.serverSelection.Update(msg)
 		m.serverSelection = s.(servers.Model)
 		cmds = append(cmds, cmd)
-	} else {
-		editorModel, cmd := m.editor.Update(msg)
-		m.editor = editorModel.(editor.Model)
+	}
+
+	if m.view == viewExportData {
+		exportDataModel, cmd := m.exportData.Update(msg)
+		m.exportData = exportDataModel.(exportData.Model)
+		cmds = append(cmds, cmd)
+		m.editor.SetContent(fmt.Sprintf("%v", m.view))
+	}
+
+	if m.focusedView == focusedViewCommand {
+		cmdModel, cmd := m.command.Update(msg)
+		m.command = cmdModel.(command.Model)
 		cmds = append(cmds, cmd)
 	}
 
@@ -488,8 +549,27 @@ func (m model) View() string {
 		return "Loading...\n"
 	}
 
-	height := max(m.height-lipgloss.Height(m.editor.View())-padding*2-2, 1)
+	var commandLine string
+
+	if m.focusedView == focusedViewCommand {
+		commandLine = m.command.View()
+	}
+
+	if m.notification != "" {
+		commandLine = m.notification
+	}
+
+	height := max(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2-2, 1)
 	width := max(m.width-padding*2, 1)
+
+	primaryView := lipgloss.JoinVertical(
+		lipgloss.Left,
+		lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(
+			m.editor.View(),
+		),
+		commandLine,
+	)
+
 	if m.err != nil {
 		return lipgloss.NewStyle().Padding(padding).Render(lipgloss.JoinVertical(
 			lipgloss.Left,
@@ -500,9 +580,7 @@ func (m model) View() string {
 				Width(width).
 				Border(lipgloss.RoundedBorder()).
 				Render(m.err.Error()),
-			lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(
-				m.editor.View(),
-			),
+			primaryView,
 		))
 	}
 
@@ -515,9 +593,7 @@ func (m model) View() string {
 				Width(width).
 				Border(lipgloss.RoundedBorder()).
 				Render(m.message),
-			lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(
-				m.editor.View(),
-			),
+			primaryView,
 		))
 	}
 
@@ -536,20 +612,20 @@ func (m model) View() string {
 			lipgloss.NewStyle().Height(m.height-lipgloss.Height(m.editor.View())-4).Render(
 				m.table.View(),
 			),
-			lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(m.editor.View()),
-		))
+			primaryView))
 
 	case viewLLMLogs:
 		return lipgloss.NewStyle().Padding(padding).Render(lipgloss.JoinVertical(
 			lipgloss.Left,
 			lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(m.llmLogs.View()),
-			lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Render(
-				m.editor.View(),
-			),
+			primaryView,
 		))
 
 	case viewDBSchema:
 		return lipgloss.NewStyle().Padding(padding).Render(m.viewport.View())
+
+	case viewExportData:
+		return m.exportData.View()
 	}
 
 	return ""
@@ -619,4 +695,57 @@ func (m model) dispatchClearYankMsg() tea.Cmd {
 	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
 		return clearYankMsg{}
 	})
+}
+
+func (model) buildDataTable(headers []string, results []map[string]any) ([][]string, []string) {
+	rows := [][]string{}
+
+	headers = append([]string{"#"}, headers...)
+
+	for i, row := range results {
+		rowData := make([]string, len(headers))
+		for j, header := range headers {
+			if val, ok := row[header]; ok {
+				rowData[j] = fmt.Sprintf("%v", val)
+			} else {
+				if header == "#" {
+					rowData[j] = fmt.Sprintf("%d", i+1)
+				} else {
+					rowData[j] = "NULL"
+				}
+			}
+		}
+		rows = append(rows, rowData)
+	}
+	return rows, headers
+}
+
+func (m *model) displayConnectionInfo() {
+	m.message = lipgloss.JoinVertical(
+		lipgloss.Left,
+		lipgloss.NewStyle().Render(fmt.Sprintf("Connected to server: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Name))),
+		lipgloss.NewStyle().Render(fmt.Sprintf("Database: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Database))),
+		lipgloss.NewStyle().Render(fmt.Sprintf("Host: %s", lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s:%d", m.server.Address, m.server.Port)))),
+	)
+}
+
+func (m *model) successNotification(msg string) tea.Cmd {
+	m.notification = styles.Success.Render(msg)
+
+	return m.clearNotification()
+}
+
+func (m *model) errorNotification(err error) tea.Cmd {
+	m.notification = styles.Error.Render(err.Error())
+
+	return m.clearNotification()
+}
+
+func (m *model) clearNotification() tea.Cmd {
+	return tea.Tick(
+		time.Second*2,
+		func(t time.Time) tea.Msg {
+			return clearNotificationMsg{}
+		},
+	)
 }
