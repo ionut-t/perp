@@ -559,7 +559,7 @@ func (m model) View() string {
 		commandLine = m.notification
 	}
 
-	height := max(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2-2, 1)
+	availableHeight := max(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2-2, 1)
 	width := max(m.width-padding*2, 1)
 
 	primaryView := lipgloss.JoinVertical(
@@ -576,7 +576,7 @@ func (m model) View() string {
 			lipgloss.NewStyle().
 				Padding(0, 1).
 				Foreground(lipgloss.Color("9")).
-				Height(height).
+				Height(availableHeight).
 				Width(width).
 				Border(lipgloss.RoundedBorder()).
 				Render(m.err.Error()),
@@ -589,7 +589,7 @@ func (m model) View() string {
 			lipgloss.Left,
 			lipgloss.NewStyle().
 				Padding(0, 1).
-				Height(height).
+				Height(availableHeight).
 				Width(width).
 				Border(lipgloss.RoundedBorder()).
 				Render(m.message),
@@ -609,9 +609,7 @@ func (m model) View() string {
 	case viewMain:
 		return lipgloss.NewStyle().Padding(padding).Render(lipgloss.JoinVertical(
 			lipgloss.Left,
-			lipgloss.NewStyle().Height(m.height-lipgloss.Height(m.editor.View())-4).Render(
-				m.table.View(),
-			),
+			lipgloss.NewStyle().Height(availableHeight).Render(m.table.View()),
 			primaryView))
 
 	case viewLLMLogs:
