@@ -94,9 +94,19 @@ func (d *Database) ExecuteQuery(query string) (QueryResult, error) {
 	case strings.HasPrefix(q, "select"):
 		result.queryType = QuerySelect
 	case strings.HasPrefix(q, "insert"):
-		result.queryType = QueryInsert
+		if strings.Contains(q, "returning") {
+			// If the query has a RETURNING clause, we treat it as a SELECT query
+			result.queryType = QuerySelect
+		} else {
+			result.queryType = QueryInsert
+		}
 	case strings.HasPrefix(q, "update"):
-		result.queryType = QueryUpdate
+		if strings.Contains(q, "returning") {
+			// If the query has a RETURNING clause, we treat it as a SELECT query
+			result.queryType = QuerySelect
+		} else {
+			result.queryType = QueryUpdate
+		}
 	case strings.HasPrefix(q, "delete"):
 		result.queryType = QueryDelete
 	default:

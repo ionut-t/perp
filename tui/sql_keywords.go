@@ -61,6 +61,7 @@ var SQL_KEYWORDS = [...]string{
 	"UNION",
 	"INTERSECT",
 	"EXCEPT",
+	"RETURNING",
 
 	"gen_random_uuid()",
 	"NOW()",
