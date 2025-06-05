@@ -174,6 +174,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetSize(m.width-padding*2, height)
 
 	case tea.KeyMsg:
+		if msg.Type == tea.KeyCtrlC {
+			db.Close(m.db)
+			return m, tea.Quit
+		}
+
 		if m.focusedView == focusedViewCommand || m.view == viewServers || m.view == viewExportData {
 			break
 		}
@@ -464,7 +469,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				data = append(data.([]map[string]any), m.queryResults...)
 			}
 
-			err := export.AsJson(data, fileName)
+			fileName, err := export.AsJson(data, fileName)
 
 			if err != nil {
 				return m, m.errorNotification(err)

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,32 +21,35 @@ type Record struct {
 }
 
 // AsJson exports the provided data as a JSON file and opens it in the configured editor.
-// It returns a tea.Cmd that can be executed to open the file, or an error if something goes wrong.
-func AsJson(data any, fileName string) error {
-	storage, err := config.GetStorage()
+func AsJson(data any, fileName string) (string, error) {
+	storage, _ := config.GetStorage()
+
+	records, err := Load()
 
 	if err != nil {
-		return err
+		return "", err
 	}
+
+	fileName = generateUniqueName(fileName, records)
 
 	storagePath := filepath.Join(storage, "exports")
 
 	if err := os.MkdirAll(storagePath, 0755); err != nil {
-		return err
+		return "", err
 	}
 
 	path := filepath.Join(storagePath, fileName+".json")
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if err := os.WriteFile(path, jsonData, 0644); err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return fileName, nil
 }
 
 // Load retrieves all export records from the configured storage directory.
@@ -95,6 +99,7 @@ func Load() ([]Record, error) {
 	return records, err
 }
 
+// Update writes the content of the provided record to the storage directory,
 func Update(record Record) error {
 	storage, err := config.GetStorage()
 	if err != nil {
@@ -106,6 +111,46 @@ func Update(record Record) error {
 	if err := os.WriteFile(path, []byte(record.Content), 0644); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// Delete removes the specified record from the storage directory.
+func Delete(record Record) error {
+	storage, err := config.GetStorage()
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(storage, "exports", record.Name+record.Extension)
+
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Rename changes the name of the record file to a new unique name.
+func (m *Record) Rename(newName string) error {
+	storage, _ := config.GetStorage()
+
+	records, err := Load()
+	if err != nil {
+		return err
+	}
+
+	fileName := generateUniqueName(newName, records)
+
+	oldPath := filepath.Join(storage, "exports", m.Name+m.Extension)
+	newPath := filepath.Join(storage, "exports", fileName+m.Extension)
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return err
+	}
+
+	m.Name = fileName
+	m.Path = newPath
 
 	return nil
 }
@@ -134,4 +179,18 @@ func loadRecordFromFile(path string) (Record, error) {
 		UpdatedAt: fileInfo.ModTime(),
 		Path:      path,
 	}, nil
+}
+
+func generateUniqueName(name string, records []Record) string {
+	uniqueName := name
+	counter := 1
+
+	for _, record := range records {
+		if record.Name == uniqueName {
+			uniqueName = name + "-" + strconv.Itoa(counter)
+			counter++
+		}
+	}
+
+	return uniqueName
 }

@@ -60,8 +60,12 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/ionut-t/goeditor/adapter-bubbletea v0.0.0-20250602203554-2af0606d555a h1:8rq7Voo8J70yTVX0L7KcfsClQKoPj55tX+/9H0hrAQ0=
 github.com/ionut-t/goeditor/adapter-bubbletea v0.0.0-20250602203554-2af0606d555a/go.mod h1:kYE0LRHg2rl45k1DMokEZDRFCy1GnJbAW+Q1hwd4Caw=
+github.com/ionut-t/goeditor/adapter-bubbletea v0.0.0-20250603201123-a19b48d722da h1:T1gPP37zn0d+FZMr8t0GJ/moeucMC0OHL72yuCPOKs8=
+github.com/ionut-t/goeditor/adapter-bubbletea v0.0.0-20250603201123-a19b48d722da/go.mod h1:kYE0LRHg2rl45k1DMokEZDRFCy1GnJbAW+Q1hwd4Caw=
 github.com/ionut-t/goeditor/core v0.0.0-20250602203554-2af0606d555a h1:gx3Dh2bKzlIcRgIC6Pd1E6RO85tvXm0L8KR7Qf3pP2I=
 github.com/ionut-t/goeditor/core v0.0.0-20250602203554-2af0606d555a/go.mod h1:sFe2iuAcaU8xyaYiiPEZBoY+0N+rljwdGH75msGiyBU=
+github.com/ionut-t/goeditor/core v0.0.0-20250603201123-a19b48d722da h1:071YFKcpCo5YN3wgcmyaCrbfMRzPC8QzIc9bc7xKuMA=
+github.com/ionut-t/goeditor/core v0.0.0-20250603201123-a19b48d722da/go.mod h1:sFe2iuAcaU8xyaYiiPEZBoY+0N+rljwdGH75msGiyBU=
 github.com/ionut-t/gotable v0.0.0-20250529201300-062831e40916 h1:0JaacytmkMyXTxO48meE+Gb2J90sUxJvqtKD5CxljHs=
 github.com/ionut-t/gotable v0.0.0-20250529201300-062831e40916/go.mod h1:YY4s6KP/yUrNMJkvMLDfhy7qflhiAxOqK2VnD4deWmI=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=

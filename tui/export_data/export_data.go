@@ -3,6 +3,7 @@ package export_data
 import (
 	"fmt"
 	"os/exec"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,6 +30,12 @@ var (
 
 type ClosedMsg struct{}
 
+type clearMsg struct{}
+
+var clearMessages = tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+	return clearMsg{}
+})
+
 type view int
 
 const (
@@ -48,7 +55,6 @@ type Model struct {
 	width, height  int
 	view           view
 	focusedView    focusedView
-	records        []export.Record
 	error          error
 	list           list.Model
 	editor         editor.Model
@@ -71,19 +77,6 @@ func New(width, height int) Model {
 
 	delegate.Styles = styles.ListItemStyles()
 
-	items := processRecords(records)
-
-	list := list.New(items, delegate, 80, 20)
-
-	list.Styles = styles.ListStyles()
-
-	list.FilterInput.PromptStyle = styles.Accent
-	list.FilterInput.Cursor.Style = styles.Accent
-
-	list.InfiniteScrolling = true
-	list.SetShowHelp(false)
-	list.SetShowTitle(false)
-
 	editorModel := editor.New(80, 20)
 	editorModel.SetCursorBlinkMode(true)
 
@@ -96,8 +89,20 @@ func New(width, height int) Model {
 		recordsMap[record.Name] = record
 	}
 
+	items := processRecords(recordsMap)
+
+	list := list.New(items, delegate, 80, 20)
+
+	list.Styles = styles.ListStyles()
+
+	list.FilterInput.PromptStyle = styles.Accent
+	list.FilterInput.Cursor.Style = styles.Accent
+
+	list.InfiniteScrolling = true
+	list.SetShowHelp(false)
+	list.SetShowTitle(false)
+
 	m := Model{
-		records:    records,
 		error:      err,
 		list:       list,
 		editor:     editorModel,
@@ -172,14 +177,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "e":
+			if m.editor.IsInsertMode() || m.editor.IsCommandMode() {
+				break
+			}
+
 			editor := config.GetEditor()
 			name := m.list.SelectedItem().(item).Title()
 			var path string
-			for _, r := range m.records {
-				if r.Name == name {
-					path = r.Path
-					break
-				}
+
+			if record, ok := m.recordsMap[name]; ok {
+				path = record.Path
+			} else {
+				m.error = fmt.Errorf("record not found: %s", name)
+				return m, nil
 			}
 
 			execCmd := tea.ExecProcess(exec.Command(editor, path), func(error) tea.Msg {
@@ -189,28 +199,93 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case editor.SaveMsg:
-		record := m.records[m.list.Index()]
+		record := m.recordsMap[m.list.SelectedItem().(item).Title()]
 		record.Content = string(msg)
 		err := export.Update(record)
 		if err != nil {
 			m.error = fmt.Errorf("failed to save record: %w", err)
 		} else {
 			m.error = nil
-			m.records, m.error = export.Load()
-			m.recordsMap = make(map[string]export.Record, len(m.records))
-			for _, record := range m.records {
-				m.recordsMap[record.Name] = record
-			}
+			records, err := export.Load()
+			m.error = err
 
-			records := processRecords(m.records)
-			m.list.SetItems(records)
-			m.list.Select(0)
+			if err == nil {
+				m.recordsMap = make(map[string]export.Record, len(records))
+				for _, record := range records {
+					m.recordsMap[record.Name] = record
+				}
+
+				records := processRecords(m.recordsMap)
+				m.list.SetItems(records)
+				m.list.Select(0)
+			}
 		}
 
 	case editor.QuitMsg:
 		return m, func() tea.Msg {
 			return ClosedMsg{}
 		}
+
+	case editor.DeleteFileMsg:
+		selected := m.list.SelectedItem()
+		current := m.recordsMap[selected.(item).Title()]
+
+		if err := export.Delete(current); err == nil {
+			m.error = nil
+			m.successMessage = "Record deleted successfully."
+			records, err := export.Load()
+			m.error = err
+
+			if err == nil {
+				m.recordsMap = make(map[string]export.Record, len(records))
+				for _, record := range records {
+					m.recordsMap[record.Name] = record
+				}
+
+				records := processRecords(m.recordsMap)
+				m.list.SetItems(records)
+			}
+
+			if len(records) > 0 {
+				selected = m.list.SelectedItem()
+				current = m.recordsMap[selected.(item).Title()]
+				m.editor.SetContent(current.Content)
+			} else {
+				m.editor.SetContent("")
+			}
+
+		} else {
+			m.error = fmt.Errorf("failed to delete record: %w", err)
+		}
+
+		return m, clearMessages
+
+	case editor.RenameMsg:
+		selected := m.list.SelectedItem()
+		current := m.recordsMap[selected.(item).Title()]
+
+		oldRecordName := current.Name
+		newName := msg.FileName
+
+		if newName == oldRecordName {
+			return m, nil
+		}
+
+		if err := current.Rename(newName); err == nil {
+			m.successMessage = "Record renamed successfully."
+			delete(m.recordsMap, oldRecordName)
+			m.recordsMap[current.Name] = current
+			m.list.SetItems(processRecords(m.recordsMap))
+
+		} else {
+			m.error = fmt.Errorf("failed to rename record: %w", err)
+		}
+
+		return m, clearMessages
+
+	case clearMsg:
+		m.successMessage = ""
+		m.error = nil
 	}
 
 	var cmds []tea.Cmd
@@ -236,7 +311,7 @@ func (m Model) View() string {
 		return "Error loading export records: " + m.error.Error()
 	}
 
-	if len(m.records) == 0 {
+	if len(m.recordsMap) == 0 {
 		return "No export records found."
 	}
 
@@ -451,14 +526,14 @@ func (m *Model) statusBarView() string {
 	))
 }
 
-func processRecords(records []export.Record) []list.Item {
-	items := make([]list.Item, len(records))
+func processRecords(records map[string]export.Record) []list.Item {
+	items := make([]list.Item, 0, len(records))
 
-	for i, record := range records {
-		items[i] = item{
+	for _, record := range records {
+		items = append(items, item{
 			title: record.Name,
 			desc:  fmt.Sprintf("Last modified: %s", record.UpdatedAt.Format("02/01/2006 15:04")),
-		}
+		})
 	}
 
 	return items
