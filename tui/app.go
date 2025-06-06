@@ -72,6 +72,7 @@ const (
 	focusedViewTable
 	focusedViewLLMLogs
 	focusedViewCommand
+	focusedViewNone
 )
 
 type model struct {
@@ -179,7 +180,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
-			m.closeDb()
+			m.closeDbConnection()
 			return m, tea.Quit
 		}
 
@@ -188,10 +189,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "ctrl+c":
-			m.closeDb()
-			return m, tea.Quit
-
 		case "q":
 			if m.dbError != nil {
 				m.serverSelection = servers.New(m.config.Storage())
@@ -208,7 +205,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.editor.IsNormalMode() {
-				m.closeDb()
+				m.closeDbConnection()
 				return m, tea.Quit
 			}
 
@@ -221,8 +218,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "S":
 			if m.editor.IsNormalMode() {
+				m.message = ""
 				m.error = nil
 				m.view = viewDBSchema
+			}
+
+		case "|":
+			if m.editor.IsNormalMode() {
+				m.message = ""
+				m.serverSelection = servers.New(m.config.Storage())
+				_, cmd := m.serverSelection.Update(nil)
+
+				m.view = viewServers
+				m.dbError = nil
+				return m, cmd
 			}
 
 		case "i":
@@ -331,6 +340,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case servers.SelectedServerMsg:
+		m.closeDbConnection()
 		m.view = viewMain
 		m.loading = true
 		m.server = msg.Server
@@ -447,7 +457,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case command.QuitMsg:
-		m.closeDb()
+		m.closeDbConnection()
 		return m, tea.Quit
 
 	case command.CancelMsg:
@@ -790,7 +800,7 @@ func (m *model) clearNotification() tea.Cmd {
 	)
 }
 
-func (m model) closeDb() {
+func (m model) closeDbConnection() {
 	if m.db != nil {
 		m.db.Close()
 	}

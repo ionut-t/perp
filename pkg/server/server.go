@@ -101,6 +101,10 @@ func save(server *Server, storage string) error {
 		}
 	}
 
+	servers = slices.DeleteFunc(servers, func(srv Server) bool {
+		return srv.ID == server.ID
+	})
+
 	servers = append(servers, *server)
 	slices.SortStableFunc(servers, func(a, b Server) int {
 		return -1 * a.CreatedAt.Compare(b.CreatedAt)

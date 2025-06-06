@@ -20,7 +20,7 @@ type view int
 
 const (
 	viewSelect view = iota
-	viewCreate
+	viewForm
 )
 
 type Model struct {
@@ -53,7 +53,7 @@ func New(storage string) Model {
 
 	var currentView view
 	if len(servers) == 0 {
-		currentView = viewCreate
+		currentView = viewForm
 	}
 
 	m := Model{
@@ -62,7 +62,7 @@ func New(storage string) Model {
 		view:    currentView,
 	}
 
-	if currentView == viewCreate {
+	if currentView == viewForm {
 		m.initialiseCreateForm()
 	} else {
 		m.initialiseSelectForm()
@@ -86,7 +86,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			if m.view == viewCreate && len(m.servers) > 0 {
+			if m.view == viewForm && len(m.servers) > 0 {
 				m.view = viewSelect
 				m.serverForm = nil
 			}
@@ -94,15 +94,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "n":
 			if m.view == viewSelect {
 				m.initialiseCreateForm()
-				m.view = viewCreate
+				m.view = viewForm
 				return m, cursor.Blink
 			}
 
 		case "e":
 			if m.view == viewSelect && m.selectForm != nil {
 				selected := m.selectForm.GetFocusedField().GetValue().(server.Server)
-				m.initialiseUpdateForm(selected)
-				m.view = viewCreate
+				m.editedServer = &selected
+				m.initialiseUpdateForm()
+				m.view = viewForm
 				return m, cursor.Blink
 			}
 
@@ -115,7 +116,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					if len(m.servers) == 0 {
 						m.initialiseCreateForm()
-						m.view = viewCreate
+						m.view = viewForm
 						m.selectForm = nil
 					} else {
 						m.initialiseSelectForm()
@@ -130,6 +131,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.view == viewSelect {
 				return m, tea.Quit
 			}
+
+		case "enter":
+			if m.selectForm != nil && m.view == viewSelect {
+				if server, ok := m.selectForm.GetFocusedField().GetValue().(server.Server); ok {
+					return m, func() tea.Msg {
+						return SelectedServerMsg{Server: server}
+					}
+
+				}
+			}
 		}
 	}
 
@@ -137,24 +148,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s, cmd := m.selectForm.Update(msg)
 		m.selectForm = s.(*huh.Form)
 		cmds = append(cmds, cmd)
-
-		if m.selectForm.State == huh.StateCompleted {
-			server := m.selectForm.Get("select").(server.Server)
-
-			return m, func() tea.Msg {
-				return SelectedServerMsg{Server: server}
-			}
-		}
 	}
 
-	if m.serverForm != nil && m.view == viewCreate {
+	if m.serverForm != nil && m.view == viewForm {
 		form, cmd := m.serverForm.Update(msg)
 		m.serverForm = form.(*huh.Form)
 		cmds = append(cmds, cmd)
 
 		if m.serverForm.State == huh.StateCompleted {
 			if m.editedServer != nil {
-				cmds = append(cmds, m.editServer())
+				m.editServer()
 			} else {
 				cmds = append(cmds, m.createServer())
 			}
@@ -247,16 +250,16 @@ func (m *Model) initialiseCreateForm() {
 	)
 }
 
-func (m *Model) initialiseUpdateForm(server server.Server) {
+func (m *Model) initialiseUpdateForm() {
 	name := huh.NewInput().Title("Name").Key("name")
-	name.Value(&server.Name)
+	name.Value(&m.editedServer.Name)
 	name.Validate(func(s string) error {
 		if s == "" {
 			return errors.New("name cannot be empty")
 		}
 
 		for _, srv := range m.servers {
-			if srv.Name != server.Name && srv.Name == s {
+			if srv.ID != m.editedServer.ID && srv.Name == s {
 				return errors.New("a server with this name already exists")
 			}
 		}
@@ -265,20 +268,20 @@ func (m *Model) initialiseUpdateForm(server server.Server) {
 	})
 
 	address := huh.NewInput().Title("Address").Key("address").Validate(validateAddress)
-	address.Value(&server.Address)
+	address.Value(&m.editedServer.Address)
 
-	portValue := strconv.Itoa(server.Port)
+	portValue := strconv.Itoa(m.editedServer.Port)
 	port := huh.NewInput().Title("Port").Key("port").Validate(validatePort)
 	port.Value(&portValue)
 
 	username := huh.NewInput().Title("Username").Key("username").Validate(validateUsername)
-	username.Value(&server.Username)
+	username.Value(&m.editedServer.Username)
 
 	password := huh.NewInput().Title("Password").Key("password").EchoMode(huh.EchoModePassword)
-	password.Value(&server.Password)
+	password.Value(&m.editedServer.Password)
 
 	database := huh.NewInput().Title("Database").Key("database").Validate(validateDatabase)
-	database.Value(&server.Database)
+	database.Value(&m.editedServer.Database)
 
 	name.Focus()
 
@@ -335,7 +338,7 @@ func (m *Model) createServer() tea.Cmd {
 
 	if err != nil {
 		m.serverForm.State = huh.StateNormal
-		m.view = viewCreate
+		m.view = viewForm
 	} else {
 		if len(m.servers) == 0 {
 			return func() tea.Msg {
@@ -355,7 +358,7 @@ func (m *Model) createServer() tea.Cmd {
 	return nil
 }
 
-func (m *Model) editServer() tea.Cmd {
+func (m *Model) editServer() {
 	name := m.serverForm.GetString("name")
 	address := m.serverForm.GetString("address")
 	port := m.serverForm.GetString("port")
@@ -377,7 +380,7 @@ func (m *Model) editServer() tea.Cmd {
 
 	if err != nil {
 		m.serverForm.State = huh.StateNormal
-		m.view = viewCreate
+		m.view = viewForm
 	} else {
 		for i, srv := range m.servers {
 			if srv.ID == m.editedServer.ID {
@@ -392,9 +395,8 @@ func (m *Model) editServer() tea.Cmd {
 
 		m.editedServer = nil
 		m.view = viewSelect
+		m.initialiseSelectForm()
 	}
-
-	return nil
 }
 
 func validateAddress(address string) error {
