@@ -9,8 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
-	"github.com/ionut-t/perp/internal/config"
-	"github.com/ionut-t/perp/pkg/export"
+	"github.com/ionut-t/perp/store/export"
 	"github.com/ionut-t/perp/ui/styles"
 )
 
@@ -32,9 +31,11 @@ type ClosedMsg struct{}
 
 type clearMsg struct{}
 
-var clearMessages = tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
-	return clearMsg{}
-})
+func clearMessages() tea.Cmd {
+	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
+		return clearMsg{}
+	})
+}
 
 type view int
 
@@ -52,14 +53,16 @@ const (
 )
 
 type Model struct {
-	width, height  int
+	store export.Store
+
+	width, height int
+
 	view           view
 	focusedView    focusedView
 	error          error
 	list           list.Model
 	editor         editor.Model
 	successMessage string
-	recordsMap     map[string]export.Record
 }
 
 type item struct {
@@ -70,8 +73,8 @@ func (i item) Title() string       { return i.title }
 func (i item) Description() string { return i.desc }
 func (i item) FilterValue() string { return i.title }
 
-func New(width, height int) Model {
-	records, err := export.Load()
+func New(store export.Store, width, height int) Model {
+	records, err := store.Load()
 
 	delegate := list.NewDefaultDelegate()
 
@@ -84,12 +87,7 @@ func New(width, height int) Model {
 		editorModel.SetContent(records[0].Content)
 	}
 
-	recordsMap := make(map[string]export.Record, len(records))
-	for _, record := range records {
-		recordsMap[record.Name] = record
-	}
-
-	items := processRecords(recordsMap)
+	items := processRecords(records)
 
 	list := list.New(items, delegate, 80, 20)
 
@@ -103,10 +101,10 @@ func New(width, height int) Model {
 	list.SetShowTitle(false)
 
 	m := Model{
-		error:      err,
-		list:       list,
-		editor:     editorModel,
-		recordsMap: recordsMap,
+		store:  store,
+		error:  err,
+		list:   list,
+		editor: editorModel,
 	}
 
 	m.handleWindowSize(tea.WindowSizeMsg{
@@ -181,43 +179,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 
-			editor := config.GetEditor()
-			name := m.list.SelectedItem().(item).Title()
-			var path string
+			path := m.store.GetCurrentRecord().Path
 
-			if record, ok := m.recordsMap[name]; ok {
-				path = record.Path
-			} else {
-				m.error = fmt.Errorf("record not found: %s", name)
-				return m, nil
-			}
-
-			execCmd := tea.ExecProcess(exec.Command(editor, path), func(error) tea.Msg {
+			execCmd := tea.ExecProcess(exec.Command(m.store.Editor(), path), func(error) tea.Msg {
 				return nil
 			})
 			return m, execCmd
 		}
 
 	case editor.SaveMsg:
-		record := m.recordsMap[m.list.SelectedItem().(item).Title()]
+		record := m.store.GetCurrentRecord()
 		record.Content = string(msg)
-		err := export.Update(record)
+		err := m.store.Update(record)
 		if err != nil {
 			m.error = fmt.Errorf("failed to save record: %w", err)
 		} else {
 			m.error = nil
-			records, err := export.Load()
+			records, err := m.store.Load()
 			m.error = err
 
 			if err == nil {
-				m.recordsMap = make(map[string]export.Record, len(records))
-				for _, record := range records {
-					m.recordsMap[record.Name] = record
-				}
-
-				records := processRecords(m.recordsMap)
+				records := processRecords(records)
 				m.list.SetItems(records)
-				m.list.Select(0)
 			}
 		}
 
@@ -227,28 +210,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case editor.DeleteFileMsg:
-		selected := m.list.SelectedItem()
-		current := m.recordsMap[selected.(item).Title()]
+		current := m.store.GetCurrentRecord()
 
-		if err := export.Delete(current); err == nil {
+		if err := m.store.Delete(current); err == nil {
 			m.error = nil
 			m.successMessage = "Record deleted successfully."
-			records, err := export.Load()
+			records, err := m.store.Load()
 			m.error = err
 
 			if err == nil {
-				m.recordsMap = make(map[string]export.Record, len(records))
-				for _, record := range records {
-					m.recordsMap[record.Name] = record
-				}
-
-				records := processRecords(m.recordsMap)
+				records := processRecords(records)
 				m.list.SetItems(records)
 			}
 
 			if len(records) > 0 {
-				selected = m.list.SelectedItem()
-				current = m.recordsMap[selected.(item).Title()]
+				current = m.store.GetCurrentRecord()
 				m.editor.SetContent(current.Content)
 			} else {
 				m.editor.SetContent("")
@@ -258,11 +234,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = fmt.Errorf("failed to delete record: %w", err)
 		}
 
-		return m, clearMessages
+		return m, clearMessages()
 
 	case editor.RenameMsg:
-		selected := m.list.SelectedItem()
-		current := m.recordsMap[selected.(item).Title()]
+		current := m.store.GetCurrentRecord()
 
 		oldRecordName := current.Name
 		newName := msg.FileName
@@ -271,17 +246,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if err := current.Rename(newName); err == nil {
+		if err := m.store.Rename(&current, newName); err == nil {
 			m.successMessage = "Record renamed successfully."
-			delete(m.recordsMap, oldRecordName)
-			m.recordsMap[current.Name] = current
-			m.list.SetItems(processRecords(m.recordsMap))
+
+			return m, tea.Batch(
+				m.list.SetItem(m.list.Index(), item{
+					title: current.Name,
+					desc:  fmt.Sprintf("Last modified: %s", current.UpdatedAt.Format("02/01/2006 15:04")),
+				}),
+				clearMessages(),
+			)
 
 		} else {
 			m.error = fmt.Errorf("failed to rename record: %w", err)
 		}
 
-		return m, clearMessages
+		return m, clearMessages()
 
 	case clearMsg:
 		m.successMessage = ""
@@ -293,8 +273,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.focusedView == focusedViewList {
 		ls, cmd := m.list.Update(msg)
 		m.list = ls
-		selected := m.list.SelectedItem()
-		current := m.recordsMap[selected.(item).Title()]
+		if selectedItem, ok := m.list.SelectedItem().(item); ok {
+			m.store.SetCurrentRecordName(selectedItem.Title())
+		}
+		current := m.store.GetCurrentRecord()
 		m.editor.SetContent(current.Content)
 		cmds = append(cmds, cmd)
 	}
@@ -311,35 +293,11 @@ func (m Model) View() string {
 		return "Error loading export records: " + m.error.Error()
 	}
 
-	if len(m.recordsMap) == 0 {
-		return "No export records found."
-	}
-
 	switch m.view {
 	case viewList:
-		// if m.delete.active {
-		// 	return viewPadding.Render(m.list.View()) + "\n" + m.delete.View()
-		// }
-
-		// if m.renameInput.active {
-		// 	return m.getViewInRenameMode(viewPadding.Render(m.list.View()))
-		// }
-
-		// if m.cmdInput.active {
-		// 	return m.getViewInCmdMode()
-		// }
-
 		return viewPadding.Render(m.list.View()) + "\n" + m.statusBarView()
 
 	case viewRecord:
-		// if m.renameInput.active {
-		// 	return m.getViewInRenameMode(m.editor.View())
-		// }
-
-		// if m.cmdInput.active {
-		// 	return m.noteView.View() + "\n" + m.cmdInput.View()
-		// }
-
 		return m.editor.View()
 
 	case viewSplit:
@@ -352,9 +310,10 @@ func (m Model) View() string {
 
 func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 	if msg.Width < 2*minListWidth {
-		if m.view == viewSplit {
+		switch m.view {
+		case viewSplit:
 			m.view = viewList
-		} else if m.view == viewList {
+		case viewList:
 			m.view = viewSplit
 		}
 	}
@@ -363,13 +322,8 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 
 	availableWidth, availableHeight, cmdViewHeight := m.getAvailableSizes()
 
-	// m.help.SetSize(msg.Width, msg.Height)
-
-	// m.delete.width = msg.Width
-
 	if m.view == viewList {
 		m.list.SetSize(availableWidth, availableHeight)
-		// m.help.SetSize(msg.Width, msg.Height)
 	}
 
 	if m.view == viewRecord {
@@ -393,16 +347,6 @@ func (m *Model) getAvailableSizes() (int, int, int) {
 
 	var cmdExecutorHeight int
 	var deleteViewHeight int
-
-	// if m.renameInput.active {
-	// 	cmdExecutorHeight = lipgloss.Height(m.renameInput.View())
-	// }
-
-	// statusBarHeight := utils.Ternary(m.cmdInput.active || m.renameInput.active, 0, lipgloss.Height(m.statusBarView()))
-
-	// if m.delete.active {
-	// 	deleteViewHeight = lipgloss.Height(m.delete.View())
-	// }
 
 	statusBarHeight := lipgloss.Height(m.statusBarView())
 
@@ -456,30 +400,6 @@ func (m *Model) getSplitView() string {
 		joinedContent,
 	))
 
-	// if m.renameInput.active {
-	// 	if m.error != nil {
-	// 		return renderedView + "\n" + styles.Error.Margin(0, 2).Render(m.error.Error())
-	// 	}
-
-	// 	return renderedView + "\n" + m.renameInput.View()
-	// }
-
-	// if m.cmdInput.active {
-	// 	if m.error != nil {
-	// 		return renderedView + "\n" + styles.Error.Margin(0, 2).Render(m.error.Error())
-	// 	}
-
-	// 	return renderedView + "\n" + m.cmdInput.View()
-	// }
-
-	// if m.delete.active {
-	// 	return lipgloss.JoinVertical(
-	// 		lipgloss.Left,
-	// 		renderedView,
-	// 		m.delete.View(),
-	// 	)
-	// }
-
 	return renderedView + "\n" + m.statusBarView()
 }
 
@@ -492,41 +412,10 @@ func (m *Model) statusBarView() string {
 		return styles.Success.Margin(0, 2).Render(m.successMessage)
 	}
 
-	// if m.list.FilterState() == list.Filtering {
-	// 	m.help.Keys.ShortHelpBindings = []key.Binding{
-	// 		keymap.Cancel,
-	// 	}
-	// } else {
-	// 	m.help.Keys.ShortHelpBindings = []key.Binding{
-	// 		keymap.Select,
-	// 		keymap.QuickEditor,
-	// 		keymap.Rename,
-	// 		keymap.Search,
-	// 		keymap.Delete,
-	// 		keymap.New,
-	// 		keymap.Quit,
-	// 		keymap.Help,
-	// 	}
-	// }
-
-	// if m.delete.active {
-	// 	return ""
-	// }
-
-	// if m.help.FullView {
-	// 	return m.help.View()
-	// }
-
-	// return lipgloss.NewStyle().Margin(0, 2).Render(m.help.View())
-	return styles.Text.Render(fmt.Sprintf(
-		"View: %d | Focused: %d | Records: %d",
-		m.view,
-		m.focusedView,
-		m.list.Index(),
-	))
+	return ""
 }
 
-func processRecords(records map[string]export.Record) []list.Item {
+func processRecords(records []export.Record) []list.Item {
 	items := make([]list.Item, 0, len(records))
 
 	for _, record := range records {

@@ -24,6 +24,8 @@ const (
 )
 
 type Model struct {
+	storage string
+
 	servers       []server.Server
 	serverForm    *huh.Form
 	selectForm    *huh.Form
@@ -32,8 +34,8 @@ type Model struct {
 	width, height int
 }
 
-func New() Model {
-	servers, err := server.Load()
+func New(storage string) Model {
+	servers, err := server.Load(storage)
 
 	if err != nil {
 		servers = []server.Server{}
@@ -55,6 +57,7 @@ func New() Model {
 	}
 
 	m := Model{
+		storage: storage,
 		servers: servers,
 		view:    currentView,
 	}
@@ -107,7 +110,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.view == viewSelect && m.selectForm != nil {
 				selected := m.selectForm.GetFocusedField().GetValue().(server.Server)
 
-				if servers, err := server.Delete(selected.ID); err == nil {
+				if servers, err := server.Delete(selected.ID, m.storage); err == nil {
 					m.servers = servers
 
 					if len(m.servers) == 0 {
@@ -328,7 +331,7 @@ func (m *Model) createServer() tea.Cmd {
 		Database: database,
 	}
 
-	srv, err := server.New(newServer)
+	srv, err := server.New(newServer, m.storage)
 
 	if err != nil {
 		m.serverForm.State = huh.StateNormal
@@ -370,7 +373,7 @@ func (m *Model) editServer() tea.Cmd {
 		Username: username,
 		Password: password,
 		Database: database,
-	})
+	}, m.storage)
 
 	if err != nil {
 		m.serverForm.State = huh.StateNormal

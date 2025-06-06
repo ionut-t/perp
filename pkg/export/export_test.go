@@ -5,64 +5,41 @@ import (
 )
 
 func TestGenerateUniqueName_NoConflict(t *testing.T) {
-	records := []Record{
-		{Name: "foo"},
-		{Name: "bar"},
-	}
-	name := "baz"
-	got := generateUniqueName(name, records)
-	want := "baz"
-	if got != want {
-		t.Errorf("generateUniqueName(%q, records) = %q; want %q", name, got, want)
+	names := []string{"foo", "bar"}
+	result := generateUniqueName("baz", names)
+	if result != "baz" {
+		t.Errorf("expected 'baz', got '%s'", result)
 	}
 }
 
 func TestGenerateUniqueName_OneConflict(t *testing.T) {
-	records := []Record{
-		{Name: "foo"},
-		{Name: "bar"},
-	}
-	name := "foo"
-	got := generateUniqueName(name, records)
-	want := "foo-1"
-	if got != want {
-		t.Errorf("generateUniqueName(%q, records) = %q; want %q", name, got, want)
+	names := []string{"foo", "bar", "baz"}
+	result := generateUniqueName("baz", names)
+	if result != "baz-1" {
+		t.Errorf("expected 'baz-1', got '%s'", result)
 	}
 }
 
 func TestGenerateUniqueName_MultipleConflicts(t *testing.T) {
-	records := []Record{
-		{Name: "foo"},
-		{Name: "foo-1"},
-		{Name: "foo-2"},
-	}
-	name := "foo"
-	got := generateUniqueName(name, records)
-	want := "foo-3"
-	if got != want {
-		t.Errorf("generateUniqueName(%q, records) = %q; want %q", name, got, want)
+	names := []string{"foo", "bar", "baz", "baz-1", "baz-2"}
+	result := generateUniqueName("baz", names)
+	if result != "baz-3" {
+		t.Errorf("expected 'baz-3', got '%s'", result)
 	}
 }
 
-func TestGenerateUniqueName_ConflictWithSimilarButNotExact(t *testing.T) {
-	records := []Record{
-		{Name: "foo"},
-		{Name: "foobar"},
-	}
-	name := "foo"
-	got := generateUniqueName(name, records)
-	want := "foo-1"
-	if got != want {
-		t.Errorf("generateUniqueName(%q, records) = %q; want %q", name, got, want)
+func TestGenerateUniqueName_ConflictWithSimilarNames(t *testing.T) {
+	names := []string{"baz", "baz-1", "baz-2", "baz-10"}
+	result := generateUniqueName("baz", names)
+	if result != "baz-3" {
+		t.Errorf("expected 'baz-3', got '%s'", result)
 	}
 }
 
-func TestGenerateUniqueName_EmptyRecords(t *testing.T) {
-	records := []Record{}
-	name := "foo"
-	got := generateUniqueName(name, records)
-	want := "foo"
-	if got != want {
-		t.Errorf("generateUniqueName(%q, records) = %q; want %q", name, got, want)
+func TestGenerateUniqueName_EmptyNames(t *testing.T) {
+	names := []string{}
+	result := generateUniqueName("foo", names)
+	if result != "foo" {
+		t.Errorf("expected 'foo', got '%s'", result)
 	}
 }

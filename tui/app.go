@@ -19,6 +19,7 @@ import (
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/llm/gemini"
 	"github.com/ionut-t/perp/pkg/server"
+	exportStore "github.com/ionut-t/perp/store/export"
 	"github.com/ionut-t/perp/tui/command"
 	exportData "github.com/ionut-t/perp/tui/export_data"
 	"github.com/ionut-t/perp/tui/servers"
@@ -74,6 +75,7 @@ const (
 )
 
 type model struct {
+	config              config.Config
 	width, height       int
 	serverSelection     servers.Model
 	server              server.Server
@@ -101,7 +103,7 @@ type model struct {
 	notification        string
 }
 
-func New() model {
+func New(config config.Config) model {
 	apiKey, _ := config.GetGeminiApiKey()
 	list := list.New([]list.Item{}, 0, 0)
 
@@ -139,6 +141,7 @@ func New() model {
 	}
 
 	return model{
+		config:          config,
 		viewport:        viewport.New(0, 0),
 		llm:             gemini.New(apiKey),
 		llmLogs:         list,
@@ -148,7 +151,7 @@ func New() model {
 		table:           t,
 		command:         command.New(),
 		mode:            modeInsert,
-		serverSelection: servers.New(),
+		serverSelection: servers.New(config.Storage()),
 		historyLogs:     historyLogs,
 	}
 }
@@ -312,7 +315,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.mode == modeNormal {
 				m.message = ""
 				m.view = viewExportData
-				m.exportData = exportData.New(m.width, m.height)
+				exportStore := exportStore.New(m.config.Storage(), m.config.Editor())
+				m.exportData = exportData.New(exportStore, m.width, m.height)
 			}
 		}
 
@@ -469,7 +473,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				data = append(data.([]map[string]any), m.queryResults...)
 			}
 
-			fileName, err := export.AsJson(data, fileName)
+			fileName, err := export.AsJson(m.config.Storage(), data, fileName)
 
 			if err != nil {
 				return m, m.errorNotification(err)

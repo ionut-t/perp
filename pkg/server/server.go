@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ionut-t/perp/internal/config"
 )
 
 type Server struct {
@@ -35,7 +34,7 @@ type CreateServer struct {
 }
 
 // New creates a new server instance and saves it to the storage file.
-func New(server CreateServer) (*Server, error) {
+func New(server CreateServer, storage string) (*Server, error) {
 	port, err := strconv.Atoi(server.Port)
 
 	if err != nil {
@@ -54,7 +53,7 @@ func New(server CreateServer) (*Server, error) {
 		UpdatedAt: time.Now().In(time.UTC),
 	}
 
-	if err := save(newServer); err != nil {
+	if err := save(newServer, storage); err != nil {
 		return nil, fmt.Errorf("failed to save server: %w", err)
 	}
 
@@ -62,13 +61,7 @@ func New(server CreateServer) (*Server, error) {
 }
 
 // Load retrieves all servers from the storage file.
-func Load() ([]Server, error) {
-	storage, err := config.GetStorage()
-
-	if err != nil {
-		return nil, err
-	}
-
+func Load(storage string) ([]Server, error) {
 	path := filepath.Join(storage, "servers.json")
 
 	var servers []Server
@@ -87,13 +80,7 @@ func Load() ([]Server, error) {
 	return servers, nil
 }
 
-func save(server *Server) error {
-	storage, err := config.GetStorage()
-
-	if err != nil {
-		return err
-	}
-
+func save(server *Server, storage string) error {
 	path := filepath.Join(storage, "servers.json")
 
 	var servers []Server
@@ -133,7 +120,7 @@ func save(server *Server) error {
 }
 
 // Update modifies an existing server's details.
-func (s *Server) Update(server CreateServer) error {
+func (s *Server) Update(server CreateServer, storage string) error {
 	port, err := strconv.Atoi(server.Port)
 
 	if err != nil {
@@ -148,7 +135,7 @@ func (s *Server) Update(server CreateServer) error {
 	s.Database = server.Database
 	s.UpdatedAt = time.Now().In(time.UTC)
 
-	if err := save(s); err != nil {
+	if err := save(s, storage); err != nil {
 		return fmt.Errorf("failed to update server: %w", err)
 	}
 
@@ -156,13 +143,7 @@ func (s *Server) Update(server CreateServer) error {
 }
 
 // Delete removes a server by its ID and returns the updated list of servers.
-func Delete(id uuid.UUID) ([]Server, error) {
-	storage, err := config.GetStorage()
-
-	if err != nil {
-		return nil, err
-	}
-
+func Delete(id uuid.UUID, storage string) ([]Server, error) {
 	path := filepath.Join(storage, "servers.json")
 
 	var servers []Server

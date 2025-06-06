@@ -12,6 +12,58 @@ import (
 const rootDir = ".perp"
 const configFileName = "config.toml"
 
+type Config interface {
+	Editor() string
+	Storage() string
+	SetEditor(editor string) error
+	GetGeminiApiKey() (string, error)
+}
+
+type config struct {
+	editor  string
+	storage string
+}
+
+func New() (Config, error) {
+	editor := getDefaultEditor()
+	storage, err := GetStorage()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &config{
+		editor:  editor,
+		storage: storage,
+	}, nil
+}
+
+func (c *config) Editor() string {
+	return c.editor
+}
+
+func (c *config) Storage() string {
+	return c.storage
+}
+
+func (m *config) SetEditor(editor string) error {
+	if _, err := InitialiseConfigFile(); err != nil {
+		return err
+	}
+
+	if editor == m.Editor() {
+		return nil
+	}
+
+	viper.Set("editor", editor)
+
+	return viper.WriteConfig()
+}
+
+func (c *config) GetGeminiApiKey() (string, error) {
+	return GetGeminiApiKey()
+}
+
 func getDefaultEditor() string {
 	if editor := os.Getenv("EDITOR"); editor != "" {
 		return editor
@@ -32,20 +84,6 @@ func GetEditor() string {
 	}
 
 	return editor
-}
-
-func SetEditor(editor string) error {
-	if _, err := InitialiseConfigFile(); err != nil {
-		return err
-	}
-
-	if editor == GetEditor() {
-		return nil
-	}
-
-	viper.Set("editor", editor)
-
-	return viper.WriteConfig()
 }
 
 func GetGeminiApiKey() (string, error) {
