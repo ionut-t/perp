@@ -1,3 +1,4 @@
+// db/interface.go
 package db
 
 import (
@@ -11,11 +12,26 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Database encapsulates the pgx database connection.
-type Database struct {
-	conn *pgx.Conn
+// Database defines the contract for database operations
+type Database interface {
+	// Execute a SQL query and return the result
+	ExecuteQuery(query string) (QueryResult, error)
+	// Fetch all rows from a pgx.Rows object and return their data
+	FetchQueryResults(rows pgx.Rows) ([]map[string]any, []string, error)
+	// Generate a human-readable schema of the database
+	GenerateSchema() (string, error)
+	// Close the database connection
+	Close() error
 }
 
+// QueryResult defines the contract for query results
+type QueryResult interface {
+	Type() QueryType
+	Query() string
+	Rows() pgx.Rows
+}
+
+// QueryType represents the type of SQL query
 type QueryType int
 
 const (
@@ -26,12 +42,28 @@ const (
 	QueryUnknown
 )
 
-type QueryResult interface {
-	Type() QueryType
-	Query() string
-	Rows() pgx.Rows
+// ColumnInfo represents database column metadata
+type ColumnInfo struct {
+	TableName     string
+	ColumnName    string
+	DataType      string
+	IsNullable    bool
+	ColumnDefault string
 }
 
+// New creates a new database connection based on the provided DSN
+func New(dbDSN string) (Database, error) {
+	return connect(dbDSN)
+}
+
+// database encapsulates the pgx database connection
+type database struct {
+	conn *pgx.Conn
+}
+
+var _ Database = (*database)(nil)
+
+// queryResult implements QueryResult interface
 type queryResult struct {
 	queryType QueryType
 	query     string
@@ -50,8 +82,8 @@ func (r queryResult) Rows() pgx.Rows {
 	return r.rows
 }
 
-// Connect establishes a connection to the PostgreSQL database using the provided DSN.
-func Connect(dbDSN string) (*Database, error) {
+// connect establishes a connection to the PostgreSQL database
+func connect(dbDSN string) (*database, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -60,26 +92,26 @@ func Connect(dbDSN string) (*Database, error) {
 		return nil, fmt.Errorf("unable to connect to database: %w", err)
 	}
 
-	return &Database{conn: conn}, nil
+	return &database{conn: conn}, nil
 }
 
-// Close closes the underlying database connection.
-func Close(d *Database) error {
-	if d != nil && d.conn != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return d.conn.Close(ctx)
+// Close closes the underlying database connection
+func (d *database) Close() error {
+	if d == nil || d.conn == nil {
+		return nil
 	}
 
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return d.conn.Close(ctx)
 }
 
-func (d *Database) ExecuteQuery(query string) (QueryResult, error) {
+// ExecuteQuery executes a SQL query and returns the result
+func (d *database) ExecuteQuery(query string) (QueryResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	rows, err := d.conn.Query(ctx, query)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -95,14 +127,12 @@ func (d *Database) ExecuteQuery(query string) (QueryResult, error) {
 		result.queryType = QuerySelect
 	case strings.HasPrefix(q, "insert"):
 		if strings.Contains(q, "returning") {
-			// If the query has a RETURNING clause, we treat it as a SELECT query
 			result.queryType = QuerySelect
 		} else {
 			result.queryType = QueryInsert
 		}
 	case strings.HasPrefix(q, "update"):
 		if strings.Contains(q, "returning") {
-			// If the query has a RETURNING clause, we treat it as a SELECT query
 			result.queryType = QuerySelect
 		} else {
 			result.queryType = QueryUpdate
@@ -117,8 +147,7 @@ func (d *Database) ExecuteQuery(query string) (QueryResult, error) {
 }
 
 // FetchQueryResults reads all rows from a pgx.Rows object and returns their data
-// as a slice of maps (column name to value) and the column headers.
-func (d *Database) FetchQueryResults(rows pgx.Rows) ([]map[string]any, []string, error) {
+func (d *database) FetchQueryResults(rows pgx.Rows) ([]map[string]any, []string, error) {
 	defer rows.Close()
 
 	fieldDescriptions := rows.FieldDescriptions()
@@ -158,7 +187,6 @@ func (d *Database) FetchQueryResults(rows pgx.Rows) ([]map[string]any, []string,
 				} else {
 					rowMap[col] = nil
 				}
-
 			default:
 				rowMap[col] = *(values[i].(*any))
 			}
@@ -173,16 +201,8 @@ func (d *Database) FetchQueryResults(rows pgx.Rows) ([]map[string]any, []string,
 	return results, columns, nil
 }
 
-type ColumnInfo struct {
-	TableName     string
-	ColumnName    string
-	DataType      string
-	IsNullable    bool
-	ColumnDefault string
-}
-
-// GenerateSchema fetches schema from DB and formats it as a human-readable string.
-func (d *Database) GenerateSchema() (string, error) {
+// GenerateSchema fetches schema from DB and formats it as a human-readable string
+func (d *database) GenerateSchema() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

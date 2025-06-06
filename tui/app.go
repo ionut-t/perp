@@ -79,8 +79,9 @@ type model struct {
 	width, height       int
 	serverSelection     servers.Model
 	server              server.Server
-	db                  *db.Database
-	err                 error
+	db                  db.Database
+	dbError             error
+	error               error
 	loading             bool
 	viewport            viewport.Model
 	view                view
@@ -178,7 +179,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
-			db.Close(m.db)
+			m.closeDb()
 			return m, tea.Quit
 		}
 
@@ -188,17 +189,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "ctrl+c":
-			db.Close(m.db)
+			m.closeDb()
 			return m, tea.Quit
 
 		case "q":
+			if m.dbError != nil {
+				m.serverSelection = servers.New(m.config.Storage())
+				_, cmd := m.serverSelection.Update(nil)
+
+				m.view = viewServers
+				m.dbError = nil
+				return m, cmd
+			}
+
 			if m.view == viewDBSchema {
 				m.view = viewMain
 				break
 			}
 
 			if m.editor.IsNormalMode() {
-				db.Close(m.db)
+				m.closeDb()
 				return m, tea.Quit
 			}
 
@@ -211,7 +221,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "S":
 			if m.editor.IsNormalMode() {
-				m.err = nil
+				m.error = nil
 				m.view = viewDBSchema
 			}
 
@@ -225,7 +235,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "alt+enter":
-			m.err = nil
+			m.error = nil
 			m.message = ""
 			if logs, err := history.Add(m.editor.GetCurrentContent()); err == nil {
 				m.historyLogs = logs
@@ -235,7 +245,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.sendQueryCmd()
 
 		case "esc":
-			m.err = nil
+			m.error = nil
 
 			if m.view == viewMain && m.mode == modeInsert {
 				if m.editor.IsNormalMode() {
@@ -324,8 +334,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view = viewMain
 		m.loading = true
 		m.server = msg.Server
-		m.db, m.err = db.Connect(m.server.ConnectionString())
-		if m.err == nil {
+		m.db, m.dbError = db.New(m.server.ConnectionString())
+		if m.dbError == nil {
 			m.displayConnectionInfo()
 			return m, m.generateSchema()
 		}
@@ -345,7 +355,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case schemaFailureMsg:
 		m.loading = false
-		m.err = msg.err
+		m.error = msg.err
 
 	case executeQueryMsg:
 		m.message = ""
@@ -374,7 +384,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.queryResults = results
 
 		if err != nil {
-			m.err = err
+			m.error = err
 			return m, nil
 		}
 
@@ -400,7 +410,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case queryFailureMsg:
 		m.loading = false
-		m.err = msg.err
+		m.error = msg.err
 
 	case llmResponseMsg:
 		m.loading = false
@@ -437,7 +447,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case command.QuitMsg:
-		db.Close(m.db)
+		m.closeDb()
 		return m, tea.Quit
 
 	case command.CancelMsg:
@@ -579,16 +589,14 @@ func (m model) View() string {
 		commandLine,
 	)
 
-	if m.err != nil {
+	if m.dbError != nil {
+		return m.renderDBError(width, m.height-padding)
+	}
+
+	if m.error != nil {
 		return lipgloss.NewStyle().Padding(padding).Render(lipgloss.JoinVertical(
 			lipgloss.Left,
-			lipgloss.NewStyle().
-				Padding(0, 1).
-				Foreground(lipgloss.Color("9")).
-				Height(availableHeight).
-				Width(width).
-				Border(lipgloss.RoundedBorder()).
-				Render(m.err.Error()),
+			m.renderError(width, availableHeight),
 			primaryView,
 		))
 	}
@@ -736,6 +744,31 @@ func (m *model) displayConnectionInfo() {
 	)
 }
 
+func (m *model) renderError(width, height int) string {
+	return styles.Error.
+		Padding(0, 1).
+		Height(height).
+		Width(width).
+		Border(lipgloss.RoundedBorder()).
+		Render(m.error.Error())
+}
+
+func (m *model) renderDBError(width, height int) string {
+	return lipgloss.NewStyle().
+		Padding(0, 1).
+		Height(height).
+		Width(width).
+		Border(lipgloss.RoundedBorder()).
+		Render(
+			lipgloss.JoinVertical(
+				lipgloss.Left,
+				styles.Error.Render(m.dbError.Error()),
+				"\n",
+				styles.Subtext0.Render("Press 'q' to go back to server selection"),
+			),
+		)
+}
+
 func (m *model) successNotification(msg string) tea.Cmd {
 	m.notification = styles.Success.Render(msg)
 
@@ -755,4 +788,10 @@ func (m *model) clearNotification() tea.Cmd {
 			return clearNotificationMsg{}
 		},
 	)
+}
+
+func (m model) closeDb() {
+	if m.db != nil {
+		m.db.Close()
+	}
 }
