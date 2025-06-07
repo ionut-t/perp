@@ -16,8 +16,6 @@ import (
 type Database interface {
 	// Execute a SQL query and return the result
 	ExecuteQuery(query string) (QueryResult, error)
-	// Fetch all rows from a pgx.Rows object and return their data
-	FetchQueryResults(rows pgx.Rows) ([]map[string]any, []string, error)
 	// Generate a human-readable schema of the database
 	GenerateSchema() (string, error)
 	// Close the database connection
@@ -146,8 +144,8 @@ func (d *database) ExecuteQuery(query string) (QueryResult, error) {
 	return result, nil
 }
 
-// FetchQueryResults reads all rows from a pgx.Rows object and returns their data
-func (d *database) FetchQueryResults(rows pgx.Rows) ([]map[string]any, []string, error) {
+// ExtractResultsFromRows reads all rows from a pgx.Rows object and returns their data
+func ExtractResultsFromRows(rows pgx.Rows) ([]map[string]any, []string, error) {
 	defer rows.Close()
 
 	fieldDescriptions := rows.FieldDescriptions()
