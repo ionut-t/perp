@@ -260,8 +260,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			if m.editor.IsInsertMode() {
+			if m.editor.IsInsertMode() || m.editor.IsNormalMode() {
 				content := m.editor.GetCurrentContent()
+
+				if content == "" {
+					break
+				}
 
 				isAskCommand := strings.HasPrefix(content, "/ask")
 
