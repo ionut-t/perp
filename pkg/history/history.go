@@ -7,9 +7,15 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
+)
 
-	"github.com/ionut-t/perp/internal/config"
+const (
+	// Maximum number of history entries to keep
+	maxHistoryEntries = 1_000
+	// Maximum age for history entries (90 days)
+	maxHistoryAge = 90 * 24 * time.Hour
 )
 
 type HistoryLog struct {
@@ -17,105 +23,192 @@ type HistoryLog struct {
 	Time  time.Time
 }
 
-// Add adds a new query to the history and returns the updated history logs.
-func Add(query string) ([]HistoryLog, error) {
-	storage, err := config.GetStorage()
+// Thread-safe history manager
+type manager struct {
+	mu      sync.RWMutex
+	storage string
+}
 
-	if err != nil {
-		return nil, err
-	}
+// Global manager instance with sync.Once for initialization
+var (
+	globalManager *manager
+	managerOnce   sync.Once
+)
+
+// getManager returns a singleton manager instance for the given storage path
+func getManager(storage string) *manager {
+	managerOnce.Do(func() {
+		globalManager = &manager{storage: storage}
+	})
+	return globalManager
+}
+
+// Add adds a new query to the history and returns the updated history logs.
+func Add(query string, storage string) ([]HistoryLog, error) {
+	manager := getManager(storage)
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
 
 	path := filepath.Join(storage, "history")
 
-	var data []byte
-	var history []HistoryLog
-	if _, err := os.Stat(path); err == nil {
-		history, data, err = readHistoryLogs(path, history)
-
-		if err != nil {
-			return nil, err
-		}
+	history, err := readHistoryLogs(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
 	}
 
 	query = strings.TrimSpace(query)
-
-	if query != "" {
-		newLog := HistoryLog{
-			Query: query,
-			Time:  time.Now(),
-		}
-		history = append(history, newLog)
-
-		data = append(data, []byte("---\n")...)
-		data = append(data, []byte("time: "+newLog.Time.Format(`"2006-01-02T15:04:05Z07:00"`)+"\n")...)
-		data = append(data, []byte("query: "+newLog.Query+"\n")...)
-		data = append(data, []byte("---\n")...)
+	if query == "" {
+		return getUniqueSortedHistory(history), nil
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return nil, fmt.Errorf("failed to write server file: %w", err)
+	// Add new entry
+	newLog := HistoryLog{
+		Query: query,
+		Time:  time.Now(),
+	}
+	history = append(history, newLog)
+
+	// Clean up old entries before writing
+	history = cleanupHistory(history)
+
+	// Write updated history
+	if err := writeHistoryLogsAtomic(path, history); err != nil {
+		return nil, err
 	}
 
 	return getUniqueSortedHistory(history), nil
 }
 
 // Get retrieves the history logs from the storage.
-func Get() ([]HistoryLog, error) {
-	storage, err := config.GetStorage()
-	if err != nil {
-		return nil, err
-	}
+func Get(storage string) ([]HistoryLog, error) {
+	manager := getManager(storage)
+	manager.mu.RLock()
+	defer manager.mu.RUnlock()
 
 	path := filepath.Join(storage, "history")
 
-	var history []HistoryLog
-	if _, err := os.Stat(path); err == nil {
-		history, _, err = readHistoryLogs(path, history)
-		if err != nil {
-			return nil, err
+	history, err := readHistoryLogs(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []HistoryLog{}, nil
 		}
+		return nil, err
 	}
-
-	slices.SortFunc(history, func(a, b HistoryLog) int {
-		return b.Time.Compare(a.Time)
-	})
 
 	return getUniqueSortedHistory(history), nil
 }
 
-func readHistoryLogs(path string, history []HistoryLog) ([]HistoryLog, []byte, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, nil, err
+// writeHistoryLogsAtomic performs atomic writes to prevent corruption during concurrent access.
+func writeHistoryLogsAtomic(path string, history []HistoryLog) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	entries := bytes.SplitSeq(data, []byte("---"))
+	// Write to temporary file first
+	tempPath := path + ".tmp"
+
+	var buf bytes.Buffer
+	for i, log := range history {
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+
+		buf.WriteString("---\n")
+		buf.WriteString(log.Time.Format(time.RFC3339))
+		buf.WriteString("\n")
+		buf.WriteString(log.Query)
+		buf.WriteString("\n---")
+	}
+
+	if err := os.WriteFile(tempPath, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write temporary history file: %w", err)
+	}
+
+	// Atomically replace the original file
+	if err := os.Rename(tempPath, path); err != nil {
+		// Clean up temp file on failure
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to replace history file: %w", err)
+	}
+
+	return nil
+}
+
+// readHistoryLogs reads the history logs from the specified path.
+func readHistoryLogs(path string) ([]HistoryLog, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var history []HistoryLog
+	entries := bytes.SplitSeq(data, []byte("\n---\n"))
+
 	for entry := range entries {
 		entry = bytes.TrimSpace(entry)
 		if len(entry) == 0 {
 			continue
 		}
-		lines := bytes.Split(entry, []byte("\n"))
-		var log HistoryLog
-		for _, line := range lines {
-			line = bytes.TrimSpace(line)
-			if bytes.HasPrefix(line, []byte("time:")) {
-				t := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("time:")))
-				parsedTime, err := time.Parse(`"2006-01-02T15:04:05Z07:00"`, string(t))
-				if err == nil {
-					log.Time = parsedTime
-				}
-			} else if bytes.HasPrefix(line, []byte("query:")) {
-				q := bytes.TrimSpace(bytes.TrimPrefix(line, []byte("query:")))
-				log.Query = string(bytes.Trim(q, `"`))
-			}
+
+		// Remove leading/trailing --- if present
+		entry = bytes.TrimPrefix(entry, []byte("---\n"))
+		entry = bytes.TrimSuffix(entry, []byte("\n---"))
+
+		// Find the timestamp line
+		lines := bytes.SplitN(entry, []byte("\n"), 2)
+		if len(lines) < 2 {
+			continue
 		}
-		if !log.Time.IsZero() && log.Query != "" {
-			history = append(history, log)
+
+		// Parse timestamp
+		timeStr := string(bytes.TrimSpace(lines[0]))
+		parsedTime, err := time.Parse(time.RFC3339, timeStr)
+		if err != nil {
+			continue
+		}
+
+		// Extract query content
+		queryContent := bytes.TrimSpace(lines[1])
+
+		query := string(queryContent)
+		if query != "" {
+			history = append(history, HistoryLog{
+				Query: query,
+				Time:  parsedTime,
+			})
 		}
 	}
 
-	return history, data, nil
+	return history, nil
+}
+
+// writeHistoryLogs writes the history logs to the specified path.
+func writeHistoryLogs(path string, history []HistoryLog) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	var buf bytes.Buffer
+
+	for i, log := range history {
+		if i > 0 {
+			buf.WriteString("\n")
+		}
+
+		buf.WriteString("---\n")
+		buf.WriteString(log.Time.Format(time.RFC3339))
+		buf.WriteString("\n")
+		buf.WriteString(log.Query)
+		buf.WriteString("\n---")
+	}
+
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write history file: %w", err)
+	}
+
+	return nil
 }
 
 func getUniqueSortedHistory(history []HistoryLog) []HistoryLog {
@@ -124,8 +217,8 @@ func getUniqueSortedHistory(history []HistoryLog) []HistoryLog {
 	})
 
 	uniqueHistory := make([]HistoryLog, 0, len(history))
-
 	seen := make(map[string]bool)
+
 	for _, log := range history {
 		query := strings.TrimSpace(log.Query)
 		if !seen[query] {
@@ -135,4 +228,30 @@ func getUniqueSortedHistory(history []HistoryLog) []HistoryLog {
 	}
 
 	return uniqueHistory
+}
+
+// cleanupHistory removes old entries and keeps only the most recent ones.
+func cleanupHistory(history []HistoryLog) []HistoryLog {
+	now := time.Now()
+	cutoffTime := now.Add(-maxHistoryAge)
+
+	// First, remove entries older than the cutoff time
+	filtered := make([]HistoryLog, 0, len(history))
+	for _, log := range history {
+		if log.Time.After(cutoffTime) {
+			filtered = append(filtered, log)
+		}
+	}
+
+	// Sort by time (newest first)
+	slices.SortFunc(filtered, func(a, b HistoryLog) int {
+		return b.Time.Compare(a.Time)
+	})
+
+	// Keep only the most recent entries if we exceed the max count
+	if len(filtered) > maxHistoryEntries {
+		filtered = filtered[:maxHistoryEntries]
+	}
+
+	return filtered
 }

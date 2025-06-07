@@ -122,7 +122,7 @@ func New(config config.Config) model {
 	editor.DisableCommandMode(true)
 	editor.WithTheme(styles.EditorTheme())
 
-	historyLogs, err := history.Get()
+	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
 		historyLogs = []history.HistoryLog{}
 	}
@@ -267,7 +267,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if !isAskCommand && strings.HasSuffix(content, ";") && len(content) > 5 ||
 					isAskCommand && len(content) > 5 && strings.HasSuffix(content, "?") {
-					if logs, err := history.Add(m.editor.GetCurrentContent()); err == nil {
+					if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
 						m.historyLogs = logs
 						m.currentHistoryIndex = 0
 					}
@@ -277,7 +277,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "alt+enter":
-			if logs, err := history.Add(m.editor.GetCurrentContent()); err == nil {
+			if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
 				m.historyLogs = logs
 				m.currentHistoryIndex = 0
 			}
