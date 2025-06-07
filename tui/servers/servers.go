@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/perp/pkg/server"
+	"github.com/ionut-t/perp/ui/styles"
 )
 
 type SelectedServerMsg struct {
@@ -175,9 +176,15 @@ func (m Model) View() string {
 			lipgloss.JoinVertical(
 				lipgloss.Left,
 				m.selectForm.View(),
-				"Press n to create a new server",
-				"Press e to edit the selected server",
-				"Press ctrl+d to delete the selected server",
+				"\n",
+				styles.Overlay0.Render(
+					lipgloss.JoinVertical(
+						lipgloss.Left,
+						"Press n to create a new server",
+						"Press e to edit the selected server",
+						"Press ctrl+d to delete the selected server",
+					),
+				),
 			),
 		)
 
@@ -248,6 +255,7 @@ func (m *Model) initialiseCreateForm() {
 			database,
 		),
 	)
+	m.serverForm.WithTheme(styles.ThemeCatppuccin())
 }
 
 func (m *Model) initialiseUpdateForm() {
@@ -295,10 +303,12 @@ func (m *Model) initialiseUpdateForm() {
 			database,
 		),
 	)
+	m.serverForm.WithTheme(styles.ThemeCatppuccin())
 }
 
 func (m *Model) initialiseSelectForm() {
 	selectServer := huh.NewSelect[server.Server]()
+	selectServer.WithTheme(styles.ThemeCatppuccin())
 	selectServer.Title("Select a server")
 	selectServer.Key("select")
 	options := make([]huh.Option[server.Server], len(m.servers))
