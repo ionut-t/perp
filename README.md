@@ -25,6 +25,7 @@ go install github.com/ionut-t/perp
 | `esc`               | Return to normal mode                     |
 | `alt+enter`         | Send query                                |
 | `y`                 | Yank/copy selected cell                   |
+| `Y`                 | Yank/copy selected row as JSON            |
 | `p`                 | Paste in the editor                       |
 | `export 1,2,3 data` | Export selected rows as JSON to data.json |
 | `export all data`   | Export all results as JSON to data.json   |
