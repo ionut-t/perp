@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
-	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/pkg/db"
@@ -122,10 +121,6 @@ func New(config config.Config) model {
 	editor.Focus()
 	editor.DisableCommandMode(true)
 	editor.WithTheme(styles.EditorTheme())
-
-	t := table.New()
-	t.SetSize(80, 20)
-	t.SetSelectionMode(table.SelectionCell | table.SelectionRow)
 
 	historyLogs, err := history.Get()
 	if err != nil {
