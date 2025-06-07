@@ -10,4 +10,5 @@ type Response struct {
 type LLM interface {
 	Ask(prompt string) (*Response, error)
 	AppendInstructions(instructions string)
+	ResetInstructions()
 }

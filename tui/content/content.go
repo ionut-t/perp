@@ -194,6 +194,10 @@ func (m *Model) GetQueryResults() []map[string]any {
 	return m.queryResults
 }
 
+func (m *Model) GetDatabaseSchema() string {
+	return m.dbSchema
+}
+
 func (m *Model) SetLLMLogs(response llm.Response, query string) {
 	newLog := chatLog{
 		Prompt:   query,

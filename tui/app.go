@@ -488,6 +488,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.Focus()
 		return m, m.errorNotification(fmt.Errorf("no query results to export"))
 
+	case command.EditorChangedMsg:
+		err := m.config.SetEditor(msg.Editor)
+		if err != nil {
+			return m, m.errorNotification(err)
+		}
+
+		return m, m.successNotification(
+			fmt.Sprintf("Editor changed to %s", msg.Editor),
+		)
+
+	case command.LLMUseDatabaseSchemaMsg:
+		if err := m.config.EnableLLMDatabaseSchema(msg.Enabled); err != nil {
+			return m, m.errorNotification(err)
+		}
+
+		if msg.Enabled {
+			m.llm.AppendInstructions(m.content.GetDatabaseSchema())
+			return m, m.successNotification("LLM will now use the database schema")
+		}
+
+		m.llm.ResetInstructions()
+		return m, m.successNotification("LLM will no longer use the database schema")
+
 	case command.ErrorMsg:
 		return m, m.errorNotification(msg.Err)
 	}

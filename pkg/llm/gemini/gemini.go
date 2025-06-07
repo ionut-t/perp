@@ -63,14 +63,16 @@ func (e *responseError) Message() string {
 }
 
 type Gemini struct {
-	apiKey       string
-	instructions string
+	apiKey               string
+	instructions         string
+	dbSchemaInstructions string
 }
 
 func New(apiKey, instructions string) *Gemini {
 	return &Gemini{
-		apiKey:       apiKey,
-		instructions: instructions,
+		apiKey:               apiKey,
+		instructions:         instructions,
+		dbSchemaInstructions: "",
 	}
 }
 
@@ -87,7 +89,7 @@ func (g *Gemini) Ask(prompt string) (*llm.Response, error) {
 		Contents: []content{
 			{
 				Parts: []part{
-					{Text: g.instructions + "\n" + prompt},
+					{Text: g.getInstructions() + "\n" + prompt},
 				},
 			},
 		},
@@ -156,5 +158,13 @@ func (g *Gemini) Ask(prompt string) (*llm.Response, error) {
 }
 
 func (g *Gemini) AppendInstructions(instructions string) {
-	g.instructions = g.instructions + "\n" + instructions
+	g.dbSchemaInstructions = instructions
+}
+
+func (g *Gemini) ResetInstructions() {
+	g.dbSchemaInstructions = ""
+}
+
+func (g *Gemini) getInstructions() string {
+	return strings.TrimSpace(g.instructions + "\n" + g.dbSchemaInstructions)
 }

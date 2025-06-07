@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,6 +15,14 @@ type ExportMsg struct {
 	Rows     []int
 	All      bool
 	FileName string
+}
+
+type EditorChangedMsg struct {
+	Editor string
+}
+
+type LLMUseDatabaseSchemaMsg struct {
+	Enabled bool
 }
 
 type CancelMsg struct{}
@@ -94,6 +103,14 @@ func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 		if strings.HasPrefix(cmdValue, "export") {
 			return c.handleExport()
 		}
+
+		if strings.HasPrefix(cmdValue, "set-editor") {
+			return c.handleEditorSetCmd(cmdValue)
+		}
+
+		if strings.HasPrefix(cmdValue, "llm-schema") {
+			return c.handleLLMDatabaseSchema(cmdValue)
+		}
 	}
 
 	cmdModel, cmd := c.input.Update(msg)
@@ -119,6 +136,41 @@ func (c Model) handleExport() (Model, tea.Cmd) {
 		Rows:     rows,
 		All:      all,
 		FileName: fileName,
+	})
+}
+
+func (c Model) handleEditorSetCmd(cmdValue string) (Model, tea.Cmd) {
+	editor := strings.TrimSpace(strings.TrimPrefix(cmdValue, "set-editor"))
+
+	if editor == "" {
+		return c, dispatch(ErrorMsg{Err: errors.New("no editor specified")})
+	}
+
+	empty := ""
+	c.input.Value(&empty)
+
+	return c, dispatch(EditorChangedMsg{Editor: editor})
+}
+
+func (c Model) handleLLMDatabaseSchema(cmdValue string) (Model, tea.Cmd) {
+	value := strings.TrimSpace(strings.TrimPrefix(cmdValue, "llm-schema"))
+
+	var enabled bool
+
+	switch value {
+	case "", "true":
+		enabled = true
+	case "false":
+		enabled = false
+	default:
+		return c, dispatch(ErrorMsg{Err: errors.New("invalid value for enabling/disabling database schema usage in LLM")})
+	}
+
+	empty := ""
+	c.input.Value(&empty)
+
+	return c, dispatch(LLMUseDatabaseSchemaMsg{
+		Enabled: enabled,
 	})
 }
 
