@@ -67,10 +67,10 @@ type Gemini struct {
 	instructions string
 }
 
-func New(apiKey string) *Gemini {
+func New(apiKey, instructions string) *Gemini {
 	return &Gemini{
 		apiKey:       apiKey,
-		instructions: llm.BaseInstructions,
+		instructions: instructions,
 	}
 }
 
@@ -156,5 +156,5 @@ func (g *Gemini) Ask(prompt string) (*llm.Response, error) {
 }
 
 func (g *Gemini) AppendInstructions(instructions string) {
-	g.instructions = llm.BaseInstructions + "\n" + instructions
+	g.instructions = g.instructions + "\n" + instructions
 }

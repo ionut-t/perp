@@ -10,6 +10,7 @@ import (
 	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/config"
+	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/export"
 	"github.com/ionut-t/perp/pkg/history"
@@ -131,9 +132,15 @@ func New(config config.Config) model {
 		historyLogs = []history.HistoryLog{}
 	}
 
+	instructions, err := config.GetLLMInstructions()
+
+	if err != nil || instructions == "" {
+		instructions = constants.LLMDefaultInstructions
+	}
+
 	return model{
 		config:          config,
-		llm:             gemini.New(apiKey),
+		llm:             gemini.New(apiKey, instructions),
 		editor:          editor,
 		sqlKeywords:     sqlKeywordsMap,
 		llmKeywords:     llmKeywordsMap,
@@ -330,7 +337,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case schemaFetchedMsg:
 		schema := string(msg)
 		m.loading = false
-		m.llm.AppendInstructions(schema)
+
+		if m.config.ShouldUseDatabaseSchema() {
+			m.llm.AppendInstructions(schema)
+		}
+
 		m.content.SetSchema(schema)
 
 	case schemaFailureMsg:

@@ -21,6 +21,7 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	rootCmd.AddCommand(configCmd())
+	rootCmd.AddCommand(llmInstructionsCmd())
 	err := rootCmd.Execute()
 
 	if err != nil {
