@@ -259,6 +259,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 
+		case "enter":
+			if m.editor.IsInsertMode() {
+				content := m.editor.GetCurrentContent()
+
+				isAskCommand := strings.HasPrefix(content, "/ask")
+
+				if !isAskCommand && strings.HasSuffix(content, ";") && len(content) > 5 ||
+					isAskCommand && len(content) > 5 && strings.HasSuffix(content, "?") {
+					if logs, err := history.Add(m.editor.GetCurrentContent()); err == nil {
+						m.historyLogs = logs
+						m.currentHistoryIndex = 0
+					}
+
+					return m, m.sendQueryCmd()
+				}
+			}
+
 		case "alt+enter":
 			if logs, err := history.Add(m.editor.GetCurrentContent()); err == nil {
 				m.historyLogs = logs
