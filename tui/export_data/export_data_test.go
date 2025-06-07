@@ -228,22 +228,22 @@ func TestModel_Update_KeyMsg_ShiftNavigation(t *testing.T) {
 	m.view = viewSplit
 	m.focusedView = focusedViewList
 
-	// Test shift+right
-	msg := tea.KeyMsg{Type: tea.KeyShiftRight}
+	// Test first tab press
+	msg := tea.KeyMsg{Type: tea.KeyTab}
 	updatedModel, _ := m.Update(msg)
 	updated := updatedModel.(Model)
 
 	if updated.focusedView != focusedViewRecord {
-		t.Errorf("expected focusedView to be focusedViewRecord after shift+right, got %v", updated.focusedView)
+		t.Errorf("expected focusedView to be focusedViewRecord after tab, got %v", updated.focusedView)
 	}
 
-	// Test shift+left to go back
-	msg = tea.KeyMsg{Type: tea.KeyShiftLeft}
+	// Test second tab press
+	msg = tea.KeyMsg{Type: tea.KeyTab}
 	updatedModel, _ = updated.Update(msg)
 	updated = updatedModel.(Model)
 
 	if updated.focusedView != focusedViewList {
-		t.Errorf("expected focusedView to be focusedViewList after shift+left, got %v", updated.focusedView)
+		t.Errorf("expected focusedView to be focusedViewList after tab, got %v", updated.focusedView)
 	}
 }
 
