@@ -170,7 +170,6 @@ func (m *Model) SetQueryResults(result db.QueryResult) error {
 	}
 
 	if len(results) == 0 {
-		// TODO: create a method in table to clear it
 		m.table.SetHeaders([]string{})
 		m.table.SetRows([][]string{})
 		m.table.SetSelectedCell(0, 0)

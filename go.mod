@@ -11,7 +11,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/ionut-t/goeditor/adapter-bubbletea v0.0.0-20250603201123-a19b48d722da
-	github.com/ionut-t/gotable v0.0.0-20250529201300-062831e40916
+	github.com/ionut-t/gotable v0.0.0-20250607132337-93132ab9783c
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/spf13/cobra v1.9.1
