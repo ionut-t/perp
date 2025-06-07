@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/pkg/db"

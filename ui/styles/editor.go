@@ -2,7 +2,7 @@ package styles
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
 )
 
 func EditorTheme() editor.Theme {
@@ -14,19 +14,23 @@ func EditorTheme() editor.Theme {
 	return editor.Theme{
 		NormalModeStyle: lipgloss.NewStyle().
 			Foreground(Base.GetForeground()).
-			Background(normalModeBG),
+			Background(normalModeBG).
+			Bold(true),
 
 		InsertModeStyle: lipgloss.NewStyle().
 			Foreground(Base.GetForeground()).
-			Background(insertModeBG),
+			Background(insertModeBG).
+			Bold(true),
 
 		VisualModeStyle: lipgloss.NewStyle().
 			Foreground(Base.GetForeground()).
-			Background(visualModeBG),
+			Background(visualModeBG).
+			Bold(true),
 
 		CommandModeStyle: lipgloss.NewStyle().
 			Foreground(Base.GetForeground()).
-			Background(commandModeBG),
+			Background(commandModeBG).
+			Bold(true),
 
 		CommandLineStyle: Surface0,
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
 	"github.com/ionut-t/perp/store/export"
 )
 
