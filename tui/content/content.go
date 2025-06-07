@@ -61,7 +61,7 @@ type chatLog struct {
 
 func New(width, height int) Model {
 	t := table.New()
-	t.SetSize(80, 20)
+	t.SetSize(width-1, height)
 	t.SetSelectionMode(table.SelectionCell | table.SelectionRow)
 	t.SetTheme(styles.TableTheme())
 
@@ -81,7 +81,7 @@ func (m *Model) SetSize(width, height int) {
 	m.viewport.Width = width
 	m.viewport.Height = height
 
-	m.table.SetSize(width, height)
+	m.table.SetSize(width-1, height)
 
 	m.llmLogsList.SetSize(width, height)
 
@@ -188,6 +188,10 @@ func (m *Model) SetQueryResults(result db.QueryResult) error {
 	m.view = viewTable
 
 	return nil
+}
+
+func (m *Model) GetQueryResults() []map[string]any {
+	return m.queryResults
 }
 
 func (m *Model) SetLLMLogs(response llm.Response, query string) {

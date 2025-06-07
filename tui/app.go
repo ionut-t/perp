@@ -435,7 +435,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.Focus()
 
 	case command.ExportMsg:
-		if m.queryResults != nil {
+		queryResults := m.content.GetQueryResults()
+		if queryResults != nil {
 			rows := msg.Rows
 			all := msg.All
 			fileName := msg.FileName
@@ -447,20 +448,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				for _, rowIdx := range rows {
 					idx := rowIdx - 1
-					if idx >= 0 && idx < len(m.queryResults) {
-						data = append(data.([]map[string]any), m.queryResults[idx])
+					if idx >= 0 && idx < len(queryResults) {
+						data = append(data.([]map[string]any), queryResults[idx])
 					}
 				}
 			} else if len(rows) == 1 {
 				idx := rows[0] - 1
-				if idx >= 0 && idx < len(m.queryResults) {
-					data = m.queryResults[idx]
+				if idx >= 0 && idx < len(queryResults) {
+					data = queryResults[idx]
 				}
 			}
 
 			if all {
 				data = make([]map[string]any, 0)
-				data = append(data.([]map[string]any), m.queryResults...)
+				data = append(data.([]map[string]any), queryResults...)
 			}
 
 			fileName, err := export.AsJson(m.config.Storage(), data, fileName)
