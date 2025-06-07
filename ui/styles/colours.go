@@ -30,10 +30,6 @@ var (
 	Info = lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: catppuccin.Latte.Blue().Hex, Dark: catppuccin.Mocha.Blue().Hex})
 
-	Highlight = lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: catppuccin.Latte.Base().Hex, Dark: catppuccin.Latte.Base().Hex}).
-			Background(lipgloss.AdaptiveColor{Light: catppuccin.Latte.Surface0().Hex, Dark: catppuccin.Mocha.Surface0().Hex})
-
 	Subtext0 = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: catppuccin.Latte.Subtext0().Hex, Dark: catppuccin.Mocha.Subtext0().Hex})
 
@@ -54,4 +50,11 @@ var (
 
 	Crust = lipgloss.NewStyle().
 		Background(lipgloss.AdaptiveColor{Light: catppuccin.Latte.Crust().Hex, Dark: catppuccin.Mocha.Crust().Hex})
+
+	AccentBackground = lipgloss.NewStyle().
+				Background(lipgloss.AdaptiveColor{Light: catppuccin.Mocha.Mauve().Hex, Dark: catppuccin.Latte.Teal().Hex})
+
+	Highlight = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: catppuccin.Latte.Base().Hex, Dark: catppuccin.Mocha.Base().Hex}).
+			Background(lipgloss.AdaptiveColor{Light: catppuccin.Latte.Sapphire().Hex, Dark: catppuccin.Mocha.Sapphire().Hex})
 )

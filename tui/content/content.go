@@ -63,6 +63,7 @@ func New(width, height int) Model {
 	t := table.New()
 	t.SetSize(80, 20)
 	t.SetSelectionMode(table.SelectionCell | table.SelectionRow)
+	t.SetTheme(styles.TableTheme())
 
 	return Model{
 		width:       width,
@@ -220,7 +221,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case clearYankMsg:
-		m.table.SetTheme(table.DefaultTheme())
+		m.table.SetTheme(styles.TableTheme())
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -348,7 +349,7 @@ func (m Model) yankSelectedCell() (tea.Model, tea.Cmd) {
 	if cell, ok := m.table.GetSelectedCell(); ok {
 		clipboard.Write(cell)
 
-		defaultTheme := table.DefaultTheme()
+		defaultTheme := styles.TableTheme()
 		theme := table.Theme{
 			Header:      defaultTheme.Header,
 			Border:      defaultTheme.Border,
@@ -387,7 +388,7 @@ func (m Model) yankSelectedRow() (tea.Model, tea.Cmd) {
 
 	clipboard.Write(content)
 
-	defaultTheme := table.DefaultTheme()
+	defaultTheme := styles.TableTheme()
 	selectedRow := defaultTheme.SelectedRow.
 		Background(defaultTheme.SelectedRow.GetForeground()).
 		Foreground(defaultTheme.SelectedRow.GetBackground())
