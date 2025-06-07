@@ -82,6 +82,7 @@ func New(store export.Store, width, height int) Model {
 
 	editorModel := editor.New(80, 20)
 	editorModel.SetCursorBlinkMode(true)
+	editorModel.WithTheme(styles.EditorTheme())
 
 	if len(records) > 0 {
 		editorModel.SetContent(records[0].Content)

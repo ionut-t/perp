@@ -122,6 +122,7 @@ func New(config config.Config) model {
 	editor.SetInsertMode()
 	editor.Focus()
 	editor.DisableCommandMode(true)
+	editor.WithTheme(styles.EditorTheme())
 
 	t := table.New()
 	t.SetSize(80, 20)
