@@ -225,7 +225,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.Focus()
 				m.editor.SetInsertMode()
 
-				return m, m.editor.CursorBlink()
+				_, cmd := m.editor.Update(nil)
+
+				return m, tea.Batch(
+					cmd,
+					m.editor.CursorBlink(),
+				)
 			}
 
 		case "alt+enter":
@@ -333,7 +338,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case llmResponseMsg:
 		m.loading = false
-		query := strings.Trim(m.editor.GetCurrentContent(), "/ask")
+		query := strings.TrimPrefix(m.editor.GetCurrentContent(), "/ask")
+		query = strings.TrimSpace(query)
 		m.content.SetLLMLogs(llm.Response(msg), query)
 		m.editor.SetContent("")
 		m.focused = focusedContent
@@ -504,8 +510,10 @@ func (m model) View() string {
 		commandLine,
 	)
 
+	width := max(m.width-padding*2, 1)
+
 	if m.error != nil {
-		return m.renderDBError(max(m.width-padding*2, 1), m.height-padding)
+		return m.renderDBError(width, m.height-padding)
 	}
 
 	switch m.view {
@@ -520,9 +528,9 @@ func (m model) View() string {
 	case viewMain:
 		return lipgloss.NewStyle().Padding(padding).Render(lipgloss.JoinVertical(
 			lipgloss.Left,
-			contentBorder.Height(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2-2).Render(
-				m.content.View(),
-			),
+			contentBorder.Width(width).
+				Height(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2-2).
+				Render(m.content.View()),
 			primaryView))
 
 	case viewExportData:

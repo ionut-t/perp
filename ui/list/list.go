@@ -7,15 +7,16 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/perp/ui/styles"
 )
 
 // Constants for consistent height calculations
 const (
-	MainBorderHeight  = 2 // Top and bottom border of main container
-	FilterBarHeight   = 1 // Height of filter/help bar
-	ItemBorderHeight  = 2 // Top and bottom border of each item
-	ItemSpacing       = 1 // Spacing between items
-	MinViewportHeight = 3 // Minimum usable viewport height
+	mainBorderHeight  = 2 // Top and bottom border of main container
+	filterBarHeight   = 1 // Height of filter/help bar
+	itemBorderHeight  = 2 // Top and bottom border of each item
+	itemSpacing       = 1 // Spacing between items
+	minViewportHeight = 3 // Minimum usable viewport height
 )
 
 // Item represents a list item with variable content
@@ -24,7 +25,7 @@ type Item struct {
 	Subtitle    string
 	Description string
 	Selected    bool
-	Style       string
+	Styles      *ItemStyles
 }
 
 // KeyMap defines the key bindings for the list
@@ -91,34 +92,30 @@ type Styles struct {
 	Cursor         lipgloss.Style
 	Filter         lipgloss.Style
 	Help           lipgloss.Style
-	Border         lipgloss.Style
+}
+
+type ItemStyles struct {
+	Title          lipgloss.Style
+	Subtitle       lipgloss.Style
+	Description    lipgloss.Style
+	SelectedBorder lipgloss.Style
 }
 
 // DefaultStyles returns the default styling
 func DefaultStyles() Styles {
 	return Styles{
-		Title: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("205")),
-		Subtitle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")),
-		Description: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244")),
+		Title:       styles.Text,
+		Subtitle:    styles.Subtext1,
+		Description: styles.Primary,
 		SelectedBorder: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("212")).
+			BorderForeground(styles.Primary.GetForeground()).
 			Padding(0, 1),
-		Cursor: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("212")).
+		Cursor: styles.Accent.
 			Bold(true),
-		Filter: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
+		Filter: styles.Accent.
 			Bold(true),
-		Help: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")),
-		Border: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("238")),
+		Help: styles.Subtext1,
 	}
 }
 
@@ -137,20 +134,16 @@ type Model struct {
 	itemHeights    []int
 	viewportHeight int
 	totalHeight    int
+	withFilter     bool
 }
 
 // calculateViewportHeight calculates stable viewport height
 func (m *Model) calculateViewportHeight() {
 	// Total reserved height = main borders + filter bar + spacing
-	reservedHeight := MainBorderHeight + FilterBarHeight + 1 // +1 for spacing
+	reservedHeight := mainBorderHeight + filterBarHeight + 1 // +1 for spacing
 
 	// Calculate available height for content
-	availableHeight := m.height - reservedHeight
-
-	// Ensure minimum viewport height
-	if availableHeight < MinViewportHeight {
-		availableHeight = MinViewportHeight
-	}
+	availableHeight := max(m.height-reservedHeight, minViewportHeight)
 
 	m.viewportHeight = availableHeight
 }
@@ -180,6 +173,7 @@ func New(items []Item, width, height int) Model {
 // SetItems updates the list items
 func (m *Model) SetItems(items []Item) {
 	m.items = items
+	m.filteredItems = items
 	m.applyFilter()
 	m.calculateItemHeights()
 	m.cursor = 0
@@ -192,6 +186,14 @@ func (m Model) GetSelectedItem() (Item, bool) {
 		return Item{}, false
 	}
 	return m.filteredItems[m.cursor], true
+}
+
+// GetIndex returns the index of the currently selected item
+func (m Model) GetIndex() int {
+	if len(m.filteredItems) == 0 || m.cursor >= len(m.filteredItems) {
+		return -1
+	}
+	return m.cursor
 }
 
 // GetSelectedItems returns all selected items
@@ -287,7 +289,7 @@ func (m *Model) calculateItemHeights() {
 		if height == 0 {
 			height = 1
 		}
-		height += ItemBorderHeight + ItemSpacing
+		height += itemBorderHeight + itemSpacing
 
 		m.itemHeights[i] = height
 		m.totalHeight += height
@@ -459,9 +461,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.filteredItems[m.cursor].Selected = !m.filteredItems[m.cursor].Selected
 				}
 			case key.Matches(msg, m.keys.Filter):
-				m.filterMode = true
-				m.filter.Focus()
-				return m, textinput.Blink
+				if m.withFilter {
+					m.filterMode = true
+					m.filter.Focus()
+					return m, textinput.Blink
+				}
 			case key.Matches(msg, m.keys.Clear):
 				if m.filter.Value() != "" {
 					m.filter.SetValue("")
@@ -481,7 +485,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // renderItem renders a single item
-func (m Model) renderItem(item Item, index int, isCursor bool) string {
+func (m Model) renderItem(item Item, isCursor bool) string {
+	var styles Styles
+	if item.Styles != nil {
+		styles = Styles{
+			Title:          item.Styles.Title,
+			Subtitle:       item.Styles.Subtitle,
+			Description:    item.Styles.Description,
+			SelectedBorder: item.Styles.SelectedBorder,
+		}
+	} else {
+		styles = m.styles
+	}
+
 	var parts []string
 	contentWidth := m.calculateContentWidth()
 
@@ -492,8 +508,9 @@ func (m Model) renderItem(item Item, index int, isCursor bool) string {
 			title = "✓ " + title
 		}
 		titleLines := wrapText(title, contentWidth)
+
 		for _, line := range titleLines {
-			parts = append(parts, m.styles.Title.Render(line))
+			parts = append(parts, styles.Title.Render(line))
 		}
 	}
 
@@ -501,7 +518,7 @@ func (m Model) renderItem(item Item, index int, isCursor bool) string {
 	if item.Subtitle != "" {
 		subtitleLines := wrapText(item.Subtitle, contentWidth)
 		for _, line := range subtitleLines {
-			parts = append(parts, m.styles.Subtitle.Render(line))
+			parts = append(parts, styles.Subtitle.Render(line))
 		}
 	}
 
@@ -516,7 +533,7 @@ func (m Model) renderItem(item Item, index int, isCursor bool) string {
 
 			descLines := wrapText(paragraph, contentWidth)
 			for _, line := range descLines {
-				parts = append(parts, m.styles.Description.Render(line))
+				parts = append(parts, styles.Description.Render(line))
 			}
 		}
 	}
@@ -529,12 +546,11 @@ func (m Model) renderItem(item Item, index int, isCursor bool) string {
 	// Create border style (visible for selected, hidden for others)
 	var borderStyle lipgloss.Style
 	if isCursor {
-		borderStyle = m.styles.SelectedBorder.Copy().Width(itemWidth)
+		borderStyle = styles.SelectedBorder.Width(itemWidth)
 	} else {
 		// Hidden border - same structure but transparent
 		borderStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("0")). // Transparent/hidden
+			Border(lipgloss.HiddenBorder()).
 			Padding(0, 1).
 			Width(itemWidth)
 	}
@@ -557,7 +573,7 @@ func (m Model) View() string {
 		} else if m.filter.Value() != "" {
 			filterBar = m.styles.Filter.Render("Filter: " + m.filter.Value() + " (press / to edit, esc to clear)")
 		} else {
-			filterBar = m.styles.Help.Render("Press / to filter, space to select, q to quit")
+			filterBar = m.styles.Help.Render("Press / to filter, enter to select, q to quit")
 		}
 
 		content := lipgloss.NewStyle().
@@ -567,8 +583,11 @@ func (m Model) View() string {
 			AlignVertical(lipgloss.Center).
 			Render(noItems)
 
-		fullContent := content + "\n" + filterBar
-		return m.styles.Border.Width(m.width).Render(fullContent)
+		if m.withFilter {
+			return content + "\n" + filterBar
+		}
+
+		return content
 	}
 
 	// Build the viewport content line by line
@@ -579,7 +598,7 @@ func (m Model) View() string {
 	// Track where we are in the current item
 	currentItemLines := []string{}
 	if itemIndex < len(m.filteredItems) {
-		itemContent := m.renderItem(m.filteredItems[itemIndex], itemIndex, itemIndex == m.cursor)
+		itemContent := m.renderItem(m.filteredItems[itemIndex], itemIndex == m.cursor)
 		currentItemLines = strings.Split(itemContent, "\n")
 	}
 	currentLineInItem := 0
@@ -590,7 +609,7 @@ func (m Model) View() string {
 		if currentLineInItem >= len(currentItemLines) {
 			itemIndex++
 			if itemIndex < len(m.filteredItems) {
-				itemContent := m.renderItem(m.filteredItems[itemIndex], itemIndex, itemIndex == m.cursor)
+				itemContent := m.renderItem(m.filteredItems[itemIndex], itemIndex == m.cursor)
 				currentItemLines = strings.Split(itemContent, "\n")
 				currentLineInItem = 0
 			} else {
@@ -624,10 +643,11 @@ func (m Model) View() string {
 		filterBar = m.styles.Help.Render("Press / to filter, space to select, q to quit")
 	}
 
-	// Combine content
-	listContent := content + "\n" + filterBar
+	if m.withFilter {
+		return content + "\n" + filterBar
+	}
 
-	return m.styles.Border.Width(m.width).Render(listContent)
+	return content
 }
 
 // SetSize updates the component size

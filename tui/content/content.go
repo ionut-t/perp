@@ -226,15 +226,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "enter":
 			if m.view == viewLLMLogs {
-				selected, ok := m.llmLogsList.GetSelectedItem()
+				log := m.logs[m.llmLogsList.GetIndex()]
 
-				if !ok {
+				if log.Error != nil {
 					return m, nil
 				}
 
 				return m, func() tea.Msg {
 					return LLMResponseSelectedMsg{
-						Response: strings.TrimSpace(selected.Description),
+						Response: strings.TrimSpace(log.Response),
 					}
 				}
 			}
@@ -364,6 +364,19 @@ func processLogs(logs []chatLog) []list.Item {
 			Title:       n.Prompt,
 			Subtitle:    n.Time.Format("02/01/2006, 15:04:05"),
 			Description: n.Response,
+		}
+
+		if n.Error != nil {
+			items[i].Description = n.Error.Error()
+			items[i].Styles = &list.ItemStyles{
+				Title:       styles.Text,
+				Subtitle:    styles.Subtext1,
+				Description: styles.Error,
+				SelectedBorder: lipgloss.NewStyle().
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(styles.Error.GetForeground()).
+					Padding(0, 1),
+			}
 		}
 	}
 

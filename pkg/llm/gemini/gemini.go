@@ -39,6 +39,29 @@ type generateContentResponse struct {
 	Candidates []candidate `json:"candidates"`
 }
 
+type responseError struct {
+	Error struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Status  string `json:"status"`
+		Details []struct {
+			Type     string         `json:"@type"`
+			Reason   string         `json:"reason,omitempty"`
+			Domain   string         `json:"domain,omitempty"`
+			Metadata map[string]any `json:"metadata,omitempty"`
+			Locale   string         `json:"locale,omitempty"`
+			Msg      string         `json:"message,omitempty"`
+		} `json:"details"`
+	} `json:"error"`
+}
+
+func (e *responseError) Message() string {
+	if e.Error.Message != "" {
+		return e.Error.Message
+	}
+	return "unknown error"
+}
+
 type Gemini struct {
 	apiKey       string
 	instructions string
@@ -89,8 +112,18 @@ func (g *Gemini) Ask(prompt string) (*llm.Response, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body) // Read body for error details
-		return nil, fmt.Errorf("API returned non-200 status: %d - %s", resp.StatusCode, string(bodyBytes))
+		bodyBytes, err := io.ReadAll(resp.Body)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to read error response body: %w", err)
+		}
+
+		var apiError responseError
+		if err := json.Unmarshal(bodyBytes, &apiError); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal error response: %w - Body: %s", err, string(bodyBytes))
+		}
+
+		return nil, fmt.Errorf("API returned non-200 status: %d - %s", resp.StatusCode, apiError.Message())
 	}
 
 	body, err := io.ReadAll(resp.Body)
