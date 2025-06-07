@@ -58,7 +58,7 @@ func (g *Gemini) Ask(prompt string) (*llm.Response, error) {
 		return nil, errors.New("API key is required")
 	}
 
-	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=%s", apiKey)
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", apiKey)
 
 	requestBody := generateContentRequest{
 		Contents: []content{
