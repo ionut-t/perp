@@ -6,8 +6,8 @@ import (
 )
 
 func EditorTheme() editor.Theme {
-	normalModeBG := Primary.GetForeground()
-	insertModeBG := Success.GetForeground()
+	normalModeBG := Info.GetForeground()
+	insertModeBG := Primary.GetForeground()
 	visualModeBG := Accent.GetForeground()
 	commandModeBG := Warning.GetForeground()
 
