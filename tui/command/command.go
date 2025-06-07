@@ -61,6 +61,11 @@ func (c Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return c, cmd
 }
 
+func (c Model) Focus() tea.Cmd {
+	c.input.Focus()
+	return c.Init()
+}
+
 func (c Model) View() string {
 	return c.input.View()
 }

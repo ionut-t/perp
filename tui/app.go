@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
@@ -119,7 +118,6 @@ func New(config config.Config) model {
 
 	editor.SetPlaceholder("Type your SQL query or /ask your question here...")
 
-	editor.SetInsertMode()
 	editor.Focus()
 	editor.DisableCommandMode(true)
 	editor.WithTheme(styles.EditorTheme())
@@ -193,11 +191,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
+		case "tab":
+			if m.view == viewMain && !m.editor.IsInsertMode() {
+				switch m.focused {
+				case focusedEditor:
+					m.focused = focusedContent
+					m.editor.Blur()
+				case focusedContent:
+					m.focused = focusedEditor
+					m.editor.Focus()
+				}
+				_, cmd := m.content.Update(nil)
+
+				return m, tea.Batch(
+					cmd,
+					m.editor.CursorBlink(),
+				)
+			}
+
 		case ":":
 			if m.editor.IsNormalMode() {
 				m.focused = focusedCommand
 				m.editor.Blur()
-				return m, cursor.Blink
+
+				ed, cmd := m.editor.Update(nil)
+				m.editor = ed.(editor.Model)
+
+				return m, tea.Batch(
+					m.command.Focus(),
+					cmd,
+				)
 			}
 
 		case "S":

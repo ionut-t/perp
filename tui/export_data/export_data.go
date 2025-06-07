@@ -149,21 +149,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.editor.CursorBlink()
 			}
 
-		case "shift+left":
-			if m.view == viewSplit {
-				if m.focusedView == focusedViewList {
-					m.focusedView = focusedViewRecord
-					m.editor.Focus()
-					m.editor.SetCursorPosition(0, 0)
-					m.editor.SetNormalMode()
-				} else {
-					m.focusedView = focusedViewList
-					m.editor.Blur()
-				}
-			}
-
-		case "shift+right":
-			if m.view == viewSplit {
+		case "tab":
+			if m.view == viewSplit && !m.editor.IsInsertMode() {
 				if m.focusedView == focusedViewList {
 					m.focusedView = focusedViewRecord
 					m.editor.Focus()
