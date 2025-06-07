@@ -1,6 +1,7 @@
 package content
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -240,24 +241,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "y":
 			if m.view == viewTable {
-				if cell, ok := m.table.GetSelectedCell(); ok {
-					clipboard.Write(cell)
+				return m.yankSelectedCell()
+			}
 
-					defaultTheme := table.DefaultTheme()
-					theme := table.Theme{
-						Header:      defaultTheme.Header,
-						Border:      defaultTheme.Border,
-						Cell:        defaultTheme.Cell,
-						SelectedRow: defaultTheme.SelectedRow,
-						SelectedCell: defaultTheme.SelectedCell.
-							Background(defaultTheme.SelectedCell.GetForeground()).
-							Foreground(defaultTheme.SelectedCell.GetBackground()),
-					}
-
-					m.table.SetTheme(theme)
-
-					return m, m.dispatchClearYankMsg()
-				}
+		case "Y":
+			if m.view == viewTable {
+				return m.yankSelectedRow()
 			}
 		}
 	}
@@ -353,6 +342,67 @@ func (m *Model) setViewportContent() {
 	case viewDBSchema:
 		m.viewport.SetContent(padding.Render(m.dbSchema))
 	}
+}
+
+func (m Model) yankSelectedCell() (tea.Model, tea.Cmd) {
+	if cell, ok := m.table.GetSelectedCell(); ok {
+		clipboard.Write(cell)
+
+		defaultTheme := table.DefaultTheme()
+		theme := table.Theme{
+			Header:      defaultTheme.Header,
+			Border:      defaultTheme.Border,
+			Cell:        defaultTheme.Cell,
+			SelectedRow: defaultTheme.SelectedRow,
+			SelectedCell: defaultTheme.SelectedCell.
+				Background(defaultTheme.SelectedCell.GetForeground()).
+				Foreground(defaultTheme.SelectedCell.GetBackground()),
+		}
+
+		m.table.SetTheme(theme)
+
+		return m, m.dispatchClearYankMsg()
+	}
+
+	return m, nil
+}
+
+func (m Model) yankSelectedRow() (tea.Model, tea.Cmd) {
+	row := m.table.GetSelectedRow()
+
+	data := m.queryResults[row]
+
+	var jsonData []byte
+	var err error
+
+	jsonData, err = json.MarshalIndent(data, "", "  ")
+
+	if err != nil {
+		return m, func() tea.Msg {
+			return clearYankMsg{}
+		}
+	}
+
+	content := strings.TrimSpace(string(jsonData))
+
+	clipboard.Write(content)
+
+	defaultTheme := table.DefaultTheme()
+	selectedRow := defaultTheme.SelectedRow.
+		Background(defaultTheme.SelectedRow.GetForeground()).
+		Foreground(defaultTheme.SelectedRow.GetBackground())
+
+	theme := table.Theme{
+		Header:       defaultTheme.Header,
+		Border:       defaultTheme.Border,
+		Cell:         defaultTheme.Cell,
+		SelectedRow:  selectedRow,
+		SelectedCell: selectedRow,
+	}
+
+	m.table.SetTheme(theme)
+
+	return m, m.dispatchClearYankMsg()
 }
 
 func processLogs(logs []chatLog) []list.Item {
