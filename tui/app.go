@@ -28,17 +28,6 @@ import (
 	"github.com/ionut-t/perp/ui/styles"
 )
 
-var (
-	padding      = lipgloss.NewStyle().Padding(1, 1)
-	activeBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Primary.GetForeground())
-	inactiveBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Overlay0.
-				GetForeground())
-)
-
 type schemaFetchedMsg string
 type schemaFailureMsg struct {
 	err error
@@ -604,14 +593,14 @@ func (m model) View() string {
 		commandLine = m.notification
 	}
 
-	editorBorder := inactiveBorder
+	editorBorder := styles.InactiveBorder
 	if m.focused == focusedEditor {
-		editorBorder = activeBorder
+		editorBorder = styles.ActiveBorder
 	}
 
-	contentBorder := inactiveBorder
+	contentBorder := styles.InactiveBorder
 	if m.focused == focusedContent {
-		contentBorder = activeBorder
+		contentBorder = styles.ActiveBorder
 	}
 
 	primaryView := lipgloss.JoinVertical(
@@ -630,7 +619,7 @@ func (m model) View() string {
 
 	switch m.view {
 	case viewServers:
-		return padding.Render(lipgloss.JoinVertical(
+		return styles.ViewPadding.Render(lipgloss.JoinVertical(
 			lipgloss.Left,
 			lipgloss.NewStyle().Height(m.height-lipgloss.Height(m.editor.View())-4).Render(
 				m.serverSelection.View(),
@@ -641,7 +630,7 @@ func (m model) View() string {
 		return lipgloss.NewStyle().Padding(1, 1, 0).Render(lipgloss.JoinVertical(
 			lipgloss.Left,
 			contentBorder.Width(width).
-				Height(height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding.GetVerticalBorderSize()*2-2).
+				Height(height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-styles.ViewPadding.GetVerticalBorderSize()*2-2).
 				Render(m.content.View()),
 			primaryView))
 
@@ -758,12 +747,12 @@ func (m model) closeDbConnection() {
 }
 
 func (m *model) getAvailableSizes() (int, int) {
-	h, v := padding.GetFrameSize()
+	h, v := styles.ViewPadding.GetFrameSize()
 
 	statusBarHeight := 1
 
-	availableHeight := m.height - v - statusBarHeight - activeBorder.GetBorderBottomSize()
-	availableWidth := m.width - h - activeBorder.GetBorderLeftSize()
+	availableHeight := m.height - v - statusBarHeight - styles.ActiveBorder.GetBorderBottomSize()
+	availableWidth := m.width - h - styles.ActiveBorder.GetBorderLeftSize()
 
 	return availableWidth, availableHeight
 }

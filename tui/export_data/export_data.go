@@ -17,14 +17,6 @@ import (
 )
 
 var (
-	viewPadding  = lipgloss.NewStyle().Padding(1, 1)
-	activeBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Primary.GetForeground())
-	inactiveBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Overlay0.
-				GetForeground())
 	splitViewSeparator      = " "
 	splitViewSeparatorWidth = lipgloss.Width(splitViewSeparator)
 	minListWidth            = 50
@@ -324,7 +316,7 @@ func (m Model) View() string {
 
 	switch m.view {
 	case viewList:
-		return viewPadding.Render(m.list.View()) + "\n" + m.statusBarView()
+		return styles.ViewPadding.Render(m.list.View()) + "\n" + m.statusBarView()
 
 	case viewRecord:
 		return m.editor.View()
@@ -378,19 +370,19 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 }
 
 func (m *Model) getAvailableSizes() (int, int) {
-	h, v := viewPadding.GetFrameSize()
+	h, v := styles.ViewPadding.GetFrameSize()
 
 	statusBarHeight := lipgloss.Height(m.statusBarView())
 
-	availableHeight := m.height - v - statusBarHeight - activeBorder.GetBorderBottomSize()
+	availableHeight := m.height - v - statusBarHeight - styles.ActiveBorder.GetBorderBottomSize()
 	availableWidth := m.width - h
 
 	return availableWidth, availableHeight
 }
 
 func (m *Model) getSplitView() string {
-	horizontalFrameSize := viewPadding.GetHorizontalFrameSize()
-	horizontalFrameBorderSize := activeBorder.GetHorizontalFrameSize()
+	horizontalFrameSize := styles.ViewPadding.GetHorizontalFrameSize()
+	horizontalFrameBorderSize := styles.ActiveBorder.GetHorizontalFrameSize()
 
 	availableWidth := m.width - horizontalFrameSize
 
@@ -402,11 +394,11 @@ func (m *Model) getSplitView() string {
 	if m.focusedView == focusedViewList {
 		joinedContent = lipgloss.JoinHorizontal(
 			lipgloss.Left,
-			activeBorder.
+			styles.ActiveBorder.
 				Width(listWidth).
 				Render(m.list.View()),
 			splitViewSeparator,
-			inactiveBorder.
+			styles.InactiveBorder.
 				Width(noteWidth).
 				Height(m.list.Height()).
 				Render(m.editor.View()),
@@ -414,18 +406,18 @@ func (m *Model) getSplitView() string {
 	} else {
 		joinedContent = lipgloss.JoinHorizontal(
 			lipgloss.Left,
-			inactiveBorder.
+			styles.InactiveBorder.
 				Width(listWidth).
 				Render(m.list.View()),
 			splitViewSeparator,
-			activeBorder.
+			styles.ActiveBorder.
 				Width(noteWidth).
 				Height(m.list.Height()).
 				Render(m.editor.View()),
 		)
 	}
 
-	renderedView := viewPadding.Render(lipgloss.JoinVertical(
+	renderedView := styles.ViewPadding.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
 		joinedContent,
 	))
