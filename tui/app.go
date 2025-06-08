@@ -5,11 +5,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/constants"
+	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/export"
 	"github.com/ionut-t/perp/pkg/history"
@@ -21,15 +23,16 @@ import (
 	"github.com/ionut-t/perp/tui/content"
 	exportData "github.com/ionut-t/perp/tui/export_data"
 	"github.com/ionut-t/perp/tui/servers"
+	"github.com/ionut-t/perp/ui/help"
+	statusbar "github.com/ionut-t/perp/ui/status-bar"
 	"github.com/ionut-t/perp/ui/styles"
 )
 
-const padding = 2
-
 var (
+	padding      = lipgloss.NewStyle().Padding(1, 1)
 	activeBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Text.GetForeground())
+			BorderForeground(styles.Primary.GetForeground())
 	inactiveBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(styles.Overlay0.
@@ -58,8 +61,8 @@ type view int
 const (
 	viewServers view = iota
 	viewMain
-	viewLLMLogs
 	viewExportData
+	viewHelp
 )
 
 type focused int
@@ -91,8 +94,8 @@ type model struct {
 	exportData          exportData.Model
 	command             command.Model
 	notification        string
-
-	content content.Model
+	content             content.Model
+	help                help.Model
 }
 
 func New(config config.Config) model {
@@ -143,6 +146,7 @@ func New(config config.Config) model {
 		serverSelection: servers.New(config.Storage()),
 		historyLogs:     historyLogs,
 		content:         content.New(0, 0),
+		help:            help.New(),
 	}
 }
 
@@ -155,13 +159,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.editor.SetSize(msg.Width-padding*2, 10)
 
-		height := max(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2-2, 1)
+		width, height := m.getAvailableSizes()
 
-		width := max(m.width-padding*2, 1)
+		m.editor.SetSize(width, max(height/2-5, 10))
 
-		m.content.SetSize(width, height)
+		contentHeight := height - lipgloss.Height(m.editor.View()) - lipgloss.Height(m.command.View())
+
+		m.content.SetSize(width, contentHeight)
+		m.help.SetSize(msg.Width, msg.Height)
+		m.help.SetContent(m.renderHelp())
 
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
@@ -173,8 +180,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
-		switch msg.String() {
-		case "q":
+		switch {
+		case key.Matches(msg, keymap.Quit):
 			if m.error != nil {
 				m.serverSelection = servers.New(m.config.Storage())
 				_, cmd := m.serverSelection.Update(nil)
@@ -188,12 +195,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 
+			if m.view == viewHelp {
+				m.view = viewMain
+				m.focused = focusedEditor
+				m.editor.Focus()
+				break
+			}
+
 			if m.editor.IsNormalMode() {
 				m.closeDbConnection()
 				return m, tea.Quit
 			}
 
-		case "tab":
+		case key.Matches(msg, changeFocused):
 			if m.view == viewMain && !m.editor.IsInsertMode() {
 				switch m.focused {
 				case focusedEditor:
@@ -211,8 +225,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 
-		case ":":
-			if m.editor.IsNormalMode() {
+		case key.Matches(msg, enterCommand):
+			if m.view == viewMain && m.editor.IsNormalMode() {
 				m.focused = focusedCommand
 				m.editor.Blur()
 
@@ -225,7 +239,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 
-		case "S":
+		case key.Matches(msg, accessDBSchema):
 			if m.editor.IsNormalMode() {
 				m.focused = focusedContent
 				m.editor.Blur()
@@ -235,7 +249,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 
-		case "|":
+		case key.Matches(msg, accessServers):
 			if m.editor.IsNormalMode() {
 				m.serverSelection = servers.New(m.config.Storage())
 				_, cmd := m.serverSelection.Update(nil)
@@ -245,7 +259,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 
-		case "i":
+		case key.Matches(msg, keymap.Insert):
 			if m.view == viewMain && m.focused == focusedContent {
 				m.focused = focusedEditor
 				m.editor.Focus()
@@ -259,7 +273,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 
-		case "enter":
+		case key.Matches(msg, keymap.Submit):
 			if m.editor.IsInsertMode() || m.editor.IsNormalMode() {
 				content := m.editor.GetCurrentContent()
 
@@ -280,7 +294,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "alt+enter":
+		case key.Matches(msg, executeQuery):
 			if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
 				m.historyLogs = logs
 				m.currentHistoryIndex = 0
@@ -288,7 +302,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return m, m.sendQueryCmd()
 
-		case "esc":
+		case key.Matches(msg, keymap.Cancel):
 			if m.view == viewMain && m.focused == focusedEditor {
 				if m.editor.IsNormalMode() {
 					if m.editor.IsFocused() {
@@ -298,7 +312,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "shift+up":
+		case key.Matches(msg, previousHistory):
 			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
 				lastQuery := m.historyLogs[m.currentHistoryIndex].Query
 
@@ -312,7 +326,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.SetCursorPositionEnd()
 			}
 
-		case "shift+down":
+		case key.Matches(msg, nextHistory):
 			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
 				lastQuery := m.historyLogs[m.currentHistoryIndex].Query
 
@@ -326,11 +340,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.SetCursorPositionEnd()
 			}
 
-		case "g":
+		case key.Matches(msg, accessExportedData):
 			if m.focused == focusedContent {
 				m.view = viewExportData
 				exportStore := exportStore.New(m.config.Storage(), m.config.Editor())
-				m.exportData = exportData.New(exportStore, m.width, m.height)
+				m.exportData = exportData.New(exportStore, m.server, m.width, m.height)
+			}
+
+		case key.Matches(msg, keymap.Help):
+			if m.editor.IsInsertMode() {
+				break
+			}
+
+			switch m.view {
+			case viewMain:
+				m.view = viewHelp
+				m.editor.Blur()
+			case viewHelp:
+				m.view = viewMain
+				m.focused = focusedEditor
+				m.editor.Focus()
 			}
 		}
 
@@ -549,6 +578,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	if m.view == viewHelp {
+		helpModel, cmd := m.help.Update(msg)
+		m.help = helpModel.(help.Model)
+		cmds = append(cmds, cmd)
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -561,6 +596,8 @@ func (m model) View() string {
 
 	if m.focused == focusedCommand {
 		commandLine = m.command.View()
+	} else {
+		commandLine = statusbar.StatusBarView(m.server, m.width)
 	}
 
 	if m.notification != "" {
@@ -585,15 +622,15 @@ func (m model) View() string {
 		commandLine,
 	)
 
-	width := max(m.width-padding*2, 1)
+	width, height := m.getAvailableSizes()
 
 	if m.error != nil {
-		return m.renderDBError(width, m.height-padding)
+		return m.renderDBError(width, height)
 	}
 
 	switch m.view {
 	case viewServers:
-		return lipgloss.NewStyle().Padding(padding).Render(lipgloss.JoinVertical(
+		return padding.Render(lipgloss.JoinVertical(
 			lipgloss.Left,
 			lipgloss.NewStyle().Height(m.height-lipgloss.Height(m.editor.View())-4).Render(
 				m.serverSelection.View(),
@@ -601,15 +638,18 @@ func (m model) View() string {
 		))
 
 	case viewMain:
-		return lipgloss.NewStyle().Padding(padding).Render(lipgloss.JoinVertical(
+		return lipgloss.NewStyle().Padding(1, 1, 0).Render(lipgloss.JoinVertical(
 			lipgloss.Left,
 			contentBorder.Width(width).
-				Height(m.height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding*2-2).
+				Height(height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-padding.GetVerticalBorderSize()*2-2).
 				Render(m.content.View()),
 			primaryView))
 
 	case viewExportData:
 		return m.exportData.View()
+
+	case viewHelp:
+		return m.help.View()
 	}
 
 	return ""
@@ -666,7 +706,6 @@ func (m model) sendQueryCmd() tea.Cmd {
 	prompt = strings.TrimSpace(prompt)
 
 	if strings.HasPrefix(prompt, "/ask ") {
-		m.view = viewLLMLogs
 		m.focused = focusedContent
 
 		return m.ask(strings.Trim(prompt, "/ask "))
@@ -716,4 +755,15 @@ func (m model) closeDbConnection() {
 	if m.db != nil {
 		m.db.Close()
 	}
+}
+
+func (m *model) getAvailableSizes() (int, int) {
+	h, v := padding.GetFrameSize()
+
+	statusBarHeight := 1
+
+	availableHeight := m.height - v - statusBarHeight - activeBorder.GetBorderBottomSize()
+	availableWidth := m.width - h - activeBorder.GetBorderLeftSize()
+
+	return availableWidth, availableHeight
 }

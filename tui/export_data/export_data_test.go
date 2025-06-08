@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
+	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/store/export"
 )
 
@@ -94,8 +95,11 @@ func TestNew_WithNoRecords(t *testing.T) {
 		currentRecord: export.Record{},
 	}
 	width, height := 100, 40
-
-	m := New(store, width, height)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, width, height)
 
 	if m.error != nil {
 		t.Errorf("expected no error, got %v", m.error)
@@ -126,8 +130,11 @@ func TestNew_WithRecords(t *testing.T) {
 		currentRecord: records[0],
 	}
 	width, height := 120, 50
-
-	m := New(store, width, height)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, width, height)
 
 	if m.error != nil {
 		t.Errorf("expected no error, got %v", m.error)
@@ -148,8 +155,11 @@ func TestNew_WithLoadError(t *testing.T) {
 		currentRecord: export.Record{},
 	}
 	width, height := 80, 20
-
-	m := New(store, width, height)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, width, height)
 
 	if m.error == nil {
 		t.Error("expected error to be set")
@@ -165,7 +175,11 @@ func TestModel_Update_WindowSizeMsg(t *testing.T) {
 	store := &mockStore{
 		records: []export.Record{{Name: "test", Content: "content"}},
 	}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 
 	newWidth, newHeight := 200, 80
 	msg := tea.WindowSizeMsg{Width: newWidth, Height: newHeight}
@@ -183,7 +197,11 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 	t.Parallel()
 
 	store := &mockStore{}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 	m.view = viewSplit
 	m.focusedView = focusedViewList
 
@@ -208,7 +226,11 @@ func TestModel_Update_KeyMsg_SwitchToInsertMode(t *testing.T) {
 		records:       []export.Record{{Name: "test", Content: "content"}},
 		currentRecord: export.Record{Name: "test", Content: "content"},
 	}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 	m.focusedView = focusedViewList
 
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}}
@@ -224,7 +246,11 @@ func TestModel_Update_KeyMsg_ShiftNavigation(t *testing.T) {
 	t.Parallel()
 
 	store := &mockStore{}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 	m.view = viewSplit
 	m.focusedView = focusedViewList
 
@@ -258,7 +284,11 @@ func TestModel_Update_EditorSaveMsg(t *testing.T) {
 		currentRecord: currentRecord,
 		records:       []export.Record{currentRecord},
 	}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 
 	msg := editor.SaveMsg("new content")
 	updatedModel, _ := m.Update(msg)
@@ -286,7 +316,11 @@ func TestModel_Update_ListNavigation(t *testing.T) {
 		records:       records,
 		currentRecord: records[0],
 	}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 	m.focusedView = focusedViewList
 
 	// Manually trigger what would happen after a selection change
@@ -311,7 +345,11 @@ func TestModel_View_ErrorState(t *testing.T) {
 	t.Parallel()
 
 	store := &mockStore{}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 	m.error = errors.New("test error")
 
 	view := m.View()
@@ -336,7 +374,11 @@ func TestModel_View_DifferentModes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &mockStore{}
-			m := New(store, 100, 40)
+			server := server.Server{
+				Name:     "test-server",
+				Database: "test-db",
+			}
+			m := New(store, server, 100, 40)
 			m.view = tt.view
 			m.error = nil
 
@@ -416,7 +458,11 @@ func TestModel_handleWindowSize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &mockStore{}
-			m := New(store, 200, 40)
+			server := server.Server{
+				Name:     "test-server",
+				Database: "test-db",
+			}
+			m := New(store, server, 200, 40)
 			m.view = tt.initialView
 
 			m.handleWindowSize(tea.WindowSizeMsg{Width: tt.width, Height: 40})
@@ -457,7 +503,11 @@ func TestModel_Update_EditorDeleteFileMsg_LastRecord(t *testing.T) {
 		currentRecord: records[0],
 		records:       records,
 	}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 
 	msg := editor.DeleteFileMsg{}
 	updatedModel, cmd := m.Update(msg)
@@ -497,7 +547,11 @@ func TestModel_Update_EditorRenameMsg(t *testing.T) {
 		currentRecord: currentRecord,
 		records:       []export.Record{currentRecord},
 	}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 
 	newName := "newname"
 
@@ -554,7 +608,11 @@ func TestModel_statusBarView(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &mockStore{}
-			m := New(store, 100, 40)
+			server := server.Server{
+				Name:     "test-server",
+				Database: "test-db",
+			}
+			m := New(store, server, 100, 40)
 			m.error = tt.error
 			m.successMessage = tt.successMessage
 
@@ -571,9 +629,13 @@ func TestModel_getAvailableSizes(t *testing.T) {
 	t.Parallel()
 
 	store := &mockStore{}
-	m := New(store, 120, 50)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 120, 50)
 
-	availableWidth, availableHeight, cmdViewHeight := m.getAvailableSizes()
+	availableWidth, availableHeight := m.getAvailableSizes()
 
 	// Basic sanity checks
 	if availableWidth <= 0 {
@@ -581,9 +643,6 @@ func TestModel_getAvailableSizes(t *testing.T) {
 	}
 	if availableHeight <= 0 {
 		t.Errorf("expected positive available height, got %d", availableHeight)
-	}
-	if cmdViewHeight < 0 {
-		t.Errorf("expected non-negative cmd view height, got %d", cmdViewHeight)
 	}
 	if availableWidth >= m.width {
 		t.Errorf("expected available width to be less than total width due to padding")
@@ -597,7 +656,11 @@ func TestNew_InitialFocus(t *testing.T) {
 	t.Parallel()
 
 	store := &mockStore{}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 
 	// Initially focused on list
 	if m.focusedView != focusedViewList {
@@ -621,7 +684,11 @@ func TestModel_Update_KeyMsg_ExternalEditor(t *testing.T) {
 		records:       records,
 		editorName:    "nano",
 	}
-	m := New(store, 100, 40)
+	server := server.Server{
+		Name:     "test-server",
+		Database: "test-db",
+	}
+	m := New(store, server, 100, 40)
 	m.focusedView = focusedViewList
 
 	// Test pressing 'e' to open external editor

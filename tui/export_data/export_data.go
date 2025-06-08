@@ -9,7 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
+	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/store/export"
+	"github.com/ionut-t/perp/ui/help"
+	statusbar "github.com/ionut-t/perp/ui/status-bar"
 	"github.com/ionut-t/perp/ui/styles"
 )
 
@@ -17,7 +20,7 @@ var (
 	viewPadding  = lipgloss.NewStyle().Padding(1, 1)
 	activeBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Text.GetForeground())
+			BorderForeground(styles.Primary.GetForeground())
 	inactiveBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(styles.Overlay0.
@@ -43,6 +46,7 @@ const (
 	viewSplit view = iota
 	viewList
 	viewRecord
+	viewHelp
 )
 
 type focusedView int
@@ -63,6 +67,8 @@ type Model struct {
 	list           list.Model
 	editor         editor.Model
 	successMessage string
+	help           help.Model
+	server         server.Server
 }
 
 type item struct {
@@ -73,7 +79,7 @@ func (i item) Title() string       { return i.title }
 func (i item) Description() string { return i.desc }
 func (i item) FilterValue() string { return i.title }
 
-func New(store export.Store, width, height int) Model {
+func New(store export.Store, server server.Server, width, height int) Model {
 	records, err := store.Load()
 
 	delegate := list.NewDefaultDelegate()
@@ -106,6 +112,8 @@ func New(store export.Store, width, height int) Model {
 		error:  err,
 		list:   list,
 		editor: editorModel,
+		help:   help.New(),
+		server: server,
 	}
 
 	m.handleWindowSize(tea.WindowSizeMsg{
@@ -132,6 +140,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "q", "esc":
+			if m.view == viewHelp {
+				m.view = viewSplit
+				return m, nil
+			}
+
 			if m.view == viewSplit {
 				if m.focusedView == focusedViewList {
 					return m, func() tea.Msg {
@@ -141,6 +154,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "i":
+			if m.view == viewHelp {
+				break
+			}
+
 			if m.focusedView == focusedViewList {
 				m.focusedView = focusedViewRecord
 				m.editor.Focus()
@@ -150,6 +167,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "tab":
+			if m.view == viewHelp {
+				break
+			}
+
 			if m.view == viewSplit && !m.editor.IsInsertMode() {
 				if m.focusedView == focusedViewList {
 					m.focusedView = focusedViewRecord
@@ -163,7 +184,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "e":
-			if m.editor.IsInsertMode() || m.editor.IsCommandMode() {
+			if m.editor.IsInsertMode() || m.editor.IsCommandMode() || m.view == viewHelp {
 				break
 			}
 
@@ -173,6 +194,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return nil
 			})
 			return m, execCmd
+
+		case "?":
+			if m.editor.IsInsertMode() {
+				break
+			}
+
+			switch m.view {
+			case viewSplit:
+				m.view = viewHelp
+				m.editor.Blur()
+			case viewHelp:
+				m.view = viewSplit
+			}
 		}
 
 	case editor.SaveMsg:
@@ -256,6 +290,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.error = nil
 	}
 
+	if m.view == viewHelp {
+		hp, cmd := m.help.Update(msg)
+		m.help = hp.(help.Model)
+
+		return m, cmd
+	}
+
 	var cmds []tea.Cmd
 
 	if m.focusedView == focusedViewList {
@@ -291,12 +332,18 @@ func (m Model) View() string {
 	case viewSplit:
 		return m.getSplitView()
 
+	case viewHelp:
+		return m.help.View()
+
 	default:
 		return ""
 	}
 }
 
 func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
+	m.help.SetSize(msg.Width, msg.Height)
+	m.help.SetContent(m.renderHelp())
+
 	if msg.Width < 2*minListWidth {
 		switch m.view {
 		case viewSplit:
@@ -308,14 +355,14 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 
 	m.width, m.height = msg.Width, msg.Height
 
-	availableWidth, availableHeight, cmdViewHeight := m.getAvailableSizes()
+	availableWidth, availableHeight := m.getAvailableSizes()
 
 	if m.view == viewList {
 		m.list.SetSize(availableWidth, availableHeight)
 	}
 
 	if m.view == viewRecord {
-		m.editor.SetSize(msg.Width, msg.Height-cmdViewHeight)
+		m.editor.SetSize(msg.Width, msg.Height)
 	}
 
 	if m.view == viewSplit {
@@ -330,20 +377,15 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 	}
 }
 
-func (m *Model) getAvailableSizes() (int, int, int) {
+func (m *Model) getAvailableSizes() (int, int) {
 	h, v := viewPadding.GetFrameSize()
-
-	var cmdExecutorHeight int
-	var deleteViewHeight int
 
 	statusBarHeight := lipgloss.Height(m.statusBarView())
 
-	availableHeight := m.height - v - statusBarHeight - cmdExecutorHeight - deleteViewHeight - activeBorder.GetBorderBottomSize()
+	availableHeight := m.height - v - statusBarHeight - activeBorder.GetBorderBottomSize()
 	availableWidth := m.width - h
 
-	cmdViewHeight := cmdExecutorHeight - deleteViewHeight
-
-	return availableWidth, availableHeight, cmdViewHeight
+	return availableWidth, availableHeight
 }
 
 func (m *Model) getSplitView() string {
@@ -400,7 +442,8 @@ func (m *Model) statusBarView() string {
 		return styles.Success.Margin(0, 2).Render(m.successMessage)
 	}
 
-	return ""
+	return lipgloss.NewStyle().Margin(0, 1).
+		Render(statusbar.StatusBarView(m.server, m.width-2))
 }
 
 func processRecords(records []export.Record) []list.Item {
