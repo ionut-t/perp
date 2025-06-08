@@ -50,7 +50,7 @@ func EditorTheme() editor.Theme {
 
 		SelectionStyle: Surface1,
 
-		HighlighYankStyle: Highlight.
+		HighlightYankStyle: Highlight.
 			Bold(true),
 
 		PlaceholderStyle: Overlay0,
