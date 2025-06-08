@@ -372,7 +372,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		schema := string(msg)
 		m.loading = false
 
-		if m.config.ShouldUseDatabaseSchema() {
+		if m.server.ShareDatabaseSchemaLLM {
 			m.llm.AppendInstructions(schema)
 		}
 
@@ -499,7 +499,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.successNotification(
 				fmt.Sprintf("Data exported successfully to %s.json", fileName),
 			)
-		} else {
 		}
 
 		m.focused = focusedEditor
@@ -512,20 +511,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.errorNotification(err)
 		}
 
+		m.focused = focusedEditor
+		m.editor.Focus()
 		return m, m.successNotification(
 			fmt.Sprintf("Editor changed to %s", msg.Editor),
 		)
 
 	case command.LLMUseDatabaseSchemaMsg:
-		if err := m.config.EnableLLMDatabaseSchema(msg.Enabled); err != nil {
+		focusEditor := func() {
+			m.focused = focusedEditor
+			m.editor.Focus()
+		}
+
+		if m.server.ShareDatabaseSchemaLLM == msg.Enabled {
+			focusEditor()
+			return m, m.successNotification("No change in LLM database schema usage")
+		}
+
+		if err := m.server.EnableDatabaseSchemaLLM(msg.Enabled, m.config.Storage()); err != nil {
 			return m, m.errorNotification(err)
 		}
 
 		if msg.Enabled {
+			focusEditor()
 			m.llm.AppendInstructions(m.content.GetDatabaseSchema())
 			return m, m.successNotification("LLM will now use the database schema")
 		}
 
+		focusEditor()
 		m.llm.ResetInstructions()
 		return m, m.successNotification("LLM will no longer use the database schema")
 

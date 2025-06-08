@@ -121,6 +121,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.selectForm = nil
 					} else {
 						m.initialiseSelectForm()
+						_, cmd := m.selectForm.Update(nil)
+
+						return m, cmd
 					}
 				}
 			}
@@ -159,8 +162,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.serverForm.State == huh.StateCompleted {
 			if m.editedServer != nil {
 				m.editServer()
+				_, cmd = m.selectForm.Update(nil)
+
+				return m, cmd
 			} else {
-				cmds = append(cmds, m.createServer())
+				if cmd := m.createServer(); cmd != nil {
+					return m, cmd
+				}
+
+				_, cmd = m.selectForm.Update(nil)
+
+				return m, cmd
 			}
 		}
 	}
@@ -191,6 +203,11 @@ func (m Model) View() string {
 		createdAt := server.CreatedAt.Local().Format("02/01/2006 15:04:05")
 		updatedAt := server.UpdatedAt.Local().Format("02/01/2006 15:04:05")
 
+		schemaShared := "No"
+		if server.ShareDatabaseSchemaLLM {
+			schemaShared = "Yes"
+		}
+
 		serverInfo := lipgloss.NewStyle().
 			Width(m.width/2).
 			Height(m.height-4).
@@ -206,6 +223,7 @@ func (m Model) View() string {
 					lipgloss.NewStyle().Render("Port: "+strconv.Itoa(server.Port)),
 					lipgloss.NewStyle().Render("Username: "+server.Username),
 					lipgloss.NewStyle().Render("Database: "+server.Database),
+					lipgloss.NewStyle().Render("Share Database Schema with LLM: "+schemaShared),
 					lipgloss.NewStyle().Render("Created At: "+createdAt),
 					lipgloss.NewStyle().Render("Updated At: "+updatedAt),
 				),
@@ -242,6 +260,11 @@ func (m *Model) initialiseCreateForm() {
 	username := huh.NewInput().Title("Username").Key("username").Validate(validateUsername)
 	password := huh.NewInput().Title("Password").Key("password").EchoMode(huh.EchoModePassword)
 	database := huh.NewInput().Title("Database").Key("database").Validate(validateDatabase)
+	shareDatabaseSchemaLLM := huh.NewConfirm().
+		Title("Share Database Schema with LLM?").
+		Key("shareDatabaseSchemaLLM").
+		Affirmative("Yes").
+		Negative("No")
 
 	name.Focus()
 
@@ -253,9 +276,11 @@ func (m *Model) initialiseCreateForm() {
 			username,
 			password,
 			database,
+			shareDatabaseSchemaLLM,
 		),
 	)
 	m.serverForm.WithTheme(styles.ThemeCatppuccin())
+	m.serverForm.WithKeyMap(m.getKeymap())
 }
 
 func (m *Model) initialiseUpdateForm() {
@@ -291,6 +316,13 @@ func (m *Model) initialiseUpdateForm() {
 	database := huh.NewInput().Title("Database").Key("database").Validate(validateDatabase)
 	database.Value(&m.editedServer.Database)
 
+	shareDatabaseSchemaLLM := huh.NewConfirm().
+		Title("Share Database Schema with LLM?").
+		Key("shareDatabaseSchemaLLM").
+		Affirmative("Yes").
+		Negative("No").
+		Value(&m.editedServer.ShareDatabaseSchemaLLM)
+
 	name.Focus()
 
 	m.serverForm = huh.NewForm(
@@ -301,9 +333,13 @@ func (m *Model) initialiseUpdateForm() {
 			username,
 			password,
 			database,
+			shareDatabaseSchemaLLM,
 		),
 	)
+
 	m.serverForm.WithTheme(styles.ThemeCatppuccin())
+	m.serverForm.WithKeyMap(m.getKeymap())
+
 }
 
 func (m *Model) initialiseSelectForm() {
@@ -317,15 +353,13 @@ func (m *Model) initialiseSelectForm() {
 		options[i] = huh.NewOption(srv.Name, srv)
 	}
 
-	m.selectForm = huh.NewForm(
-		huh.NewGroup(selectServer),
-	)
 	selectServer.Options(options...)
 	selectServer.Focus()
 
 	m.selectForm = huh.NewForm(
 		huh.NewGroup(selectServer),
 	)
+
 }
 
 func (m *Model) createServer() tea.Cmd {
@@ -335,13 +369,16 @@ func (m *Model) createServer() tea.Cmd {
 	username := m.serverForm.GetString("username")
 	password := m.serverForm.GetString("password")
 	database := m.serverForm.GetString("database")
+	shareDatabaseSchemaLLM := m.serverForm.GetBool("shareDatabaseSchemaLLM")
+
 	newServer := server.CreateServer{
-		Name:     name,
-		Address:  address,
-		Port:     port,
-		Username: username,
-		Password: password,
-		Database: database,
+		Name:                   name,
+		Address:                address,
+		Port:                   port,
+		Username:               username,
+		Password:               password,
+		Database:               database,
+		ShareDatabaseSchemaLLM: shareDatabaseSchemaLLM,
 	}
 
 	srv, err := server.New(newServer, m.storage)
@@ -375,17 +412,19 @@ func (m *Model) editServer() {
 	username := m.serverForm.GetString("username")
 	password := m.serverForm.GetString("password")
 	database := m.serverForm.GetString("database")
+	shareDatabaseSchemaLLM := m.serverForm.GetBool("shareDatabaseSchemaLLM")
 
 	m.view = viewSelect
 	m.serverForm = nil
 
 	err := m.editedServer.Update(server.CreateServer{
-		Name:     name,
-		Address:  address,
-		Port:     port,
-		Username: username,
-		Password: password,
-		Database: database,
+		Name:                   name,
+		Address:                address,
+		Port:                   port,
+		Username:               username,
+		Password:               password,
+		Database:               database,
+		ShareDatabaseSchemaLLM: shareDatabaseSchemaLLM,
 	}, m.storage)
 
 	if err != nil {
@@ -407,6 +446,14 @@ func (m *Model) editServer() {
 		m.view = viewSelect
 		m.initialiseSelectForm()
 	}
+}
+
+func (m Model) getKeymap() *huh.KeyMap {
+	keymap := huh.NewDefaultKeyMap()
+	keymap.Confirm.Accept.Unbind()
+	keymap.Confirm.Reject.Unbind()
+
+	return keymap
 }
 
 func validateAddress(address string) error {

@@ -20,7 +20,6 @@ func configCmd() *cobra.Command {
 
 			editorFlag, _ := cmd.Flags().GetString("editor")
 			geminiApiKeyFlag, _ := cmd.Flags().GetString("GEMINI_API_KEY")
-			useDatabaseSchemaFlag, _ := cmd.Flags().GetBool("use-database-schema")
 
 			flagsSet := false
 
@@ -34,12 +33,6 @@ func configCmd() *cobra.Command {
 				viper.Set("GEMINI_API_KEY", geminiApiKeyFlag)
 				flagsSet = true
 				fmt.Println("Gemini API key set")
-			}
-
-			if useDatabaseSchemaFlag {
-				viper.Set("use_database_schema", useDatabaseSchemaFlag)
-				flagsSet = true
-				fmt.Println("use_database_schema set to:", useDatabaseSchemaFlag)
 			}
 
 			if flagsSet {

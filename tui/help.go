@@ -233,7 +233,7 @@ func (m model) renderCommandHelp() string {
 		),
 		key.NewBinding(
 			key.WithKeys(""),
-			key.WithHelp("llm-schema <bool>", `enables or disables the usage of database schema in LLM queries;
+			key.WithHelp("llm-schema <bool>", `enables or disables the usage of database schema in LLM queries for the current server;
 						if the value is not provided, it will be set as true.
 						 `),
 		),

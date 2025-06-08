@@ -21,8 +21,6 @@ type Config interface {
 	SetEditor(editor string) error
 	GetGeminiApiKey() (string, error)
 	GetLLMInstructions() (string, error)
-	ShouldUseDatabaseSchema() bool
-	EnableLLMDatabaseSchema(enabled bool) error
 }
 
 type config struct {
@@ -94,24 +92,6 @@ func (c *config) GetLLMInstructions() (string, error) {
 	}
 
 	return string(content), nil
-}
-
-func (c *config) ShouldUseDatabaseSchema() bool {
-	return viper.GetBool("use_database_schema")
-}
-
-func (c *config) EnableLLMDatabaseSchema(enabled bool) error {
-	if enabled == c.ShouldUseDatabaseSchema() {
-		return nil
-	}
-
-	viper.Set("use_database_schema", enabled)
-
-	if err := viper.WriteConfig(); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	return nil
 }
 
 func getDefaultEditor() string {

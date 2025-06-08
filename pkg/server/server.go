@@ -13,24 +13,26 @@ import (
 )
 
 type Server struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Address   string    `json:"address"`
-	Port      int       `json:"port"`
-	Database  string    `json:"database"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID                     uuid.UUID `json:"id"`
+	Name                   string    `json:"name"`
+	Address                string    `json:"address"`
+	Port                   int       `json:"port"`
+	Database               string    `json:"database"`
+	Username               string    `json:"username"`
+	Password               string    `json:"password"`
+	CreatedAt              time.Time `json:"createdAt"`
+	UpdatedAt              time.Time `json:"updatedAt"`
+	ShareDatabaseSchemaLLM bool      `json:"shareDatabaseSchemaLLM"`
 }
 
 type CreateServer struct {
-	Name     string
-	Address  string
-	Port     string
-	Username string
-	Password string
-	Database string
+	Name                   string
+	Address                string
+	Port                   string
+	Username               string
+	Password               string
+	Database               string
+	ShareDatabaseSchemaLLM bool
 }
 
 // New creates a new server instance and saves it to the storage file.
@@ -42,15 +44,16 @@ func New(server CreateServer, storage string) (*Server, error) {
 	}
 
 	newServer := &Server{
-		ID:        uuid.New(),
-		Name:      server.Name,
-		Address:   server.Address,
-		Port:      port,
-		Username:  server.Username,
-		Password:  server.Password,
-		Database:  server.Database,
-		CreatedAt: time.Now().In(time.UTC),
-		UpdatedAt: time.Now().In(time.UTC),
+		ID:                     uuid.New(),
+		Name:                   server.Name,
+		Address:                server.Address,
+		Port:                   port,
+		Username:               server.Username,
+		Password:               server.Password,
+		Database:               server.Database,
+		ShareDatabaseSchemaLLM: server.ShareDatabaseSchemaLLM,
+		CreatedAt:              time.Now().In(time.UTC),
+		UpdatedAt:              time.Now().In(time.UTC),
 	}
 
 	if err := save(newServer, storage); err != nil {
@@ -137,6 +140,22 @@ func (s *Server) Update(server CreateServer, storage string) error {
 	s.Username = server.Username
 	s.Password = server.Password
 	s.Database = server.Database
+	s.ShareDatabaseSchemaLLM = server.ShareDatabaseSchemaLLM
+	s.UpdatedAt = time.Now().In(time.UTC)
+
+	if err := save(s, storage); err != nil {
+		return fmt.Errorf("failed to update server: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Server) EnableDatabaseSchemaLLM(enabled bool, storage string) error {
+	if s.ShareDatabaseSchemaLLM == enabled {
+		return nil
+	}
+
+	s.ShareDatabaseSchemaLLM = enabled
 	s.UpdatedAt = time.Now().In(time.UTC)
 
 	if err := save(s, storage); err != nil {
