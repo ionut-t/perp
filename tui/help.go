@@ -213,7 +213,7 @@ func (m model) renderCommandHelp() string {
 						 Example:
 						 export all data
 						 it exports to data.json (extension is not required);
-						 if the file already exists, it will create a new file with unique name derived from the input name.
+						 if the file already exists, it will create a new file with unique name derived from the input name
 						 `,
 			),
 		),
@@ -223,19 +223,30 @@ func (m model) renderCommandHelp() string {
 						 Example:
 						 export 1,2,3 data.json
 						 it exports rows 1,2,3 to data.json;
-						 if the file already exists, it will create a new file with unique name derived from the input name.
+						 if the file already exists, it will create a new file with unique name derived from the input name
 						 `,
 			),
 		),
 		key.NewBinding(
 			key.WithKeys(""),
-			key.WithHelp("set-editor <editor>", "sets the external editor to use for editing configuration or exported data"),
+			key.WithHelp("set-editor <editor>", `sets the external editor to use for editing configuration or exported data
+			`),
 		),
 		key.NewBinding(
 			key.WithKeys(""),
-			key.WithHelp("llm-schema <bool>", `enables or disables the usage of database schema in LLM queries for the current server;
-						if the value is not provided, it will be set as true.
+			key.WithHelp("llm-db-schema-enable", `enables the usage of database schema in LLM queries for the current server
 						 `),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("llm-db-schema-disable", `disables the usage of database schema in LLM queries for the current server
+						 `),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("llm-model <model>", `sets the LLM model to use for queries
+						Example:
+						llm-model gemini-1.5-flash`),
 		),
 	}
 

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,15 +10,25 @@ import (
 	"github.com/spf13/viper"
 )
 
-const rootDir = ".perp"
-const configFileName = "config.toml"
-const llmInstructionsFileName = "llm_instructions.md"
+const (
+	LLMApiKey   = "LLM_API_KEY"
+	LLMModelKey = "LLM_MODEL"
+	EditorKey   = "editor"
+
+	rootDir                 = ".perp"
+	configFileName          = "config.toml"
+	llmInstructionsFileName = "llm_instructions.md"
+	llmInstructions         = "LLM_INSTRUCTIONS"
+	llmDefaultInstructions  = "LLM_DEFAULT_INSTRUCTIONS"
+)
 
 type Config interface {
 	Editor() string
 	Storage() string
 	SetEditor(editor string) error
-	GetGeminiApiKey() (string, error)
+	GetLLMApiKey() (string, error)
+	GetLLMModel() (string, error)
+	SetLLMModel(model string) error
 	GetLLMInstructions() (string, error)
 }
 
@@ -61,14 +70,38 @@ func (m *config) SetEditor(editor string) error {
 	return viper.WriteConfig()
 }
 
-func (c *config) GetGeminiApiKey() (string, error) {
-	apiKey := viper.GetString("GEMINI_API_KEY")
+func (c *config) GetLLMApiKey() (string, error) {
+	apiKey := viper.GetString(LLMApiKey)
 
 	if apiKey == "" {
-		return "", errors.New("GEMINI_API_KEY not set")
+		return "", fmt.Errorf("%s not set", LLMApiKey)
 	}
 
 	return apiKey, nil
+}
+
+func (c *config) GetLLMModel() (string, error) {
+	model := viper.GetString(LLMModelKey)
+
+	if model == "" {
+		return "", fmt.Errorf("%s not set", LLMModelKey)
+	}
+
+	return model, nil
+}
+
+func (c *config) SetLLMModel(model string) error {
+	if _, err := InitialiseConfigFile(); err != nil {
+		return err
+	}
+
+	if model == "" {
+		return fmt.Errorf("%s cannot be empty", LLMModelKey)
+	}
+
+	viper.Set(LLMModelKey, model)
+
+	return viper.WriteConfig()
 }
 
 func (c *config) GetLLMInstructions() (string, error) {
@@ -107,7 +140,7 @@ func getDefaultEditor() string {
 }
 
 func GetEditor() string {
-	editor := viper.GetString("editor")
+	editor := viper.GetString(EditorKey)
 
 	if editor == "" {
 		return getDefaultEditor()
@@ -134,8 +167,9 @@ func InitialiseConfigFile() (string, error) {
 		viper.SetConfigFile(configPath)
 
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			viper.SetDefault("editor", GetEditor())
-			viper.SetDefault("use_database_schema", false)
+			viper.SetDefault(EditorKey, GetEditor())
+			viper.SetDefault(LLMApiKey, "")
+			viper.SetDefault(LLMModelKey, "")
 
 			if err := viper.WriteConfig(); err != nil {
 				return "", err

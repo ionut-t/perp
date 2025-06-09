@@ -18,21 +18,28 @@ func configCmd() *cobra.Command {
 			configPath := config.GetConfigFilePath()
 			println("Config file path:", configPath)
 
-			editorFlag, _ := cmd.Flags().GetString("editor")
-			geminiApiKeyFlag, _ := cmd.Flags().GetString("GEMINI_API_KEY")
+			editorFlag, _ := cmd.Flags().GetString(config.EditorKey)
+			llmApiKeyFlag, _ := cmd.Flags().GetString(config.LLMApiKey)
+			llmModelFlag, _ := cmd.Flags().GetString(config.LLMModelKey)
 
 			flagsSet := false
 
 			if editorFlag != "" {
-				viper.Set("editor", editorFlag)
+				viper.Set(config.EditorKey, editorFlag)
 				flagsSet = true
 				fmt.Println("Editor set to:", editorFlag)
 			}
 
-			if geminiApiKeyFlag != "" {
-				viper.Set("GEMINI_API_KEY", geminiApiKeyFlag)
+			if llmApiKeyFlag != "" {
+				viper.Set(config.LLMApiKey, llmApiKeyFlag)
 				flagsSet = true
 				fmt.Println("Gemini API key set")
+			}
+
+			if llmModelFlag != "" {
+				viper.Set(config.LLMModelKey, llmModelFlag)
+				flagsSet = true
+				fmt.Println("LLM model set to:", llmModelFlag)
 			}
 
 			if flagsSet {
@@ -48,9 +55,9 @@ func configCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringP("editor", "e", "", "Set the editor to use for editing config")
-	cmd.Flags().StringP("gemini-api-key", "g", "", "Set the Gemini API key")
-	cmd.Flags().BoolP("use-database-schema", "d", false, "Use database schema for LLM instructions")
+	cmd.Flags().StringP(config.EditorKey, "e", "", "Set the editor to use for editing config")
+	cmd.Flags().StringP(config.LLMApiKey, "k", "", "Set the LLM API key")
+	cmd.Flags().StringP(config.LLMModelKey, "m", "", "Set the LLM model")
 
 	return cmd
 }

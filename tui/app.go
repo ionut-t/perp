@@ -88,7 +88,8 @@ type model struct {
 }
 
 func New(config config.Config) model {
-	apiKey, _ := config.GetGeminiApiKey()
+	llmApiKey, _ := config.GetLLMApiKey()
+	llmModel, _ := config.GetLLMModel()
 
 	editor := editor.New(80, 10)
 	editor.ShowMessages(false)
@@ -127,7 +128,7 @@ func New(config config.Config) model {
 
 	return model{
 		config:          config,
-		llm:             gemini.New(apiKey, instructions),
+		llm:             gemini.New(llmApiKey, llmModel, instructions),
 		editor:          editor,
 		sqlKeywords:     sqlKeywordsMap,
 		llmKeywords:     llmKeywordsMap,
@@ -542,6 +543,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.llm.ResetInstructions()
 		return m, m.successNotification("LLM will no longer use the database schema")
 
+	case command.LLMModelChangedMsg:
+		existingModel, _ := m.config.GetLLMModel()
+		if existingModel == msg.Model {
+			return m, m.successNotification("LLM model is already set to " + msg.Model)
+		}
+
+		if err := m.config.SetLLMModel(msg.Model); err != nil {
+			return m, m.errorNotification(err)
+		}
+
+		m.focused = focusedEditor
+		m.editor.Focus()
+		return m, m.successNotification("LLM model changed to " + msg.Model)
+
 	case command.ErrorMsg:
 		return m, m.errorNotification(msg.Err)
 	}
@@ -599,7 +614,9 @@ func (m model) View() string {
 	if m.focused == focusedCommand {
 		commandLine = m.command.View()
 	} else {
-		commandLine = statusbar.StatusBarView(m.server, m.width)
+		llmModel, _ := m.config.GetLLMModel()
+
+		commandLine = statusbar.StatusBarView(m.server, llmModel, m.width)
 	}
 
 	if m.notification != "" {

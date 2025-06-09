@@ -435,7 +435,7 @@ func (m *Model) statusBarView() string {
 	}
 
 	return lipgloss.NewStyle().Margin(0, 1).
-		Render(statusbar.StatusBarView(m.server, m.width-2))
+		Render(statusbar.StatusBarView(m.server, "", m.width-2))
 }
 
 func processRecords(records []export.Record) []list.Item {

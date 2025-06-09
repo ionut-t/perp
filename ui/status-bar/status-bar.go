@@ -8,7 +8,7 @@ import (
 	"github.com/ionut-t/perp/ui/styles"
 )
 
-func StatusBarView(server server.Server, width int) string {
+func StatusBarView(server server.Server, llmModel string, width int) string {
 	bg := styles.Surface0.GetBackground()
 
 	separator := styles.Surface0.Render(" | ")
@@ -17,14 +17,21 @@ func StatusBarView(server server.Server, width int) string {
 
 	database := styles.Accent.Background(bg).Render(server.Database)
 
-	serverInfo := styles.Surface0.Padding(0, 1).Render(
-		serverName + separator + database,
-	)
+	var llmModelDisplay string
+
+	left := serverName + separator + database
+
+	if llmModel != "" {
+		llmModelDisplay = styles.Accent.Background(bg).Render(llmModel)
+		left += separator + llmModelDisplay
+	}
+
+	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
 
 	helpText := styles.Info.Background(bg).PaddingRight(1).Render("? Help")
 
 	displayedInfoWidth := width -
-		lipgloss.Width(serverInfo) -
+		lipgloss.Width(leftInfo) -
 		lipgloss.Width(helpText) -
 		lipgloss.Width(separator)
 
@@ -33,7 +40,7 @@ func StatusBarView(server server.Server, width int) string {
 	return styles.Surface0.Width(width).Render(
 		lipgloss.JoinHorizontal(
 			lipgloss.Right,
-			serverInfo,
+			leftInfo,
 			spaces,
 			helpText,
 		),

@@ -25,6 +25,10 @@ type LLMUseDatabaseSchemaMsg struct {
 	Enabled bool
 }
 
+type LLMModelChangedMsg struct {
+	Model string
+}
+
 type CancelMsg struct{}
 
 type QuitMsg struct{}
@@ -108,9 +112,15 @@ func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return c.handleEditorSetCmd(cmdValue)
 		}
 
-		if strings.HasPrefix(cmdValue, "llm-schema") {
+		if strings.HasPrefix(cmdValue, "llm-db-schema-enable") || strings.HasPrefix(cmdValue, "llm-db-schema-disable") {
 			return c.handleLLMDatabaseSchema(cmdValue)
 		}
+
+		if strings.HasPrefix(cmdValue, "llm-model") {
+			return c.handleLLMMModelChanged(cmdValue)
+		}
+
+		return c, dispatch(ErrorMsg{Err: fmt.Errorf("unknown command: %s", cmdValue)})
 	}
 
 	cmdModel, cmd := c.input.Update(msg)
@@ -153,17 +163,14 @@ func (c Model) handleEditorSetCmd(cmdValue string) (Model, tea.Cmd) {
 }
 
 func (c Model) handleLLMDatabaseSchema(cmdValue string) (Model, tea.Cmd) {
-	value := strings.TrimSpace(strings.TrimPrefix(cmdValue, "llm-schema"))
-
 	var enabled bool
-
-	switch value {
-	case "", "true":
+	switch cmdValue {
+	case "llm-db-schema-enable":
 		enabled = true
-	case "false":
+	case "llm-db-schema-disable":
 		enabled = false
 	default:
-		return c, dispatch(ErrorMsg{Err: errors.New("invalid value for enabling/disabling database schema usage in LLM")})
+		return c, dispatch(ErrorMsg{Err: errors.New("invalid command for enabling/disabling database schema usage in LLM")})
 	}
 
 	empty := ""
@@ -172,6 +179,24 @@ func (c Model) handleLLMDatabaseSchema(cmdValue string) (Model, tea.Cmd) {
 	return c, dispatch(LLMUseDatabaseSchemaMsg{
 		Enabled: enabled,
 	})
+}
+
+func (c Model) handleLLMMModelChanged(cmdValue string) (Model, tea.Cmd) {
+	model := strings.TrimSpace(strings.TrimPrefix(cmdValue, "llm-model"))
+
+	if model == "" {
+		return c, dispatch(ErrorMsg{Err: errors.New("no LLM model specified")})
+	}
+
+	parts := strings.Split(model, " ")
+	if len(parts) > 1 {
+		return c, dispatch(ErrorMsg{Err: fmt.Errorf("invalid LLM model format: %s, expected single word model name", model)})
+	}
+
+	empty := ""
+	c.input.Value(&empty)
+
+	return c, dispatch(LLMModelChangedMsg{Model: model})
 }
 
 func parseExportCommand(value string) ([]int, bool, string, error) {

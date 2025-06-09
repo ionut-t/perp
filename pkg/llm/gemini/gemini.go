@@ -13,6 +13,8 @@ import (
 	"github.com/ionut-t/perp/pkg/llm"
 )
 
+const baseURL = "https://generativelanguage.googleapis.com/v1beta/models/"
+
 // --- Gemini API Request and Response Structs ---
 // part represents a part of the content (e.g., text)
 type part struct {
@@ -64,26 +66,29 @@ func (e *responseError) Message() string {
 
 type Gemini struct {
 	apiKey               string
+	model                string
 	instructions         string
 	dbSchemaInstructions string
 }
 
-func New(apiKey, instructions string) *Gemini {
+func New(apiKey, model, instructions string) *Gemini {
 	return &Gemini{
-		apiKey:               apiKey,
-		instructions:         instructions,
-		dbSchemaInstructions: "",
+		apiKey:       apiKey,
+		model:        model,
+		instructions: instructions,
 	}
 }
 
 func (g *Gemini) Ask(prompt string) (*llm.Response, error) {
-	apiKey := g.apiKey
-
-	if apiKey == "" {
-		return nil, errors.New("API key is required")
+	if g.apiKey == "" {
+		return nil, errors.New("API key for Gemini is required")
 	}
 
-	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=%s", apiKey)
+	if g.model == "" {
+		return nil, errors.New("Gemini model is required")
+	}
+
+	apiURL := fmt.Sprintf("%s%s:generateContent?key=%s", baseURL, g.model, g.apiKey)
 
 	requestBody := generateContentRequest{
 		Contents: []content{
