@@ -24,7 +24,6 @@ import (
 	exportData "github.com/ionut-t/perp/tui/export_data"
 	"github.com/ionut-t/perp/tui/servers"
 	"github.com/ionut-t/perp/ui/help"
-	statusbar "github.com/ionut-t/perp/ui/status-bar"
 	"github.com/ionut-t/perp/ui/styles"
 )
 
@@ -463,53 +462,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.Focus()
 
 	case command.ExportMsg:
-		queryResults := m.content.GetQueryResults()
-		if queryResults != nil {
-			rows := msg.Rows
-			all := msg.All
-			fileName := msg.FileName
-
-			var data any
-
-			if len(rows) > 1 {
-				data = make([]map[string]any, 0)
-
-				for _, rowIdx := range rows {
-					idx := rowIdx - 1
-					if idx >= 0 && idx < len(queryResults) {
-						data = append(data.([]map[string]any), queryResults[idx])
-					}
-				}
-			} else if len(rows) == 1 {
-				idx := rows[0] - 1
-				if idx >= 0 && idx < len(queryResults) {
-					data = queryResults[idx]
-				}
-			}
-
-			if all {
-				data = make([]map[string]any, 0)
-				data = append(data.([]map[string]any), queryResults...)
-			}
-
-			fileName, err := export.AsJson(m.config.Storage(), data, fileName)
-
-			if err != nil {
-				return m, m.errorNotification(err)
-			}
-
-			m.focused = focusedEditor
-			m.editor.Focus()
-			m.command.Reset()
-
-			return m, m.successNotification(
-				fmt.Sprintf("Data exported successfully to %s.json", fileName),
-			)
-		}
-
-		m.focused = focusedEditor
-		m.editor.Focus()
-		return m, m.errorNotification(fmt.Errorf("no query results to export"))
+		return m.handleDataExport(msg)
 
 	case command.EditorChangedMsg:
 		err := m.config.SetEditor(msg.Editor)
@@ -619,9 +572,7 @@ func (m model) View() string {
 	if m.focused == focusedCommand {
 		commandLine = m.command.View()
 	} else {
-		llmModel, _ := m.config.GetLLMModel()
-
-		commandLine = statusbar.StatusBarView(m.server, llmModel, m.width)
+		commandLine = m.renderStatusBar()
 	}
 
 	if m.notification != "" {
@@ -738,6 +689,55 @@ func (m model) sendQueryCmd() tea.Cmd {
 	return m.executeQuery(prompt)
 }
 
+func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
+	queryResults := m.content.GetQueryResults()
+	if queryResults != nil {
+		rows := msg.Rows
+		all := msg.All
+		fileName := msg.FileName
+
+		var data any
+		if len(rows) > 1 {
+			data = make([]map[string]any, 0)
+
+			for _, rowIdx := range rows {
+				idx := rowIdx - 1
+				if idx >= 0 && idx < len(queryResults) {
+					data = append(data.([]map[string]any), queryResults[idx])
+				}
+			}
+		} else if len(rows) == 1 {
+			idx := rows[0] - 1
+			if idx >= 0 && idx < len(queryResults) {
+				data = queryResults[idx]
+			}
+		}
+
+		if all {
+			data = make([]map[string]any, 0)
+			data = append(data.([]map[string]any), queryResults...)
+		}
+
+		fileName, err := export.AsJson(m.config.Storage(), data, fileName)
+
+		if err != nil {
+			return m, m.errorNotification(err)
+		}
+
+		m.focused = focusedEditor
+		m.editor.Focus()
+		m.command.Reset()
+
+		return m, m.successNotification(
+			fmt.Sprintf("Data exported successfully to %s.json", fileName),
+		)
+	}
+
+	m.focused = focusedEditor
+	m.editor.Focus()
+	return m, m.errorNotification(fmt.Errorf("no query results to export"))
+}
+
 func (m *model) renderDBError(width, height int) string {
 	return lipgloss.NewStyle().
 		Padding(0, 1).
@@ -752,6 +752,40 @@ func (m *model) renderDBError(width, height int) string {
 				styles.Subtext0.Render("Press 'q' to go back to server selection"),
 			),
 		)
+}
+
+func (m *model) renderStatusBar() string {
+	bg := styles.Surface0.GetBackground()
+
+	separator := styles.Surface0.Render(" | ")
+
+	serverName := styles.Primary.Background(bg).Render(m.server.Name)
+
+	database := styles.Accent.Background(bg).Render(m.server.Database)
+
+	llm := lipgloss.NewStyle().Background(bg).Render(m.renderLLMModel())
+
+	left := serverName + separator + database + separator + llm
+
+	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
+
+	helpText := styles.Info.Background(bg).PaddingRight(1).Render("? Help")
+
+	displayedInfoWidth := m.width -
+		lipgloss.Width(leftInfo) -
+		lipgloss.Width(helpText) -
+		lipgloss.Width(separator)
+
+	spaces := styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
+
+	return styles.Surface0.Width(m.width).Render(
+		lipgloss.JoinHorizontal(
+			lipgloss.Right,
+			leftInfo,
+			spaces,
+			helpText,
+		),
+	)
 }
 
 func (m *model) successNotification(msg string) tea.Cmd {
@@ -790,4 +824,18 @@ func (m *model) getAvailableSizes() (int, int) {
 	availableWidth := m.width - h - styles.ActiveBorder.GetBorderLeftSize()
 
 	return availableWidth, availableHeight
+}
+
+func (m model) renderLLMModel() string {
+	llmModel, _ := m.config.GetLLMModel()
+
+	if llmModel == "" {
+		return styles.Subtext0.Render("No LLM model set")
+	}
+
+	if m.server.ShareDatabaseSchemaLLM {
+		return styles.Accent.Render(llmModel + " (DB Schema enabled)")
+	}
+
+	return styles.Accent.Render(llmModel)
 }

@@ -3,6 +3,7 @@ package export_data
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -12,7 +13,6 @@ import (
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/store/export"
 	"github.com/ionut-t/perp/ui/help"
-	statusbar "github.com/ionut-t/perp/ui/status-bar"
 	"github.com/ionut-t/perp/ui/styles"
 )
 
@@ -435,7 +435,7 @@ func (m *Model) statusBarView() string {
 	}
 
 	return lipgloss.NewStyle().Margin(0, 1).
-		Render(statusbar.StatusBarView(m.server, "", m.width-2))
+		Render(m.renderStatusBar())
 }
 
 func processRecords(records []export.Record) []list.Item {
@@ -449,4 +449,36 @@ func processRecords(records []export.Record) []list.Item {
 	}
 
 	return items
+}
+
+func (m *Model) renderStatusBar() string {
+	bg := styles.Surface0.GetBackground()
+
+	separator := styles.Surface0.Render(" | ")
+
+	serverName := styles.Primary.Background(bg).Render(m.server.Name)
+
+	database := styles.Accent.Background(bg).Render(m.server.Database)
+
+	left := serverName + separator + database
+
+	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
+
+	helpText := styles.Info.Background(bg).PaddingRight(1).Render("? Help")
+
+	displayedInfoWidth := m.width -
+		lipgloss.Width(leftInfo) -
+		lipgloss.Width(helpText) -
+		lipgloss.Width(separator)
+
+	spaces := styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
+
+	return styles.Surface0.Width(m.width).Render(
+		lipgloss.JoinHorizontal(
+			lipgloss.Right,
+			leftInfo,
+			spaces,
+			helpText,
+		),
+	)
 }
