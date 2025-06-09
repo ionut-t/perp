@@ -12,7 +12,6 @@ import (
 
 // Constants for consistent height calculations
 const (
-	mainBorderHeight  = 2 // Top and bottom border of main container
 	filterBarHeight   = 1 // Height of filter/help bar
 	itemBorderHeight  = 2 // Top and bottom border of each item
 	itemSpacing       = 1 // Spacing between items
@@ -135,12 +134,17 @@ type Model struct {
 	viewportHeight int
 	totalHeight    int
 	withFilter     bool
+	placeholder    string
 }
 
 // calculateViewportHeight calculates stable viewport height
 func (m *Model) calculateViewportHeight() {
 	// Total reserved height = main borders + filter bar + spacing
-	reservedHeight := mainBorderHeight + filterBarHeight + 1 // +1 for spacing
+	reservedHeight := 0
+
+	if m.withFilter {
+		reservedHeight += filterBarHeight
+	}
 
 	// Calculate available height for content
 	availableHeight := max(m.height-reservedHeight, minViewportHeight)
@@ -178,6 +182,11 @@ func (m *Model) SetItems(items []Item) {
 	m.calculateItemHeights()
 	m.cursor = 0
 	m.viewportStart = 0
+}
+
+// SetPlaceholder sets the placeholder text for the filter input
+func (m *Model) SetPlaceholder(placeholder string) {
+	m.placeholder = placeholder
 }
 
 // GetSelectedItem returns the currently selected item
@@ -561,7 +570,7 @@ func (m Model) renderItem(item Item, isCursor bool) string {
 // View renders the list
 func (m Model) View() string {
 	if len(m.filteredItems) == 0 {
-		noItems := "No items to display"
+		noItems := m.placeholder
 		if m.filter.Value() != "" {
 			noItems = "No items match filter: " + m.filter.Value()
 		}

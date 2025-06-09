@@ -337,6 +337,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.exportData = exportData.New(exportStore, m.server, m.width, m.height)
 			}
 
+		case key.Matches(msg, viewLLMLogs):
+			if m.focused == focusedContent {
+				m.content.ShowLLMLogs()
+			}
+
 		case key.Matches(msg, keymap.Help):
 			if m.editor.IsInsertMode() {
 				break

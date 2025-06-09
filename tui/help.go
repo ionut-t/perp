@@ -69,6 +69,11 @@ var enterCommand = key.NewBinding(
 	key.WithHelp(":", "enter command mode (available when the editor is not focused)"),
 )
 
+var viewLLMLogs = key.NewBinding(
+	key.WithKeys("l"),
+	key.WithHelp("l", "view LLM logs (available when the editor is not focused)"),
+)
+
 func (m model) renderHelp() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -90,6 +95,7 @@ func (m model) renderUsefulHelp() string {
 		accessDBSchema,
 		accessServers,
 		enterCommand,
+		viewLLMLogs,
 	}
 
 	title := styles.Text.Bold(true).Render("Useful Shortcuts")

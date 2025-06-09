@@ -65,12 +65,15 @@ func New(width, height int) Model {
 	t.SetSelectionMode(table.SelectionCell | table.SelectionRow)
 	t.SetTheme(styles.TableTheme())
 
+	ls := list.New([]list.Item{}, width, height)
+	ls.SetPlaceholder("No LLM logs found.")
+
 	return Model{
 		width:       width,
 		height:      height,
 		viewport:    viewport.New(width, height),
 		table:       t,
-		llmLogsList: list.New([]list.Item{}, width, height),
+		llmLogsList: ls,
 	}
 }
 
@@ -287,7 +290,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	switch m.view {
 	case viewTable:
-		return m.table.View()
+		// TODO: Fix the height of the table in gotable library
+		return lipgloss.NewStyle().Height(m.height).Render(m.table.View())
 
 	case viewLLMLogs:
 		return m.llmLogsList.View()
