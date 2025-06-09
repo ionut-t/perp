@@ -98,7 +98,7 @@ func New(config config.Config) model {
 	sqlKeywordsMap := make(map[string]lipgloss.Style, len(SQL_KEYWORDS)*2)
 
 	for _, keyword := range SQL_KEYWORDS {
-		highlighted := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF5733"))
+		highlighted := styles.Accent.Bold(true)
 		sqlKeywordsMap[strings.ToUpper(keyword)] = highlighted
 		sqlKeywordsMap[strings.ToLower(keyword)] = highlighted
 	}
@@ -106,7 +106,7 @@ func New(config config.Config) model {
 	editor.SetHighlightedWords(sqlKeywordsMap)
 
 	llmKeywordsMap := map[string]lipgloss.Style{
-		"/ask": lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00FF00")),
+		"/ask": styles.Info.Bold(true),
 	}
 
 	editor.SetPlaceholder("Type your SQL query or /ask your question here...")
