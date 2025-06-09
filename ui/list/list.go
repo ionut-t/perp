@@ -533,8 +533,8 @@ func (m Model) renderItem(item Item, isCursor bool) string {
 
 	// Description (with wrapping and paragraph support)
 	if item.Description != "" {
-		paragraphs := strings.Split(item.Description, "\n")
-		for _, paragraph := range paragraphs {
+		paragraphs := strings.SplitSeq(item.Description, "\n")
+		for paragraph := range paragraphs {
 			if paragraph == "" {
 				parts = append(parts, "")
 				continue
@@ -564,7 +564,7 @@ func (m Model) renderItem(item Item, isCursor bool) string {
 			Width(itemWidth)
 	}
 
-	return borderStyle.Render(content)
+	return borderStyle.Margin(0, 1).Render(content)
 }
 
 // View renders the list
