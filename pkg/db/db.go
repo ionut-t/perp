@@ -10,16 +10,17 @@ import (
 
 	"github.com/jackc/pgx/pgtype"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Database defines the contract for database operations
 type Database interface {
 	// Execute a SQL query and return the result
-	ExecuteQuery(query string) (QueryResult, error)
+	ExecuteQuery(ctx context.Context, query string) (QueryResult, error)
 	// Generate a human-readable schema of the database
 	GenerateSchema() (string, error)
 	// Close the database connection
-	Close() error
+	Close()
 }
 
 // QueryResult defines the contract for query results
@@ -49,14 +50,22 @@ type ColumnInfo struct {
 	ColumnDefault string
 }
 
-// New creates a new database connection based on the provided DSN
+// New creates a new database pool based on the provided DSN
 func New(dbDSN string) (Database, error) {
-	return connect(dbDSN)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dbDSN)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to database: %w", err)
+	}
+
+	return &database{pool: pool}, nil
 }
 
-// database encapsulates the pgx database connection
+// database encapsulates the pgx database connection pool
 type database struct {
-	conn *pgx.Conn
+	pool *pgxpool.Pool
 }
 
 var _ Database = (*database)(nil)
@@ -80,36 +89,18 @@ func (r queryResult) Rows() pgx.Rows {
 	return r.rows
 }
 
-// connect establishes a connection to the PostgreSQL database
-func connect(dbDSN string) (*database, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	conn, err := pgx.Connect(ctx, dbDSN)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to database: %w", err)
-	}
-
-	return &database{conn: conn}, nil
-}
-
 // Close closes the underlying database connection
-func (d *database) Close() error {
-	if d == nil || d.conn == nil {
-		return nil
+func (d *database) Close() {
+	if d == nil || d.pool == nil {
+		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return d.conn.Close(ctx)
+	d.pool.Close()
 }
 
 // ExecuteQuery executes a SQL query and returns the result
-func (d *database) ExecuteQuery(query string) (QueryResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	rows, err := d.conn.Query(ctx, query)
+func (d *database) ExecuteQuery(ctx context.Context, query string) (QueryResult, error) {
+	rows, err := d.pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -144,7 +135,7 @@ func (d *database) ExecuteQuery(query string) (QueryResult, error) {
 	return result, nil
 }
 
-// ExtractResultsFromRows reads all rows from a pgx.Rows object and returns their data
+// ExtractResultsFromRows processes the pgx.Rows and returns a slice of maps and column names.
 func ExtractResultsFromRows(rows pgx.Rows) ([]map[string]any, []string, error) {
 	defer rows.Close()
 
@@ -156,19 +147,15 @@ func ExtractResultsFromRows(rows pgx.Rows) ([]map[string]any, []string, error) {
 
 	var results []map[string]any
 	for rows.Next() {
-		values := make([]any, len(columns))
 		scanTargets := make([]any, len(columns))
 
 		for i, fd := range fieldDescriptions {
 			switch fd.DataTypeOID {
 			case pgtype.UUIDOID:
 				var uuid pgtype.UUID
-				values[i] = &uuid
 				scanTargets[i] = &uuid
 			default:
-				var generic any
-				values[i] = &generic
-				scanTargets[i] = &generic
+				scanTargets[i] = new(any)
 			}
 		}
 
@@ -178,15 +165,17 @@ func ExtractResultsFromRows(rows pgx.Rows) ([]map[string]any, []string, error) {
 
 		rowMap := make(map[string]any)
 		for i, col := range columns {
-			switch v := values[i].(type) {
+			switch v := scanTargets[i].(type) {
 			case *pgtype.UUID:
 				if v.Status == pgtype.Present {
-					rowMap[col] = fmt.Sprintf("%x-%x-%x-%x-%x", v.Bytes[0:4], v.Bytes[4:6], v.Bytes[6:8], v.Bytes[8:10], v.Bytes[10:16])
+					rowMap[col] = fmt.Sprintf("%x-%x-%x-%x-%x",
+						v.Bytes[0:4], v.Bytes[4:6], v.Bytes[6:8],
+						v.Bytes[8:10], v.Bytes[10:16])
 				} else {
 					rowMap[col] = nil
 				}
 			default:
-				rowMap[col] = *(values[i].(*any))
+				rowMap[col] = *(v.(*any))
 			}
 		}
 		results = append(results, rowMap)
@@ -204,7 +193,7 @@ func (d *database) GenerateSchema() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	rows, err := d.conn.Query(ctx, `
+	rows, err := d.pool.Query(ctx, `
 		SELECT
 			table_name,
 			column_name,

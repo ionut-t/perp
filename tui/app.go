@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ type llmFailureMsg struct {
 	err error
 }
 
-type executeQueryMsg db.QueryResult
+type executeQueryMsg content.ParsedQueryResult
 type queryFailureMsg struct {
 	err error
 }
@@ -391,7 +392,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.editor.SetContent("")
 
-		err := m.content.SetQueryResults(msg)
+		err := m.content.SetQueryResults(content.ParsedQueryResult(msg))
 
 		if err != nil {
 			return m, nil
@@ -404,7 +405,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ed, cmd := m.editor.Update(nil)
 		m.editor = ed.(editor.Model)
 
-		return m, cmd
+		return m, tea.Batch(
+			cmd,
+			m.successNotification(
+				fmt.Sprintf("Rows affected: %d", msg.AffectedRows),
+			),
+		)
 
 	case queryFailureMsg:
 		m.loading = false
@@ -643,12 +649,30 @@ func (m model) generateSchema() tea.Cmd {
 
 func (m model) executeQuery(query string) tea.Cmd {
 	return func() tea.Msg {
-		result, err := m.db.ExecuteQuery(query)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		result, err := m.db.ExecuteQuery(ctx, query)
 		if err != nil {
 			return queryFailureMsg{err: err}
 		}
 
-		return executeQueryMsg(result)
+		var queryResult content.ParsedQueryResult
+
+		rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+
+		if err != nil {
+			return queryFailureMsg{err: err}
+		}
+
+		queryResult.Type = result.Type()
+		queryResult.Query = result.Query()
+		result.Rows().Close()
+		queryResult.AffectedRows = result.Rows().CommandTag().RowsAffected()
+		queryResult.Columns = columns
+		queryResult.Rows = rows
+
+		return executeQueryMsg(queryResult)
 	}
 }
 

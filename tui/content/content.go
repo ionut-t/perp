@@ -22,6 +22,14 @@ var (
 	padding = lipgloss.NewStyle().Padding(0, 1)
 )
 
+type ParsedQueryResult struct {
+	Query        string
+	Type         db.QueryType
+	AffectedRows int64
+	Columns      []string
+	Rows         []map[string]any
+}
+
 type LLMResponseSelectedMsg struct {
 	Response string
 }
@@ -143,20 +151,16 @@ func (m *Model) SetError(err error) {
 	m.view = viewError
 }
 
-func (m *Model) SetQueryResults(result db.QueryResult) error {
+func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 	m.queryResults = nil
 
-	if result.Type() != db.QuerySelect {
-		rows := result.Rows()
-		rows.Close()
-		affected := rows.CommandTag().RowsAffected()
-
+	if result.Type != db.QuerySelect {
 		content := lipgloss.JoinVertical(
 			lipgloss.Left,
-			result.Query(),
+			result.Query,
 			"\n",
 			lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render(
-				fmt.Sprintf("Query executed successfully. Affected rows: %d", affected),
+				fmt.Sprintf("Query executed successfully. Affected rows: %d", result.AffectedRows),
 			),
 		)
 
@@ -166,15 +170,9 @@ func (m *Model) SetQueryResults(result db.QueryResult) error {
 		return nil
 	}
 
-	results, headers, err := db.ExtractResultsFromRows(result.Rows())
-	m.queryResults = results
+	m.queryResults = result.Rows
 
-	if err != nil {
-		m.error = err
-		return err
-	}
-
-	if len(results) == 0 {
+	if len(result.Rows) == 0 {
 		m.table.SetHeaders([]string{})
 		m.table.SetRows([][]string{})
 		m.table.SetSelectedCell(0, 0)
@@ -183,7 +181,7 @@ func (m *Model) SetQueryResults(result db.QueryResult) error {
 		return nil
 	}
 
-	rows, headers := m.buildDataTable(headers, results)
+	rows, headers := m.buildDataTable(result.Columns, result.Rows)
 
 	m.table.SetHeaders(headers)
 	m.table.SetRows(rows)
