@@ -321,7 +321,9 @@ func (m *Model) buildDataTable(headers []string, results []map[string]any) ([][]
 		rowData := make([]string, len(headers))
 		for j, header := range headers {
 			if val, ok := row[header]; ok {
-				rowData[j] = fmt.Sprintf("%v", val)
+				value := fmt.Sprintf("%v", val)
+				// TODO: Consider expanding the table library to handle multiline cells
+				rowData[j] = strings.ReplaceAll(value, "\n", " ")
 			} else {
 				if header == "#" {
 					rowData[j] = fmt.Sprintf("%d", i+1)
