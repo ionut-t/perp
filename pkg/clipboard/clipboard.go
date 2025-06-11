@@ -9,11 +9,5 @@ func Write(text string) error {
 }
 
 func Read() (string, error) {
-	text, err := clipboard.ReadAll()
-
-	if err != nil {
-		return "", err
-	}
-
-	return text, nil
+	return clipboard.ReadAll()
 }
