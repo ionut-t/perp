@@ -83,7 +83,7 @@ func TestAdd(t *testing.T) {
 
 			// Setup existing history if provided
 			if tt.existingLogs != nil {
-				err := writeHistoryLogs(filepath.Join(tempDir, "history"), tt.existingLogs)
+				err := writeHistoryLogs(filepath.Join(tempDir, historyFileName), tt.existingLogs)
 				if err != nil {
 					t.Fatalf("Failed to setup existing history: %v", err)
 				}
@@ -149,7 +149,7 @@ func TestGet(t *testing.T) {
 
 			// Setup history file if needed
 			if tt.setupLogs != nil {
-				err := writeHistoryLogs(filepath.Join(tempDir, "history"), tt.setupLogs)
+				err := writeHistoryLogs(filepath.Join(tempDir, historyFileName), tt.setupLogs)
 				if err != nil {
 					t.Fatalf("Failed to setup history: %v", err)
 				}
@@ -219,7 +219,7 @@ func TestReadHistoryLogs(t *testing.T) {
 			tempDir := setupTempDir(t)
 			defer os.RemoveAll(tempDir)
 
-			historyPath := filepath.Join(tempDir, "history")
+			historyPath := filepath.Join(tempDir, historyFileName)
 			if tt.fileContent != "" {
 				err := os.WriteFile(historyPath, []byte(tt.fileContent), 0644)
 				if err != nil {
@@ -259,7 +259,7 @@ func TestWriteHistoryLogs(t *testing.T) {
 	tempDir := setupTempDir(t)
 	defer os.RemoveAll(tempDir)
 
-	historyPath := filepath.Join(tempDir, "history")
+	historyPath := filepath.Join(tempDir, historyFileName)
 	logs := []HistoryLog{
 		{Query: "SELECT 1", Time: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)},
 		{Query: "SELECT 2", Time: time.Date(2024, 1, 1, 13, 0, 0, 0, time.UTC)},
@@ -400,7 +400,7 @@ func TestFilePermissions(t *testing.T) {
 
 	// Test directory creation
 	subDir := filepath.Join(tempDir, "subdir")
-	historyPath := filepath.Join(subDir, "history")
+	historyPath := filepath.Join(subDir, historyFileName)
 
 	logs := []HistoryLog{
 		{Query: "SELECT 1", Time: time.Now()},
