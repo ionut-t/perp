@@ -86,14 +86,18 @@ type model struct {
 	sqlKeywords           map[string]lipgloss.Style
 	llmKeywords           map[string]lipgloss.Style
 	queryResults          []map[string]any
-	historyLogs           []history.HistoryLog
-	currentHistoryIndex   int
 	exportData            exportData.Model
 	command               command.Model
 	notification          string
 	content               content.Model
 	help                  help.Model
 	llmSharedTablesSchema []string
+
+	// history management
+	historyLogs           []history.HistoryLog
+	currentHistoryIndex   int
+	historyNavigating     bool
+	originalEditorContent string
 }
 
 func New(config config.Config) model {
@@ -172,6 +176,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.help.SetContent(m.renderHelp())
 
 	case tea.KeyMsg:
+		if m.historyNavigating && m.editor.IsFocused() && m.focused == focusedEditor {
+			// Check if it's a character input (not a special key)
+			if len(msg.String()) == 1 || msg.Type == tea.KeySpace {
+				// User is typing, exit history navigation
+				m.resetHistory()
+			}
+		}
+
 		if msg.Type == tea.KeyCtrlC {
 			m.closeDbConnection()
 			return m, tea.Quit
@@ -292,6 +304,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 
+				m.resetHistory()
+
 				isLLMCommand := strings.HasPrefix(content, "/ask") ||
 					strings.HasPrefix(content, "/add") ||
 					strings.HasPrefix(content, "/remove")
@@ -299,7 +313,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !isLLMCommand && strings.HasSuffix(content, ";") && len(content) > 5 {
 					if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
 						m.historyLogs = logs
-						m.currentHistoryIndex = 0
 					}
 
 					return m, m.sendQueryCmd()
@@ -307,6 +320,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, executeQuery):
+			m.resetHistory()
+
 			if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
 				m.historyLogs = logs
 				m.currentHistoryIndex = 0
@@ -316,6 +331,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, keymap.Cancel):
 			if m.view == viewMain && m.focused == focusedEditor {
+				m.resetHistory()
+
 				if m.editor.IsNormalMode() {
 					if m.editor.IsFocused() {
 						m.focused = focusedContent
@@ -326,31 +343,61 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, previousHistory):
 			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
-				lastQuery := m.historyLogs[m.currentHistoryIndex].Query
+				// If we're not already navigating, save the current content
+				if !m.historyNavigating {
+					m.originalEditorContent = m.editor.GetCurrentContent()
+					m.currentHistoryIndex = -1 // Start before the first item
+					m.historyNavigating = true
+				}
 
+				// Move to older entry
 				if m.currentHistoryIndex < len(m.historyLogs)-1 {
 					m.currentHistoryIndex++
-				} else {
-					m.currentHistoryIndex = 0
+					m.editor.SetContent(m.historyLogs[m.currentHistoryIndex].Query)
+					m.editor.SetCursorPositionEnd()
 				}
-
-				m.editor.SetContent(lastQuery)
-				m.editor.SetCursorPositionEnd()
 			}
+			// if m.editor.IsFocused() && len(m.historyLogs) > 0 {
+			// 	lastQuery := m.historyLogs[m.currentHistoryIndex].Query
+
+			// 	if m.currentHistoryIndex < len(m.historyLogs)-1 {
+			// 		m.currentHistoryIndex++
+			// 	} else {
+			// 		m.currentHistoryIndex = 0
+			// 	}
+
+			// 	m.editor.SetContent(lastQuery)
+			// 	m.editor.SetCursorPositionEnd()
+			// }
 
 		case key.Matches(msg, nextHistory):
-			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
-				lastQuery := m.historyLogs[m.currentHistoryIndex].Query
-
+			if m.editor.IsFocused() && m.historyNavigating {
+				// Move to newer entry
 				if m.currentHistoryIndex > 0 {
 					m.currentHistoryIndex--
-				} else {
-					m.currentHistoryIndex = len(m.historyLogs) - 1
+					m.editor.SetContent(m.historyLogs[m.currentHistoryIndex].Query)
+					m.editor.SetCursorPositionEnd()
+				} else if m.currentHistoryIndex == 0 {
+					// Return to original content
+					m.currentHistoryIndex = -1
+					m.editor.SetContent(m.originalEditorContent)
+					m.editor.SetCursorPositionEnd()
+					m.historyNavigating = false
 				}
-
-				m.editor.SetContent(lastQuery)
-				m.editor.SetCursorPositionEnd()
 			}
+
+			// if m.editor.IsFocused() && len(m.historyLogs) > 0 {
+			// 	lastQuery := m.historyLogs[m.currentHistoryIndex].Query
+
+			// 	if m.currentHistoryIndex > 0 {
+			// 		m.currentHistoryIndex--
+			// 	} else {
+			// 		m.currentHistoryIndex = len(m.historyLogs) - 1
+			// 	}
+
+			// 	m.editor.SetContent(lastQuery)
+			// 	m.editor.SetCursorPositionEnd()
+			// }
 
 		case key.Matches(msg, accessExportedData):
 			if m.focused == focusedContent {
@@ -1049,4 +1096,10 @@ func parseTableNames(input string) []string {
 		}
 	}
 	return tables
+}
+
+func (m *model) resetHistory() {
+	m.historyNavigating = false
+	m.currentHistoryIndex = -1
+	m.originalEditorContent = ""
 }
