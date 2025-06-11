@@ -60,7 +60,7 @@ func (s *store) Load() ([]Record, error) {
 }
 
 func (s *store) Update(record Record) error {
-	path := filepath.Join(s.storage, "exports", record.Name+record.Extension)
+	path := filepath.Join(s.storage, record.Name+record.Extension)
 
 	if err := os.WriteFile(path, []byte(record.Content), 0644); err != nil {
 		return err
@@ -70,7 +70,15 @@ func (s *store) Update(record Record) error {
 }
 
 func (s *store) Delete(record Record) error {
-	path := filepath.Join(s.storage, "exports", record.Name+record.Extension)
+	path := filepath.Join(s.storage, record.Name+record.Extension)
+
+	if len(s.records) == 1 {
+		if err := os.RemoveAll(filepath.Dir(path)); err != nil {
+			return err
+		}
+
+		return nil
+	}
 
 	if err := os.Remove(path); err != nil {
 		return err
@@ -90,11 +98,12 @@ func (s *store) SetCurrentRecordName(name string) {
 		s.currentRecordName = ""
 	}
 }
+
 func (s *store) Rename(record *Record, newName string) error {
 	uniqueName := s.generateUniqueName(newName)
 
 	oldPath := record.Path
-	newPath := filepath.Join(s.storage, "exports", uniqueName+record.Extension)
+	newPath := filepath.Join(s.storage, uniqueName+record.Extension)
 
 	if err := os.Rename(oldPath, newPath); err != nil {
 		return err
@@ -169,11 +178,9 @@ func loadRecordFromFile(path string) (Record, error) {
 }
 
 func (s *store) load() error {
-	path := filepath.Join(s.storage, "exports")
-
 	var records []Record
 
-	err := filepath.WalkDir(path, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(s.storage, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil

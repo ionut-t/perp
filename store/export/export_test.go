@@ -17,7 +17,7 @@ func setupTestDir(t *testing.T) (string, func()) {
 }
 
 func writeTestFile(t *testing.T, dir, name, content string, modTime time.Time) string {
-	path := filepath.Join(dir, "exports", name)
+	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestStore_Update_CreatesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update returned error: %v", err)
 	}
-	path := filepath.Join(storage, "exports", "testfile.txt")
+	path := filepath.Join(storage, "testfile.txt")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("expected file to exist, got error: %v", err)
@@ -161,7 +161,7 @@ func TestStore_Update_OverwritesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update returned error on overwrite: %v", err)
 	}
-	path := filepath.Join(storage, "exports", "testfile.txt")
+	path := filepath.Join(storage, "testfile.txt")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("expected file to exist, got error: %v", err)
@@ -211,7 +211,7 @@ func TestStore_Delete_RemovesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Delete returned error: %v", err)
 	}
-	path := filepath.Join(storage, "exports", fileName)
+	path := filepath.Join(storage, fileName)
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("expected file to be deleted, but it still exists or another error occurred: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestStore_Rename_ChangesFileNameAndUpdatesRecord(t *testing.T) {
 	}
 
 	// New file should exist
-	newPath := filepath.Join(storage, "exports", newName+".txt")
+	newPath := filepath.Join(storage, newName+".txt")
 	data, err := os.ReadFile(newPath)
 	if err != nil {
 		t.Fatalf("expected new file to exist, got error: %v", err)
@@ -423,7 +423,7 @@ func TestStore_Rename_ErrorOnInvalidOldPath(t *testing.T) {
 	rec := Record{
 		Name:      "doesnotexist",
 		Extension: ".txt",
-		Path:      filepath.Join(storage, "exports", "doesnotexist.txt"),
+		Path:      filepath.Join(storage, "doesnotexist.txt"),
 	}
 	err := s.Rename(&rec, "newname")
 	if err == nil {

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -354,7 +355,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, accessExportedData):
 			if m.focused == focusedContent {
 				m.view = viewExportData
-				exportStore := exportStore.New(m.config.Storage(), m.config.Editor())
+				storage := filepath.Join(m.config.Storage(), m.server.Name)
+				exportStore := exportStore.New(storage, m.config.Editor())
 				m.exportData = exportData.New(exportStore, m.server, m.width, m.height)
 			}
 
@@ -813,7 +815,8 @@ func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 			data = append(data.([]map[string]any), queryResults...)
 		}
 
-		fileName, err := export.AsJson(m.config.Storage(), data, fileName)
+		storage := filepath.Join(m.config.Storage(), m.server.Name)
+		fileName, err := export.AsJson(storage, data, fileName)
 
 		if err != nil {
 			return m, m.errorNotification(err)

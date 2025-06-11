@@ -39,6 +39,7 @@ const (
 	viewList
 	viewRecord
 	viewHelp
+	viewPlaceholder
 )
 
 type focusedView int
@@ -99,6 +100,11 @@ func New(store export.Store, server server.Server, width, height int) Model {
 	list.SetShowHelp(false)
 	list.SetShowTitle(false)
 
+	view := viewSplit
+	if len(items) == 0 {
+		view = viewPlaceholder
+	}
+
 	m := Model{
 		store:  store,
 		error:  err,
@@ -106,6 +112,7 @@ func New(store export.Store, server server.Server, width, height int) Model {
 		editor: editorModel,
 		help:   help.New(),
 		server: server,
+		view:   view,
 	}
 
 	m.handleWindowSize(tea.WindowSizeMsg{
@@ -132,21 +139,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "q", "esc":
-			if m.view == viewHelp {
-				m.view = viewSplit
-				return m, nil
-			}
-
-			if m.view == viewSplit {
+			switch m.view {
+			case viewSplit:
 				if m.focusedView == focusedViewList {
 					return m, func() tea.Msg {
 						return ClosedMsg{}
 					}
 				}
+
+			case viewHelp:
+				m.view = viewSplit
+				return m, nil
+
+			case viewPlaceholder:
+				return m, func() tea.Msg {
+					return ClosedMsg{}
+				}
 			}
 
 		case "i":
-			if m.view == viewHelp {
+			if m.view == viewHelp || m.view == viewPlaceholder {
 				break
 			}
 
@@ -159,7 +171,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "tab":
-			if m.view == viewHelp {
+			if m.view == viewHelp || m.view == viewPlaceholder {
 				break
 			}
 
@@ -176,7 +188,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "e":
-			if m.editor.IsInsertMode() || m.editor.IsCommandMode() || m.view == viewHelp {
+			if m.editor.IsInsertMode() || m.editor.IsCommandMode() || m.view == viewHelp || m.view == viewPlaceholder {
 				break
 			}
 
@@ -188,7 +200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, execCmd
 
 		case "?":
-			if m.editor.IsInsertMode() {
+			if m.editor.IsInsertMode() || m.editor.IsCommandMode() || m.view == viewPlaceholder {
 				break
 			}
 
@@ -235,6 +247,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err == nil {
 				records := processRecords(records)
 				m.list.SetItems(records)
+				if selectedItem, ok := m.list.SelectedItem().(item); ok {
+					m.store.SetCurrentRecordName(selectedItem.Title())
+				}
 			}
 
 			if len(records) > 0 {
@@ -242,6 +257,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.SetContent(current.Content)
 			} else {
 				m.editor.SetContent("")
+				m.view = viewPlaceholder
 			}
 
 		} else {
@@ -311,7 +327,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.error != nil {
-		return "Error loading export records: " + m.error.Error()
+		return styles.Error.Render("Error loading export records: " + m.error.Error())
 	}
 
 	switch m.view {
@@ -326,6 +342,16 @@ func (m Model) View() string {
 
 	case viewHelp:
 		return m.help.View()
+
+	case viewPlaceholder:
+		return styles.ViewPadding.Render(
+			lipgloss.JoinVertical(
+				lipgloss.Left,
+				styles.Primary.Render("No data exported."),
+				"\n",
+				styles.Subtext0.Render("Press 'q' to go back."),
+			),
+		)
 
 	default:
 		return ""

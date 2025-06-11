@@ -18,13 +18,11 @@ func AsJson(storage string, data any, fileName string) (string, error) {
 
 	fileName = generateUniqueName(fileName, records)
 
-	storagePath := filepath.Join(storage, "exports")
-
-	if err := os.MkdirAll(storagePath, 0755); err != nil {
+	if err := os.MkdirAll(storage, 0755); err != nil {
 		return "", err
 	}
 
-	path := filepath.Join(storagePath, fileName+".json")
+	path := filepath.Join(storage, fileName+".json")
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -38,13 +36,19 @@ func AsJson(storage string, data any, fileName string) (string, error) {
 	return fileName, nil
 }
 
-func load(storage string) ([]string, error) {
-	path := filepath.Join(storage, "exports")
-
+func load(path string) ([]string, error) {
 	var records []string
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return records, nil
+	}
 
 	files, err := os.ReadDir(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return records, nil
+		}
+
 		return nil, err
 	}
 	for _, file := range files {

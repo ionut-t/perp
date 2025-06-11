@@ -263,9 +263,9 @@ func (m model) renderCommandHelp() string {
 	bindings := []key.Binding{
 		key.NewBinding(
 			key.WithKeys(""),
-			key.WithHelp("export all <file>", `export all data returned by the query as JSON to a file
+			key.WithHelp("export * <file>", `export all data returned by the query as JSON to a file
 						 Example:
-						 export all data
+						 export * data
 						 it exports to data.json (extension is not required);
 						 if the file already exists, it will create a new file with unique name derived from the input name
 						 `,

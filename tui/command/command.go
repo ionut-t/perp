@@ -212,7 +212,7 @@ func parseExportCommand(value string) ([]int, bool, string, error) {
 		return nil, false, "", fmt.Errorf("invalid export command format, expected: %s", helper)
 	}
 
-	if parts[1] == "all" {
+	if parts[1] == "*" {
 		all = true
 		fileName = strings.Join(parts[2:], " ")
 	} else {
