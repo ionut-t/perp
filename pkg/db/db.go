@@ -19,6 +19,8 @@ type Database interface {
 	ExecuteQuery(ctx context.Context, query string) (QueryResult, error)
 	// Generate a human-readable schema of the database
 	GenerateSchema() (string, error)
+	// Generate a human-readable schema for specific tables
+	GenerateSchemaForTables(tables []string) (string, error)
 	// Close the database connection
 	Close()
 }
@@ -253,4 +255,83 @@ Table: {{$tableName}}
 	}
 
 	return b.String(), nil
+}
+func (d *database) GenerateSchemaForTables(tables []string) (string, error) {
+	if len(tables) == 0 {
+		return "", fmt.Errorf("no tables specified")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	placeholders := make([]string, len(tables))
+	args := make([]any, len(tables))
+	for i, table := range tables {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = table
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			table_name,
+			column_name,
+			data_type,
+			is_nullable,
+			column_default
+		FROM
+			information_schema.columns
+		WHERE
+			table_schema = 'public' 
+			AND table_name IN (%s)
+		ORDER BY
+			table_name, ordinal_position;
+	`, strings.Join(placeholders, ","))
+
+	rows, err := d.pool.Query(ctx, query, args...)
+	if err != nil {
+		return "", fmt.Errorf("failed to query information_schema: %w", err)
+	}
+	defer rows.Close()
+
+	var columns []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		var isNullableStr string
+		var columnDefault *string
+		if err := rows.Scan(&col.TableName, &col.ColumnName, &col.DataType, &isNullableStr, &columnDefault); err != nil {
+			return "", fmt.Errorf("failed to scan column info: %w", err)
+		}
+		col.IsNullable = (isNullableStr == "YES")
+		if columnDefault != nil {
+			col.ColumnDefault = *columnDefault
+		} else {
+			col.ColumnDefault = ""
+		}
+		columns = append(columns, col)
+	}
+
+	if rows.Err() != nil {
+		return "", fmt.Errorf("error after reading rows: %w", rows.Err())
+	}
+
+	// Group columns by table name
+	tableColumns := make(map[string][]ColumnInfo)
+	for _, col := range columns {
+		tableColumns[col.TableName] = append(tableColumns[col.TableName], col)
+	}
+
+	var b strings.Builder
+	tmpl := template.Must(template.New("schema").Parse(`
+{{range $tableName, $cols := .}}
+Table: {{$tableName}}
+{{range $col := $cols}}- {{$col.ColumnName}} ({{$col.DataType}}): {{$col.ColumnDefault}} {{if $col.IsNullable}}[nullable]{{else}}[not nullable]{{end}}
+{{end}}
+{{end}}
+`))
+
+	if err := tmpl.Execute(&b, tableColumns); err != nil {
+		return "", fmt.Errorf("failed to execute schema template: %w", err)
+	}
+
+	return strings.TrimSpace(b.String()), nil
 }

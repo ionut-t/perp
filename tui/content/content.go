@@ -44,20 +44,22 @@ const (
 	viewTable
 	viewInfo
 	viewLLMLogs
+	viewLLMSharedSchema
 	viewError
 )
 
 type Model struct {
-	width, height int
-	view          view
-	error         error
-	dbSchema      string
-	queryResults  []map[string]any
-	viewport      viewport.Model
-	table         table.Model
-	server        server.Server
-	llmLogsList   list.Model
-	logs          []chatLog
+	width, height   int
+	view            view
+	error           error
+	dbSchema        string
+	llmSharedSchema string
+	queryResults    []map[string]any
+	viewport        viewport.Model
+	table           table.Model
+	server          server.Server
+	llmLogsList     list.Model
+	logs            []chatLog
 }
 
 type chatLog struct {
@@ -77,11 +79,12 @@ func New(width, height int) Model {
 	ls.SetPlaceholder("No LLM logs found.")
 
 	return Model{
-		width:       width,
-		height:      height,
-		viewport:    viewport.New(width, height),
-		table:       t,
-		llmLogsList: ls,
+		width:           width,
+		height:          height,
+		viewport:        viewport.New(width, height),
+		table:           t,
+		llmLogsList:     ls,
+		llmSharedSchema: "No schema shared with LLM.",
 	}
 }
 
@@ -97,7 +100,7 @@ func (m *Model) SetSize(width, height int) {
 	m.llmLogsList.SetSize(width, height)
 
 	switch m.view {
-	case viewConnectionInfo, viewInfo, viewDBSchema:
+	case viewConnectionInfo, viewInfo, viewDBSchema, viewLLMSharedSchema:
 		m.viewport.Height = height
 		m.viewport.Width = width
 	case viewTable:
@@ -115,6 +118,24 @@ func (m *Model) SetSchema(schema string) {
 	m.dbSchema = strings.TrimSpace(schema)
 }
 
+func (m *Model) SetLLMSharedSchema(schema string) {
+	title := "Table schemas shared with LLM"
+
+	if schema == "" {
+		schema = "No schema shared with LLM."
+	} else {
+		schema = lipgloss.JoinVertical(
+			lipgloss.Left,
+			lipgloss.NewStyle().Bold(true).Render(title),
+			"\n",
+			schema,
+		)
+	}
+
+	m.llmSharedSchema = schema
+	m.setViewportContent()
+}
+
 func (m *Model) ShowConnectionInfo() {
 	m.view = viewConnectionInfo
 	m.setViewportContent()
@@ -122,6 +143,10 @@ func (m *Model) ShowConnectionInfo() {
 
 func (m *Model) ShowDBSchema() {
 	m.view = viewDBSchema
+}
+
+func (m *Model) ShowLLMSharedSchema() {
+	m.view = viewLLMSharedSchema
 }
 
 func (m *Model) ShowLLMLogs() {
@@ -195,10 +220,6 @@ func (m *Model) GetQueryResults() []map[string]any {
 	return m.queryResults
 }
 
-func (m *Model) GetDatabaseSchema() string {
-	return m.dbSchema
-}
-
 func (m *Model) SetLLMLogs(response llm.Response, query string) {
 	newLog := chatLog{
 		Prompt:   query,
@@ -264,13 +285,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch m.view {
-	case viewConnectionInfo, viewDBSchema, viewInfo:
-		m.setViewportContent()
-
-		vp, cmd := m.viewport.Update(msg)
-		m.viewport = vp
-		cmds = append(cmds, cmd)
-
 	case viewTable:
 		t, cmd := m.table.Update(msg)
 		m.table = t
@@ -279,6 +293,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case viewLLMLogs:
 		l, cmd := m.llmLogsList.Update(msg)
 		m.llmLogsList = l
+		cmds = append(cmds, cmd)
+
+	default:
+		m.setViewportContent()
+
+		vp, cmd := m.viewport.Update(msg)
+		m.viewport = vp
 		cmds = append(cmds, cmd)
 	}
 
@@ -354,6 +375,9 @@ func (m *Model) setViewportContent() {
 
 	case viewDBSchema:
 		m.viewport.SetContent(padding.Render(m.dbSchema))
+
+	case viewLLMSharedSchema:
+		m.viewport.SetContent(padding.Render(m.llmSharedSchema))
 	}
 }
 

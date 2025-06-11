@@ -49,6 +49,11 @@ var accessDBSchema = key.NewBinding(
 	key.WithHelp("S", "view database schema (available when the editor is not focused)"),
 )
 
+var accessLLMSharedSchema = key.NewBinding(
+	key.WithKeys("s"),
+	key.WithHelp("s", "view LLM shared schema (available when the editor is not focused)"),
+)
+
 var accessServers = key.NewBinding(
 	key.WithKeys("|"),
 	key.WithHelp("|", "view servers (available when the editor is not focused)"),
@@ -78,6 +83,7 @@ func (m model) renderHelp() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.renderUsefulHelp(),
+		m.renderLLMHelp(),
 		m.renderEditorHelp(),
 		m.renderTableHelp(),
 		m.renderCommandHelp(),
@@ -93,6 +99,7 @@ func (m model) renderUsefulHelp() string {
 		keymap.Insert,
 		accessExportedData,
 		accessDBSchema,
+		accessLLMSharedSchema,
 		accessServers,
 		enterCommand,
 		viewLLMLogs,
@@ -101,6 +108,47 @@ func (m model) renderUsefulHelp() string {
 	title := styles.Text.Bold(true).Render("Useful Shortcuts")
 
 	return title + help.RenderHelpView(m.width, bindings)
+}
+
+func (m model) renderLLMHelp() string {
+	bindings := []key.Binding{
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("/ask", `send a query to the LLM
+						 Example:
+						 /ask join all users with their orders and return the user name, email and order total
+						 `,
+			),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("/add", `adds tables to the LLM instructions
+						 Example:
+						 /add users, orders
+						 `),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("/remove", `removes tables from the LLM instructions
+						 Example:
+						 /remove users, orders
+						 / remove * -> removes all tables from the LLM instructions
+						 `),
+		),
+	}
+
+	title := styles.Text.Bold(true).Render("LLM Commands")
+
+	description := styles.Subtext1.Render(
+		"These commands are available when the editor is in INSERT mode.",
+	)
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		description,
+		help.RenderHelpView(m.width, bindings),
+	)
 }
 
 func (m model) renderEditorHelp() string {

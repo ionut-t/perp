@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +46,12 @@ type queryFailureMsg struct {
 
 type clearNotificationMsg struct{}
 
+type llmSharedSchemaMsg struct {
+	schema  string
+	message string
+	tables  []string
+}
+
 type view int
 
 const (
@@ -64,27 +71,28 @@ const (
 )
 
 type model struct {
-	config              config.Config
-	width, height       int
-	view                view
-	focused             focused
-	serverSelection     servers.Model
-	server              server.Server
-	db                  db.Database
-	error               error
-	loading             bool
-	llm                 llm.LLM
-	editor              editor.Model
-	sqlKeywords         map[string]lipgloss.Style
-	llmKeywords         map[string]lipgloss.Style
-	queryResults        []map[string]any
-	historyLogs         []history.HistoryLog
-	currentHistoryIndex int
-	exportData          exportData.Model
-	command             command.Model
-	notification        string
-	content             content.Model
-	help                help.Model
+	config                config.Config
+	width, height         int
+	view                  view
+	focused               focused
+	serverSelection       servers.Model
+	server                server.Server
+	db                    db.Database
+	error                 error
+	loading               bool
+	llm                   llm.LLM
+	editor                editor.Model
+	sqlKeywords           map[string]lipgloss.Style
+	llmKeywords           map[string]lipgloss.Style
+	queryResults          []map[string]any
+	historyLogs           []history.HistoryLog
+	currentHistoryIndex   int
+	exportData            exportData.Model
+	command               command.Model
+	notification          string
+	content               content.Model
+	help                  help.Model
+	llmSharedTablesSchema []string
 }
 
 func New(config config.Config) model {
@@ -106,10 +114,12 @@ func New(config config.Config) model {
 	editor.SetHighlightedWords(sqlKeywordsMap)
 
 	llmKeywordsMap := map[string]lipgloss.Style{
-		"/ask": styles.Info.Bold(true),
+		"/ask":    styles.Info.Bold(true),
+		"/add":    styles.Info.Bold(true),
+		"/remove": styles.Info.Bold(true),
 	}
 
-	editor.SetPlaceholder("Type your SQL query or /ask your question here...")
+	editor.SetPlaceholder("Type your SQL query here...")
 
 	editor.Focus()
 	editor.DisableCommandMode(true)
@@ -239,6 +249,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 
+		case key.Matches(msg, accessLLMSharedSchema):
+			if m.editor.IsNormalMode() {
+				m.focused = focusedContent
+				m.editor.Blur()
+				m.content.ShowLLMSharedSchema()
+				c, cmd := m.content.Update(nil)
+				m.content = c.(content.Model)
+				return m, cmd
+			}
+
 		case key.Matches(msg, accessServers):
 			if m.editor.IsNormalMode() {
 				m.serverSelection = servers.New(m.config.Storage())
@@ -271,10 +291,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 
-				isAskCommand := strings.HasPrefix(content, "/ask")
+				isLLMCommand := strings.HasPrefix(content, "/ask") ||
+					strings.HasPrefix(content, "/add") ||
+					strings.HasPrefix(content, "/remove")
 
-				if !isAskCommand && strings.HasSuffix(content, ";") && len(content) > 5 ||
-					isAskCommand && len(content) > 5 && strings.HasSuffix(content, "?") {
+				if !isLLMCommand && strings.HasSuffix(content, ";") && len(content) > 5 {
 					if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
 						m.historyLogs = logs
 						m.currentHistoryIndex = 0
@@ -367,6 +388,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.db, m.error = db.New(m.server.ConnectionString())
 		if m.error == nil {
 			m.content.SetConnectionInfo(m.server)
+
+			if m.server.ShareDatabaseSchemaLLM {
+				m.editor.SetPlaceholder("Type your SQL query or /ask your question here...")
+			} else {
+				m.editor.SetPlaceholder("Type your SQL query")
+			}
+
 			return m, m.generateSchema()
 		}
 		m.loading = false
@@ -377,10 +405,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case schemaFetchedMsg:
 		schema := string(msg)
 		m.loading = false
-
-		if m.server.ShareDatabaseSchemaLLM {
-			m.llm.AppendInstructions(schema)
-		}
 
 		m.content.SetSchema(schema)
 
@@ -434,6 +458,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		query := strings.Trim(m.editor.GetCurrentContent(), "/ask")
 		m.content.SetLLMLogsError(msg.err, query)
+
+	case llmSharedSchemaMsg:
+		m.editor.SetContent("")
+		m.content.SetLLMSharedSchema(msg.schema)
+		m.llmSharedTablesSchema = msg.tables
+
+		return m, m.successNotification(msg.message)
 
 	case content.LLMResponseSelectedMsg:
 		m.editor.SetContent(msg.Response)
@@ -499,7 +530,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.Enabled {
 			focusEditor()
-			m.llm.AppendInstructions(m.content.GetDatabaseSchema())
 			return m, m.successNotification("LLM will now use the database schema")
 		}
 
@@ -688,7 +718,7 @@ func (m model) ask(prompt string) tea.Cmd {
 }
 
 func (m model) setHighlightedKeywords() map[string]lipgloss.Style {
-	if strings.HasPrefix(m.editor.GetCurrentContent(), "/ask") {
+	if strings.HasPrefix(m.editor.GetCurrentContent(), "/") {
 		return m.llmKeywords
 	}
 
@@ -704,10 +734,51 @@ func (m model) sendQueryCmd() tea.Cmd {
 
 	prompt = strings.TrimSpace(prompt)
 
-	if strings.HasPrefix(prompt, "/ask ") {
+	if strings.HasPrefix(prompt, "/ask") {
 		m.focused = focusedContent
 
 		return m.ask(strings.Trim(prompt, "/ask "))
+	}
+
+	if strings.HasPrefix(prompt, "/add") {
+		return func() tea.Msg {
+			schema, err := m.addTablesSchemaToLLM()
+
+			if err != nil {
+				return m.errorNotification(err)
+			}
+
+			var message string
+			if len(m.llmSharedTablesSchema) == 1 {
+				message = "Table added to LLM schema"
+			} else {
+				message = "Tables added to LLM schema"
+			}
+
+			return llmSharedSchemaMsg{schema: schema, message: message, tables: m.llmSharedTablesSchema}
+		}
+	}
+
+	if strings.HasPrefix(prompt, "/remove") {
+		return func() tea.Msg {
+			schema, err := m.removeTablesSchemaToLLM()
+
+			if err != nil {
+				return m.errorNotification(err)
+			}
+
+			var message string
+			switch len(m.llmSharedTablesSchema) {
+			case 0:
+				message = "All tables removed from LLM instructions"
+			case 1:
+				message = "Table removed from LLM schema"
+			default:
+				message = "Tables removed from LLM schema"
+			}
+
+			return llmSharedSchemaMsg{schema: schema, message: message, tables: m.llmSharedTablesSchema}
+		}
 	}
 
 	return m.executeQuery(prompt)
@@ -850,7 +921,7 @@ func (m *model) getAvailableSizes() (int, int) {
 	return availableWidth, availableHeight
 }
 
-func (m model) renderLLMModel() string {
+func (m *model) renderLLMModel() string {
 	llmModel, _ := m.config.GetLLMModel()
 
 	if llmModel == "" {
@@ -862,4 +933,117 @@ func (m model) renderLLMModel() string {
 	}
 
 	return styles.Accent.Render(llmModel)
+}
+
+// addTablesSchemaToLLM processes the `/add` command to include table schemas in the LLM context.
+func (m *model) addTablesSchemaToLLM() (string, error) {
+	if !m.server.ShareDatabaseSchemaLLM {
+		return "", fmt.Errorf("cannot add tables to LLM schema when this feature is disabled")
+	}
+
+	value := strings.TrimSpace(strings.TrimPrefix(m.editor.GetCurrentContent(), "/add"))
+	if value == "" {
+		return "", fmt.Errorf("no tables specified to add")
+	}
+
+	tables := parseTableNames(value)
+	if len(tables) == 0 {
+		return "", fmt.Errorf("no valid table names provided")
+	}
+
+	var newTables []string
+	for _, tableName := range tables {
+		if !slices.Contains(m.llmSharedTablesSchema, tableName) {
+			newTables = append(newTables, tableName)
+		}
+	}
+
+	finalTableList := append(m.llmSharedTablesSchema, newTables...)
+
+	schema, err := m.db.GenerateSchemaForTables(finalTableList)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate schema: %w", err)
+	}
+
+	if strings.TrimSpace(schema) == "" {
+		return "", fmt.Errorf("no schema found for the specified tables; please check they exist")
+	}
+
+	m.llmSharedTablesSchema = finalTableList
+	m.llm.ResetInstructions()
+
+	m.llm.AppendInstructions("Database Schema:\n\n" + schema)
+
+	return schema, nil
+}
+
+func (m *model) removeTablesSchemaToLLM() (string, error) {
+	if !m.server.ShareDatabaseSchemaLLM {
+		return "", nil
+	}
+
+	value := m.editor.GetCurrentContent()
+	value = strings.TrimPrefix(value, "/remove")
+	value = strings.TrimSpace(value)
+
+	if value == "" {
+		return "", fmt.Errorf("no tables specified to remove from LLM schema")
+	}
+
+	if value == "*" {
+		m.llmSharedTablesSchema = []string{}
+		m.llm.ResetInstructions()
+
+		return "", nil
+	}
+
+	tables := parseTableNames(value)
+	if len(tables) == 0 {
+		return "", fmt.Errorf("no valid table names provided")
+	}
+
+	if len(tables) == 0 {
+		return "", fmt.Errorf("no valid tables specified to remove from LLM schema")
+	}
+
+	for _, tableName := range tables {
+		idx := slices.Index(m.llmSharedTablesSchema, tableName)
+
+		if idx > -1 {
+			m.llmSharedTablesSchema = slices.Delete(m.llmSharedTablesSchema, idx, idx+1)
+		}
+	}
+
+	if len(m.llmSharedTablesSchema) == 0 {
+		m.llm.ResetInstructions()
+		return "", nil
+	}
+
+	schema, err := m.db.GenerateSchemaForTables(m.llmSharedTablesSchema)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate schema for tables: %w", err)
+	}
+
+	m.llm.ResetInstructions()
+	m.llm.AppendInstructions(schema)
+
+	return schema, nil
+}
+
+// parseTableNames is a helper function that extracts and deduplicates table names from a raw input string.
+func parseTableNames(input string) []string {
+	var tables []string
+	seen := make(map[string]bool)
+
+	// Split the input string by common delimiters like comma, space, tab, or newline.
+	for _, table := range strings.FieldsFunc(input, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n'
+	}) {
+		trimmedTable := strings.TrimSpace(table)
+		if trimmedTable != "" && !seen[trimmedTable] {
+			tables = append(tables, trimmedTable)
+			seen[trimmedTable] = true
+		}
+	}
+	return tables
 }
