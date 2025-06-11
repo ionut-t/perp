@@ -16,7 +16,6 @@ func configCmd() *cobra.Command {
 		Short: "Manage configuration",
 		Run: func(cmd *cobra.Command, args []string) {
 			configPath := config.GetConfigFilePath()
-			println("Config file path:", configPath)
 
 			editorFlag, _ := cmd.Flags().GetString(config.EditorKey)
 			llmApiKeyFlag, _ := cmd.Flags().GetString(config.LLMApiKey)

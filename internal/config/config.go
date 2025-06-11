@@ -16,7 +16,7 @@ const (
 	EditorKey   = "editor"
 
 	rootDir                 = ".perp"
-	configFileName          = "config.toml"
+	configFileName          = ".config.toml"
 	llmInstructionsFileName = "llm_instructions.md"
 	llmInstructions         = "LLM_INSTRUCTIONS"
 	llmDefaultInstructions  = "LLM_DEFAULT_INSTRUCTIONS"

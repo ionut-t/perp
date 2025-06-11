@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	historyFileName = ".history"
 	// Maximum number of history entries to keep
 	maxHistoryEntries = 1_000
 	// Maximum age for history entries (90 days)
@@ -49,7 +50,7 @@ func Add(query string, storage string) ([]HistoryLog, error) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	path := filepath.Join(storage, "history")
+	path := filepath.Join(storage, historyFileName)
 
 	history, err := readHistoryLogs(path)
 	if err != nil && !os.IsNotExist(err) {
@@ -85,7 +86,7 @@ func Get(storage string) ([]HistoryLog, error) {
 	manager.mu.RLock()
 	defer manager.mu.RUnlock()
 
-	path := filepath.Join(storage, "history")
+	path := filepath.Join(storage, historyFileName)
 
 	history, err := readHistoryLogs(path)
 	if err != nil {
