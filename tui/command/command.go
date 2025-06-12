@@ -14,7 +14,7 @@ import (
 type ExportMsg struct {
 	Rows     []int
 	All      bool
-	FileName string
+	Filename string
 }
 
 type EditorChangedMsg struct {
@@ -145,7 +145,7 @@ func (c Model) handleExport() (Model, tea.Cmd) {
 	return c, dispatch(ExportMsg{
 		Rows:     rows,
 		All:      all,
-		FileName: fileName,
+		Filename: fileName,
 	})
 }
 

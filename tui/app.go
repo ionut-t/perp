@@ -21,6 +21,7 @@ import (
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/llm/gemini"
 	"github.com/ionut-t/perp/pkg/server"
+	"github.com/ionut-t/perp/pkg/utils"
 	exportStore "github.com/ionut-t/perp/store/export"
 	"github.com/ionut-t/perp/tui/command"
 	"github.com/ionut-t/perp/tui/content"
@@ -44,8 +45,6 @@ type executeQueryMsg content.ParsedQueryResult
 type queryFailureMsg struct {
 	err error
 }
-
-type clearNotificationMsg struct{}
 
 type llmSharedSchemaMsg struct {
 	schema  string
@@ -311,21 +310,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					strings.HasPrefix(content, "/remove")
 
 				if !isLLMCommand && strings.HasSuffix(content, ";") && len(content) > 5 {
-					if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
-						m.historyLogs = logs
-					}
-
+					m.addToHistory()
 					return m, m.sendQueryCmd()
 				}
 			}
 
 		case key.Matches(msg, executeQuery):
 			m.resetHistory()
-
-			if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
-				m.historyLogs = logs
-				m.currentHistoryIndex = 0
-			}
+			m.addToHistory()
 
 			return m, m.sendQueryCmd()
 
@@ -343,61 +335,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, previousHistory):
 			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
-				// If we're not already navigating, save the current content
-				if !m.historyNavigating {
-					m.originalEditorContent = m.editor.GetCurrentContent()
-					m.currentHistoryIndex = -1 // Start before the first item
-					m.historyNavigating = true
-				}
-
-				// Move to older entry
-				if m.currentHistoryIndex < len(m.historyLogs)-1 {
-					m.currentHistoryIndex++
-					m.editor.SetContent(m.historyLogs[m.currentHistoryIndex].Query)
-					m.editor.SetCursorPositionEnd()
-				}
+				m.previousHistory()
 			}
-			// if m.editor.IsFocused() && len(m.historyLogs) > 0 {
-			// 	lastQuery := m.historyLogs[m.currentHistoryIndex].Query
-
-			// 	if m.currentHistoryIndex < len(m.historyLogs)-1 {
-			// 		m.currentHistoryIndex++
-			// 	} else {
-			// 		m.currentHistoryIndex = 0
-			// 	}
-
-			// 	m.editor.SetContent(lastQuery)
-			// 	m.editor.SetCursorPositionEnd()
-			// }
 
 		case key.Matches(msg, nextHistory):
 			if m.editor.IsFocused() && m.historyNavigating {
-				// Move to newer entry
-				if m.currentHistoryIndex > 0 {
-					m.currentHistoryIndex--
-					m.editor.SetContent(m.historyLogs[m.currentHistoryIndex].Query)
-					m.editor.SetCursorPositionEnd()
-				} else if m.currentHistoryIndex == 0 {
-					// Return to original content
-					m.currentHistoryIndex = -1
-					m.editor.SetContent(m.originalEditorContent)
-					m.editor.SetCursorPositionEnd()
-					m.historyNavigating = false
-				}
+				m.nextHistory()
 			}
-
-			// if m.editor.IsFocused() && len(m.historyLogs) > 0 {
-			// 	lastQuery := m.historyLogs[m.currentHistoryIndex].Query
-
-			// 	if m.currentHistoryIndex > 0 {
-			// 		m.currentHistoryIndex--
-			// 	} else {
-			// 		m.currentHistoryIndex = len(m.historyLogs) - 1
-			// 	}
-
-			// 	m.editor.SetContent(lastQuery)
-			// 	m.editor.SetCursorPositionEnd()
-			// }
 
 		case key.Matches(msg, accessExportedData):
 			if m.focused == focusedContent {
@@ -448,7 +392,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = false
 
-	case clearNotificationMsg:
+	case utils.ClearNotificationMsg:
 		m.notification = ""
 
 	case schemaFetchedMsg:
@@ -835,52 +779,30 @@ func (m model) sendQueryCmd() tea.Cmd {
 
 func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 	queryResults := m.content.GetQueryResults()
-	if queryResults != nil {
-		rows := msg.Rows
-		all := msg.All
-		fileName := msg.FileName
 
-		var data any
-		if len(rows) > 1 {
-			data = make([]map[string]any, 0)
+	data, err := utils.HandleDataExport(queryResults, msg.Rows, msg.All)
 
-			for _, rowIdx := range rows {
-				idx := rowIdx - 1
-				if idx >= 0 && idx < len(queryResults) {
-					data = append(data.([]map[string]any), queryResults[idx])
-				}
-			}
-		} else if len(rows) == 1 {
-			idx := rows[0] - 1
-			if idx >= 0 && idx < len(queryResults) {
-				data = queryResults[idx]
-			}
-		}
-
-		if all {
-			data = make([]map[string]any, 0)
-			data = append(data.([]map[string]any), queryResults...)
-		}
-
-		storage := filepath.Join(m.config.Storage(), m.server.Name)
-		fileName, err := export.AsJson(storage, data, fileName)
-
-		if err != nil {
-			return m, m.errorNotification(err)
-		}
-
+	if err != nil {
 		m.focused = focusedEditor
 		m.editor.Focus()
-		m.command.Reset()
 
-		return m, m.successNotification(
-			fmt.Sprintf("Data exported successfully to %s.json", fileName),
-		)
+		return m, m.errorNotification(err)
+	}
+
+	storage := filepath.Join(m.config.Storage(), m.server.Name)
+	fileName, err := export.AsJson(storage, data, msg.Filename)
+
+	if err != nil {
+		return m, m.errorNotification(err)
 	}
 
 	m.focused = focusedEditor
 	m.editor.Focus()
-	return m, m.errorNotification(fmt.Errorf("no query results to export"))
+	m.command.Reset()
+
+	return m, m.successNotification(
+		fmt.Sprintf("Data exported successfully to %s.json", fileName),
+	)
 }
 
 func (m *model) renderDBError(width, height int) string {
@@ -936,22 +858,13 @@ func (m *model) renderStatusBar() string {
 func (m *model) successNotification(msg string) tea.Cmd {
 	m.notification = styles.Success.Render(msg)
 
-	return m.clearNotification()
+	return utils.ClearNotification()
 }
 
 func (m *model) errorNotification(err error) tea.Cmd {
 	m.notification = styles.Error.Render(err.Error())
 
-	return m.clearNotification()
-}
-
-func (m *model) clearNotification() tea.Cmd {
-	return tea.Tick(
-		time.Second*2,
-		func(t time.Time) tea.Msg {
-			return clearNotificationMsg{}
-		},
-	)
+	return utils.ClearNotification()
 }
 
 func (m model) closeDbConnection() {
@@ -996,7 +909,7 @@ func (m *model) addTablesSchemaToLLM() (string, error) {
 		return "", fmt.Errorf("no tables specified to add")
 	}
 
-	tables := parseTableNames(value)
+	tables := utils.ParseTableNames(value)
 	if len(tables) == 0 {
 		return "", fmt.Errorf("no valid table names provided")
 	}
@@ -1047,7 +960,7 @@ func (m *model) removeTablesSchemaToLLM() (string, error) {
 		return "", nil
 	}
 
-	tables := parseTableNames(value)
+	tables := utils.ParseTableNames(value)
 	if len(tables) == 0 {
 		return "", fmt.Errorf("no valid table names provided")
 	}
@@ -1078,28 +991,4 @@ func (m *model) removeTablesSchemaToLLM() (string, error) {
 	m.llm.AppendInstructions(schema)
 
 	return schema, nil
-}
-
-// parseTableNames is a helper function that extracts and deduplicates table names from a raw input string.
-func parseTableNames(input string) []string {
-	var tables []string
-	seen := make(map[string]bool)
-
-	// Split the input string by common delimiters like comma, space, tab, or newline.
-	for _, table := range strings.FieldsFunc(input, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '\t' || r == '\n'
-	}) {
-		trimmedTable := strings.TrimSpace(table)
-		if trimmedTable != "" && !seen[trimmedTable] {
-			tables = append(tables, trimmedTable)
-			seen[trimmedTable] = true
-		}
-	}
-	return tables
-}
-
-func (m *model) resetHistory() {
-	m.historyNavigating = false
-	m.currentHistoryIndex = -1
-	m.originalEditorContent = ""
 }
