@@ -51,6 +51,10 @@ type llmSharedSchemaMsg struct {
 	tables  []string
 }
 
+type notificationErrorMsg struct {
+	err error
+}
+
 type view int
 
 const (
@@ -458,6 +462,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, m.successNotification(msg.message)
 
+	case notificationErrorMsg:
+		return m, m.errorNotification(msg.err)
+
 	case content.LLMResponseSelectedMsg:
 		m.editor.SetContent(msg.Response)
 		m.editor.Focus()
@@ -697,7 +704,11 @@ func (m model) sendQueryCmd() tea.Cmd {
 			schema, err := m.addTablesSchemaToLLM()
 
 			if err != nil {
-				return m.errorNotification(err)
+				m.editor.SetContent("")
+
+				return func() tea.Msg {
+					return notificationErrorMsg{err: err}
+				}()
 			}
 
 			var message string
