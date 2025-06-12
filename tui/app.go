@@ -634,7 +634,7 @@ func (m model) executeQuery(query string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		result, err := m.db.ExecuteQuery(ctx, query)
+		result, err := m.db.Query(ctx, query)
 		if err != nil {
 			return queryFailureMsg{err: err}
 		}

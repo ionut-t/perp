@@ -16,7 +16,7 @@ import (
 // Database defines the contract for database operations
 type Database interface {
 	// Execute a SQL query and return the result
-	ExecuteQuery(ctx context.Context, query string) (QueryResult, error)
+	Query(ctx context.Context, query string) (QueryResult, error)
 	// Generate a human-readable schema of the database
 	GenerateSchema() (string, error)
 	// Generate a human-readable schema for specific tables
@@ -100,8 +100,8 @@ func (d *database) Close() {
 	d.pool.Close()
 }
 
-// ExecuteQuery executes a SQL query and returns the result
-func (d *database) ExecuteQuery(ctx context.Context, query string) (QueryResult, error) {
+// Query executes a SQL query and returns the result
+func (d *database) Query(ctx context.Context, query string) (QueryResult, error) {
 	rows, err := d.pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
