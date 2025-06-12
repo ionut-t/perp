@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -596,36 +595,6 @@ func (m model) View() string {
 		return "Loading...\n"
 	}
 
-	var commandLine string
-
-	if m.focused == focusedCommand {
-		commandLine = m.command.View()
-	} else {
-		commandLine = m.renderStatusBar()
-	}
-
-	if m.notification != "" {
-		commandLine = m.notification
-	}
-
-	editorBorder := styles.InactiveBorder
-	if m.focused == focusedEditor {
-		editorBorder = styles.ActiveBorder
-	}
-
-	contentBorder := styles.InactiveBorder
-	if m.focused == focusedContent {
-		contentBorder = styles.ActiveBorder
-	}
-
-	primaryView := lipgloss.JoinVertical(
-		lipgloss.Left,
-		editorBorder.Render(
-			m.editor.View(),
-		),
-		commandLine,
-	)
-
 	width, height := m.getAvailableSizes()
 
 	if m.error != nil {
@@ -634,20 +603,10 @@ func (m model) View() string {
 
 	switch m.view {
 	case viewServers:
-		return styles.ViewPadding.Render(lipgloss.JoinVertical(
-			lipgloss.Left,
-			lipgloss.NewStyle().Height(m.height-lipgloss.Height(m.editor.View())-4).Render(
-				m.serverSelection.View(),
-			),
-		))
+		return m.renderServers()
 
 	case viewMain:
-		return lipgloss.NewStyle().Padding(1, 1, 0).Render(lipgloss.JoinVertical(
-			lipgloss.Left,
-			contentBorder.Width(width).
-				Height(height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-styles.ViewPadding.GetVerticalBorderSize()*2-2).
-				Render(m.content.View()),
-			primaryView))
+		return m.renderMain(width, height)
 
 	case viewExportData:
 		return m.exportData.View()
@@ -805,56 +764,6 @@ func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 	)
 }
 
-func (m *model) renderDBError(width, height int) string {
-	return lipgloss.NewStyle().
-		Padding(0, 1).
-		Height(height).
-		Width(width).
-		Border(lipgloss.RoundedBorder()).
-		Render(
-			lipgloss.JoinVertical(
-				lipgloss.Left,
-				styles.Error.Render(m.error.Error()),
-				"\n",
-				styles.Subtext0.Render("Press 'q' to go back to server selection"),
-			),
-		)
-}
-
-func (m *model) renderStatusBar() string {
-	bg := styles.Surface0.GetBackground()
-
-	separator := styles.Surface0.Render(" | ")
-
-	serverName := styles.Primary.Background(bg).Render(m.server.Name)
-
-	database := styles.Accent.Background(bg).Render(m.server.Database)
-
-	llm := lipgloss.NewStyle().Background(bg).Render(m.renderLLMModel())
-
-	left := serverName + separator + database + separator + llm
-
-	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
-
-	helpText := styles.Info.Background(bg).PaddingRight(1).Render("? Help")
-
-	displayedInfoWidth := m.width -
-		lipgloss.Width(leftInfo) -
-		lipgloss.Width(helpText) -
-		lipgloss.Width(separator)
-
-	spaces := styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
-
-	return styles.Surface0.Width(m.width).Render(
-		lipgloss.JoinHorizontal(
-			lipgloss.Right,
-			leftInfo,
-			spaces,
-			helpText,
-		),
-	)
-}
-
 func (m *model) successNotification(msg string) tea.Cmd {
 	m.notification = styles.Success.Render(msg)
 
@@ -871,124 +780,4 @@ func (m model) closeDbConnection() {
 	if m.db != nil {
 		m.db.Close()
 	}
-}
-
-func (m *model) getAvailableSizes() (int, int) {
-	h, v := styles.ViewPadding.GetFrameSize()
-
-	statusBarHeight := 1
-
-	availableHeight := m.height - v - statusBarHeight - styles.ActiveBorder.GetBorderBottomSize()
-	availableWidth := m.width - h - styles.ActiveBorder.GetBorderLeftSize()
-
-	return availableWidth, availableHeight
-}
-
-func (m *model) renderLLMModel() string {
-	llmModel, _ := m.config.GetLLMModel()
-
-	if llmModel == "" {
-		return styles.Subtext0.Render("No LLM model set")
-	}
-
-	if m.server.ShareDatabaseSchemaLLM {
-		return styles.Accent.Render(llmModel + " (DB Schema enabled)")
-	}
-
-	return styles.Accent.Render(llmModel)
-}
-
-// addTablesSchemaToLLM processes the `/add` command to include table schemas in the LLM context.
-func (m *model) addTablesSchemaToLLM() (string, error) {
-	if !m.server.ShareDatabaseSchemaLLM {
-		return "", fmt.Errorf("cannot add tables to LLM schema when this feature is disabled")
-	}
-
-	value := strings.TrimSpace(strings.TrimPrefix(m.editor.GetCurrentContent(), "/add"))
-	if value == "" {
-		return "", fmt.Errorf("no tables specified to add")
-	}
-
-	tables := utils.ParseTableNames(value)
-	if len(tables) == 0 {
-		return "", fmt.Errorf("no valid table names provided")
-	}
-
-	var newTables []string
-	for _, tableName := range tables {
-		if !slices.Contains(m.llmSharedTablesSchema, tableName) {
-			newTables = append(newTables, tableName)
-		}
-	}
-
-	finalTableList := append(m.llmSharedTablesSchema, newTables...)
-
-	schema, err := m.db.GenerateSchemaForTables(finalTableList)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate schema: %w", err)
-	}
-
-	if strings.TrimSpace(schema) == "" {
-		return "", fmt.Errorf("no schema found for the specified tables; please check they exist")
-	}
-
-	m.llmSharedTablesSchema = finalTableList
-	m.llm.ResetInstructions()
-
-	m.llm.AppendInstructions("Database Schema:\n\n" + schema)
-
-	return schema, nil
-}
-
-func (m *model) removeTablesSchemaToLLM() (string, error) {
-	if !m.server.ShareDatabaseSchemaLLM {
-		return "", nil
-	}
-
-	value := m.editor.GetCurrentContent()
-	value = strings.TrimPrefix(value, "/remove")
-	value = strings.TrimSpace(value)
-
-	if value == "" {
-		return "", fmt.Errorf("no tables specified to remove from LLM schema")
-	}
-
-	if value == "*" {
-		m.llmSharedTablesSchema = []string{}
-		m.llm.ResetInstructions()
-
-		return "", nil
-	}
-
-	tables := utils.ParseTableNames(value)
-	if len(tables) == 0 {
-		return "", fmt.Errorf("no valid table names provided")
-	}
-
-	if len(tables) == 0 {
-		return "", fmt.Errorf("no valid tables specified to remove from LLM schema")
-	}
-
-	for _, tableName := range tables {
-		idx := slices.Index(m.llmSharedTablesSchema, tableName)
-
-		if idx > -1 {
-			m.llmSharedTablesSchema = slices.Delete(m.llmSharedTablesSchema, idx, idx+1)
-		}
-	}
-
-	if len(m.llmSharedTablesSchema) == 0 {
-		m.llm.ResetInstructions()
-		return "", nil
-	}
-
-	schema, err := m.db.GenerateSchemaForTables(m.llmSharedTablesSchema)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate schema for tables: %w", err)
-	}
-
-	m.llm.ResetInstructions()
-	m.llm.AppendInstructions(schema)
-
-	return schema, nil
 }
