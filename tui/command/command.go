@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/ionut-t/perp/pkg/utils"
 	"github.com/ionut-t/perp/ui/styles"
 )
 
@@ -90,7 +91,7 @@ func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case tea.KeyEsc:
 		empty := ""
 		c.input.Value(&empty)
-		return c, dispatch(CancelMsg{})
+		return c, utils.Dispatch(CancelMsg{})
 
 	case tea.KeyEnter:
 		cmdValue := c.input.GetValue().(string)
@@ -101,7 +102,7 @@ func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 		}
 
 		if cmdValue == "q" {
-			return c, dispatch(QuitMsg{})
+			return c, utils.Dispatch(QuitMsg{})
 		}
 
 		if strings.HasPrefix(cmdValue, "export") {
@@ -120,7 +121,7 @@ func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return c.handleLLMMModelChanged(cmdValue)
 		}
 
-		return c, dispatch(ErrorMsg{Err: fmt.Errorf("unknown command: %s", cmdValue)})
+		return c, utils.Dispatch(ErrorMsg{Err: fmt.Errorf("unknown command: %s", cmdValue)})
 	}
 
 	cmdModel, cmd := c.input.Update(msg)
@@ -135,14 +136,14 @@ func (c Model) handleExport() (Model, tea.Cmd) {
 	rows, all, fileName, err := parseExportCommand(value)
 
 	if err != nil {
-		return c, dispatch(ErrorMsg{Err: err})
+		return c, utils.Dispatch(ErrorMsg{Err: err})
 	}
 
 	if len(rows) == 0 && !all {
-		return c, dispatch(ErrorMsg{Err: fmt.Errorf("no rows specified")})
+		return c, utils.Dispatch(ErrorMsg{Err: fmt.Errorf("no rows specified")})
 	}
 
-	return c, dispatch(ExportMsg{
+	return c, utils.Dispatch(ExportMsg{
 		Rows:     rows,
 		All:      all,
 		Filename: fileName,
@@ -153,13 +154,13 @@ func (c Model) handleEditorSetCmd(cmdValue string) (Model, tea.Cmd) {
 	editor := strings.TrimSpace(strings.TrimPrefix(cmdValue, "set-editor"))
 
 	if editor == "" {
-		return c, dispatch(ErrorMsg{Err: errors.New("no editor specified")})
+		return c, utils.Dispatch(ErrorMsg{Err: errors.New("no editor specified")})
 	}
 
 	empty := ""
 	c.input.Value(&empty)
 
-	return c, dispatch(EditorChangedMsg{Editor: editor})
+	return c, utils.Dispatch(EditorChangedMsg{Editor: editor})
 }
 
 func (c Model) handleLLMDatabaseSchema(cmdValue string) (Model, tea.Cmd) {
@@ -170,13 +171,13 @@ func (c Model) handleLLMDatabaseSchema(cmdValue string) (Model, tea.Cmd) {
 	case "llm-db-schema-disable":
 		enabled = false
 	default:
-		return c, dispatch(ErrorMsg{Err: errors.New("invalid command for enabling/disabling database schema usage in LLM")})
+		return c, utils.Dispatch(ErrorMsg{Err: errors.New("invalid command for enabling/disabling database schema usage in LLM")})
 	}
 
 	empty := ""
 	c.input.Value(&empty)
 
-	return c, dispatch(LLMUseDatabaseSchemaMsg{
+	return c, utils.Dispatch(LLMUseDatabaseSchemaMsg{
 		Enabled: enabled,
 	})
 }
@@ -185,18 +186,18 @@ func (c Model) handleLLMMModelChanged(cmdValue string) (Model, tea.Cmd) {
 	model := strings.TrimSpace(strings.TrimPrefix(cmdValue, "llm-model"))
 
 	if model == "" {
-		return c, dispatch(ErrorMsg{Err: errors.New("no LLM model specified")})
+		return c, utils.Dispatch(ErrorMsg{Err: errors.New("no LLM model specified")})
 	}
 
 	parts := strings.Split(model, " ")
 	if len(parts) > 1 {
-		return c, dispatch(ErrorMsg{Err: fmt.Errorf("invalid LLM model format: %s, expected single word model name", model)})
+		return c, utils.Dispatch(ErrorMsg{Err: fmt.Errorf("invalid LLM model format: %s, expected single word model name", model)})
 	}
 
 	empty := ""
 	c.input.Value(&empty)
 
-	return c, dispatch(LLMModelChangedMsg{Model: model})
+	return c, utils.Dispatch(LLMModelChangedMsg{Model: model})
 }
 
 func parseExportCommand(value string) ([]int, bool, string, error) {
@@ -233,10 +234,4 @@ func parseExportCommand(value string) ([]int, bool, string, error) {
 
 	fileName = strings.TrimSuffix(fileName, ".json")
 	return rows, all, fileName, nil
-}
-
-func dispatch(msg tea.Msg) tea.Cmd {
-	return func() tea.Msg {
-		return msg
-	}
 }

@@ -68,3 +68,9 @@ func HandleDataExport(queryResults []map[string]any, rows []int, all bool) (any,
 
 	return nil, errors.New("no query results to export")
 }
+
+func Dispatch(msg tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		return msg
+	}
+}

@@ -706,9 +706,7 @@ func (m model) sendQueryCmd() tea.Cmd {
 			if err != nil {
 				m.editor.SetContent("")
 
-				return func() tea.Msg {
-					return notificationErrorMsg{err: err}
-				}()
+				return utils.Dispatch(notificationErrorMsg{err: err})
 			}
 
 			var message string
