@@ -132,7 +132,7 @@ func (m model) renderLLMHelp() string {
 			key.WithHelp("/remove", `removes tables from the LLM instructions
 						 Example:
 						 /remove users, orders
-						 / remove * -> removes all tables from the LLM instructions
+						 /remove * -> removes all tables from the LLM instructions
 						 `),
 		),
 	}
