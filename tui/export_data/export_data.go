@@ -6,10 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
+	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/store/export"
 	"github.com/ionut-t/perp/ui/help"
@@ -137,8 +139,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
-		switch msg.String() {
-		case "q", "esc":
+		switch {
+		case key.Matches(msg, keymap.Quit) || key.Matches(msg, keymap.Cancel):
 			switch m.view {
 			case viewSplit:
 				if m.focusedView == focusedViewList {
@@ -157,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "i":
+		case key.Matches(msg, keymap.Insert):
 			if m.view == viewHelp || m.view == viewPlaceholder {
 				break
 			}
@@ -170,7 +172,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.editor.CursorBlink()
 			}
 
-		case "tab":
+		case key.Matches(msg, changeFocused):
 			if m.view == viewHelp || m.view == viewPlaceholder {
 				break
 			}
@@ -187,8 +189,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "e":
-			if m.editor.IsInsertMode() || m.editor.IsCommandMode() || m.view == viewHelp || m.view == viewPlaceholder {
+		case key.Matches(msg, keymap.Editor):
+			if m.editor.IsInsertMode() ||
+				m.editor.IsCommandMode() ||
+				m.view == viewHelp ||
+				m.view == viewPlaceholder {
 				break
 			}
 
@@ -199,8 +204,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 			return m, execCmd
 
-		case "?":
-			if m.editor.IsInsertMode() || m.editor.IsCommandMode() || m.view == viewPlaceholder {
+		case key.Matches(msg, keymap.Help):
+			if m.editor.IsInsertMode() ||
+				m.editor.IsCommandMode() ||
+				m.view == viewPlaceholder {
 				break
 			}
 
