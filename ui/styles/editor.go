@@ -2,7 +2,7 @@ package styles
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
+	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 )
 
 func EditorTheme() editor.Theme {

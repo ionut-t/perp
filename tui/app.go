@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/ionut-t/goeditor/adapter-bubbletea/editor"
+	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/internal/keymap"

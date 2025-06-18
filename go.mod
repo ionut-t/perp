@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/google/uuid v1.6.0
-	github.com/ionut-t/goeditor/adapter-bubbletea v0.0.0-20250608172051-5b097b4d75d4
+	github.com/ionut-t/goeditor/adapter-bubbletea v0.1.0
 	github.com/ionut-t/gotable v0.1.0
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v5 v5.7.5
@@ -30,7 +30,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/ionut-t/goeditor/core v0.0.0-20250603201123-a19b48d722da // indirect
+	github.com/ionut-t/goeditor/core v0.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
