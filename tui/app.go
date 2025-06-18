@@ -469,7 +469,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.SetContent(msg.Response)
 		m.editor.Focus()
 		m.editor.SetInsertMode()
-		m.editor.SetCursorPositionEnd()
+		_ = m.editor.SetCursorPositionEnd()
 		m.view = viewMain
 		m.focused = focusedEditor
 		ed, cmd := m.editor.Update(nil)

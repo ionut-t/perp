@@ -25,7 +25,7 @@ func (m *model) previousHistory() {
 	if m.currentHistoryIndex < len(m.historyLogs)-1 {
 		m.currentHistoryIndex++
 		m.editor.SetContent(m.historyLogs[m.currentHistoryIndex].Query)
-		m.editor.SetCursorPositionEnd()
+		_ = m.editor.SetCursorPositionEnd()
 	}
 }
 
@@ -34,11 +34,11 @@ func (m *model) nextHistory() {
 	if m.currentHistoryIndex > 0 {
 		m.currentHistoryIndex--
 		m.editor.SetContent(m.historyLogs[m.currentHistoryIndex].Query)
-		m.editor.SetCursorPositionEnd()
+		_ = m.editor.SetCursorPositionEnd()
 	} else if m.currentHistoryIndex == 0 {
 		m.currentHistoryIndex = -1
 		m.editor.SetContent(m.originalEditorContent)
-		m.editor.SetCursorPositionEnd()
+		_ = m.editor.SetCursorPositionEnd()
 		m.historyNavigating = false
 	}
 }

@@ -76,7 +76,7 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			if tt.setupServers != nil {
 				saveTestServers(t, tempDir, tt.setupServers)
@@ -240,7 +240,7 @@ func TestUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			if tt.setupServers != nil {
 				saveTestServers(t, tempDir, tt.setupServers)
@@ -374,7 +374,7 @@ func TestCreateServer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			m := Model{storage: tempDir}
 
@@ -410,7 +410,7 @@ func TestEditServerFlow(t *testing.T) {
 
 	t.Run("test edit server state transitions", func(t *testing.T) {
 		tempDir := setupTempDir(t)
-		defer os.RemoveAll(tempDir)
+		defer removeTempDir(t, tempDir)
 
 		// Create initial server
 		createdServer, _ := server.New(server.CreateServer{
@@ -497,6 +497,13 @@ func TestValidationFunctions(t *testing.T) {
 
 // Helper functions
 
+func removeTempDir(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.RemoveAll(dir); err != nil {
+		t.Errorf("Failed to remove temp dir %s: %v", dir, err)
+	}
+}
+
 func setupTempDir(t *testing.T) string {
 	t.Helper()
 	tempDir, err := os.MkdirTemp("", "servers_ui_test")
@@ -544,11 +551,15 @@ func findSubstring(s, substr string) int {
 
 func BenchmarkNew(b *testing.B) {
 	tempDir, _ := os.MkdirTemp("", "servers_bench")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			b.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}()
 
 	// Create some servers for testing
 	for i := range 10 {
-		server.New(server.CreateServer{
+		_, _ = server.New(server.CreateServer{
 			Name:     "Server" + string(rune('A'+i)),
 			Address:  "localhost",
 			Port:     "5432",
@@ -565,7 +576,11 @@ func BenchmarkNew(b *testing.B) {
 
 func BenchmarkUpdate(b *testing.B) {
 	tempDir, _ := os.MkdirTemp("", "servers_bench")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			b.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}()
 
 	m := New(tempDir)
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
@@ -577,10 +592,14 @@ func BenchmarkUpdate(b *testing.B) {
 
 func BenchmarkView(b *testing.B) {
 	tempDir, _ := os.MkdirTemp("", "servers_bench")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			b.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}()
 
 	// Create a server for select view
-	server.New(server.CreateServer{
+	_, _ = server.New(server.CreateServer{
 		Name:     "Bench Server",
 		Address:  "localhost",
 		Port:     "5432",

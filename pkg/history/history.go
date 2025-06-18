@@ -129,7 +129,7 @@ func writeHistoryLogsAtomic(path string, history []HistoryLog) error {
 	// Atomically replace the original file
 	if err := os.Rename(tempPath, path); err != nil {
 		// Clean up temp file on failure
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("failed to replace history file: %w", err)
 	}
 

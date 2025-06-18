@@ -13,7 +13,11 @@ func setupTestDir(t *testing.T) (string, func()) {
 	if err := os.Mkdir(exportsDir, 0755); err != nil {
 		t.Fatalf("failed to create exports dir: %v", err)
 	}
-	return dir, func() { os.RemoveAll(dir) }
+	return dir, func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}
 }
 
 func writeTestFile(t *testing.T, dir, name, content string, modTime time.Time) string {

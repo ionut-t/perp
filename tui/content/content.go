@@ -383,7 +383,10 @@ func (m *Model) setViewportContent() {
 
 func (m Model) yankSelectedCell() (tea.Model, tea.Cmd) {
 	if cell, ok := m.table.GetSelectedCell(); ok {
-		clipboard.Write(cell)
+
+		if err := clipboard.Write(cell); err != nil {
+			return m, nil
+		}
 
 		defaultTheme := styles.TableTheme()
 		theme := table.Theme{
@@ -422,7 +425,9 @@ func (m Model) yankSelectedRow() (tea.Model, tea.Cmd) {
 
 	content := strings.TrimSpace(string(jsonData))
 
-	clipboard.Write(content)
+	if err := clipboard.Write(content); err != nil {
+		return m, nil
+	}
 
 	defaultTheme := styles.TableTheme()
 	selectedRow := defaultTheme.SelectedRow.

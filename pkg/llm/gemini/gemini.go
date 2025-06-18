@@ -116,7 +116,12 @@ func (g *Gemini) Ask(prompt string) (*llm.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to make API request: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			fmt.Printf("warning: failed to close response body: %v\n", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, err := io.ReadAll(resp.Body)

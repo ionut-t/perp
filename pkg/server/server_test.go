@@ -96,7 +96,8 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+
+			defer removeTempDir(t, tempDir)
 
 			if tt.name == "duplicate server name" {
 				first, err := New(tt.input, tempDir)
@@ -228,7 +229,8 @@ func TestLoad(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+
+			defer removeTempDir(t, tempDir)
 
 			if tt.setupServers != nil {
 				if err := saveServers(tempDir, tt.setupServers); err != nil {
@@ -333,7 +335,7 @@ func TestUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			if err := saveServers(tempDir, []Server{tt.initial}); err != nil {
 				t.Fatalf("Failed to save initial server: %v", err)
@@ -409,7 +411,7 @@ func TestEnableDatabaseSchemaLLM(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			srv := Server{
 				ID:                     uuid.New(),
@@ -528,7 +530,7 @@ func TestDelete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			if tt.setupServers != nil {
 				if err := saveServers(tempDir, tt.setupServers); err != nil {
@@ -622,7 +624,7 @@ func TestFilePermissions(t *testing.T) {
 	t.Parallel()
 
 	tempDir := setupTempDir(t)
-	defer os.RemoveAll(tempDir)
+	defer removeTempDir(t, tempDir)
 
 	server := CreateServer{
 		Name:     "Test Server",
@@ -654,7 +656,7 @@ func TestJSONMarshaling(t *testing.T) {
 	t.Parallel()
 
 	tempDir := setupTempDir(t)
-	defer os.RemoveAll(tempDir)
+	defer removeTempDir(t, tempDir)
 
 	server := CreateServer{
 		Name:                   "Test Server",
@@ -729,7 +731,7 @@ func TestConcurrentOperations(t *testing.T) {
 	t.Parallel()
 
 	tempDir := setupTempDir(t)
-	defer os.RemoveAll(tempDir)
+	defer removeTempDir(t, tempDir)
 
 	for i := range 5 {
 		server := CreateServer{
@@ -775,6 +777,13 @@ func TestConcurrentOperations(t *testing.T) {
 
 // Helper functions
 
+func removeTempDir(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("Failed to remove temp dir: %v", err)
+	}
+}
+
 func setupTempDir(t *testing.T) string {
 	t.Helper()
 	tempDir, err := os.MkdirTemp("", "server_test")
@@ -810,7 +819,11 @@ func findSubstring(s, substr string) int {
 
 func BenchmarkNew(b *testing.B) {
 	tempDir, _ := os.MkdirTemp("", "server_bench")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			b.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}()
 
 	for i := 0; b.Loop(); i++ {
 		server := CreateServer{
@@ -830,7 +843,11 @@ func BenchmarkNew(b *testing.B) {
 
 func BenchmarkLoad(b *testing.B) {
 	tempDir, _ := os.MkdirTemp("", "server_bench")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			b.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}()
 
 	// Create some servers
 	for i := range 100 {
@@ -842,7 +859,7 @@ func BenchmarkLoad(b *testing.B) {
 			Password: "pass",
 			Database: "db",
 		}
-		New(server, tempDir)
+		_, _ = New(server, tempDir)
 	}
 
 	for b.Loop() {

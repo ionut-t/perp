@@ -167,7 +167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focusedView == focusedViewList {
 				m.focusedView = focusedViewRecord
 				m.editor.Focus()
-				m.editor.SetCursorPosition(0, 0)
+				_ = m.editor.SetCursorPosition(0, 0)
 				m.editor.SetInsertMode()
 				return m, m.editor.CursorBlink()
 			}
@@ -181,7 +181,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.focusedView == focusedViewList {
 					m.focusedView = focusedViewRecord
 					m.editor.Focus()
-					m.editor.SetCursorPosition(0, 0)
+					_ = m.editor.SetCursorPosition(0, 0)
 					m.editor.SetNormalMode()
 				} else {
 					m.focusedView = focusedViewList

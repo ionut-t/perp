@@ -79,7 +79,11 @@ func TestAdd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer func() {
+				if err := os.RemoveAll(tempDir); err != nil {
+					t.Fatalf("Failed to remove temp dir: %v", err)
+				}
+			}()
 
 			// Setup existing history if provided
 			if tt.existingLogs != nil {
@@ -145,7 +149,7 @@ func TestGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			// Setup history file if needed
 			if tt.setupLogs != nil {
@@ -217,7 +221,7 @@ func TestReadHistoryLogs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			historyPath := filepath.Join(tempDir, historyFileName)
 			if tt.fileContent != "" {
@@ -257,7 +261,7 @@ func TestReadHistoryLogs(t *testing.T) {
 
 func TestWriteHistoryLogs(t *testing.T) {
 	tempDir := setupTempDir(t)
-	defer os.RemoveAll(tempDir)
+	defer removeTempDir(t, tempDir)
 
 	historyPath := filepath.Join(tempDir, historyFileName)
 	logs := []HistoryLog{
@@ -396,7 +400,7 @@ func TestCleanupHistory(t *testing.T) {
 
 func TestFilePermissions(t *testing.T) {
 	tempDir := setupTempDir(t)
-	defer os.RemoveAll(tempDir)
+	defer removeTempDir(t, tempDir)
 
 	// Test directory creation
 	subDir := filepath.Join(tempDir, "subdir")
@@ -460,7 +464,7 @@ func TestEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := setupTempDir(t)
-			defer os.RemoveAll(tempDir)
+			defer removeTempDir(t, tempDir)
 
 			err := tt.action(tempDir)
 
@@ -476,7 +480,7 @@ func TestEdgeCases(t *testing.T) {
 
 func TestConcurrentAccess(t *testing.T) {
 	tempDir := setupTempDir(t)
-	defer os.RemoveAll(tempDir)
+	defer removeTempDir(t, tempDir)
 
 	// Test concurrent adds
 	done := make(chan bool, 10)
@@ -510,6 +514,13 @@ func TestConcurrentAccess(t *testing.T) {
 
 // Helper functions
 
+func removeTempDir(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("Failed to remove temp dir %s: %v", dir, err)
+	}
+}
+
 func setupTempDir(t *testing.T) string {
 	t.Helper()
 	tempDir, err := os.MkdirTemp("", "history_test")
@@ -534,7 +545,11 @@ func generateManyLogs(count int, baseTime time.Time) []HistoryLog {
 
 func BenchmarkAdd(b *testing.B) {
 	tempDir, _ := os.MkdirTemp("", "history_bench")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			b.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}()
 
 	for i := 0; b.Loop(); i++ {
 		query := fmt.Sprintf("SELECT %d FROM table", i)
@@ -547,12 +562,16 @@ func BenchmarkAdd(b *testing.B) {
 
 func BenchmarkGet(b *testing.B) {
 	tempDir, _ := os.MkdirTemp("", "history_bench")
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			b.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}()
 
 	// Setup some history
 	for i := range 100 {
 		query := fmt.Sprintf("SELECT %d FROM table", i)
-		Add(query, tempDir)
+		_, _ = Add(query, tempDir)
 	}
 
 	for b.Loop() {

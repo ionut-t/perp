@@ -442,7 +442,7 @@ func BenchmarkHandleDataExportSingle(b *testing.B) {
 	}
 
 	for b.Loop() {
-		HandleDataExport(sampleResults, []int{2}, false)
+		_, _ = HandleDataExport(sampleResults, []int{2}, false)
 	}
 }
 
@@ -459,7 +459,7 @@ func BenchmarkHandleDataExportMultiple(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		HandleDataExport(sampleResults, rows, false)
+		_, _ = HandleDataExport(sampleResults, rows, false)
 	}
 }
 
@@ -474,6 +474,6 @@ func BenchmarkHandleDataExportAll(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		HandleDataExport(sampleResults, []int{}, true)
+		_, _ = HandleDataExport(sampleResults, []int{}, true)
 	}
 }
