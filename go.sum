@@ -64,6 +64,8 @@ github.com/ionut-t/goeditor/core v0.0.0-20250603201123-a19b48d722da h1:071YFKcpC
 github.com/ionut-t/goeditor/core v0.0.0-20250603201123-a19b48d722da/go.mod h1:sFe2iuAcaU8xyaYiiPEZBoY+0N+rljwdGH75msGiyBU=
 github.com/ionut-t/gotable v0.0.0-20250607194734-c6419234cc49 h1:msc+3JUm3n40sesD/t6d2PAE+dRn7ADAxdJbhLCQIDA=
 github.com/ionut-t/gotable v0.0.0-20250607194734-c6419234cc49/go.mod h1:YY4s6KP/yUrNMJkvMLDfhy7qflhiAxOqK2VnD4deWmI=
+github.com/ionut-t/gotable v0.1.0 h1:1dZ7KBRQ9uJQOWIOWsLji3dBWp6QVdWmAw0mEAk4bxA=
+github.com/ionut-t/gotable v0.1.0/go.mod h1:YY4s6KP/yUrNMJkvMLDfhy7qflhiAxOqK2VnD4deWmI=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
 github.com/jackc/pgpassfile v1.0.0/go.mod h1:CEx0iS5ambNFdcRtxPj5JhEz+xB6uRky5eyVu/W2HEg=
 github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 h1:iCEnooe7UlwOQYpKFhBabPMi4aNAfoODPEFNiAnClxo=
