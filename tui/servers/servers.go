@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
@@ -242,7 +243,7 @@ func (m Model) View() string {
 func (m *Model) initialiseCreateForm() {
 	name := huh.NewInput().Title("Name").Key("name")
 	name.Validate(func(s string) error {
-		if s == "" {
+		if strings.TrimSpace(s) == "" {
 			return errors.New("name cannot be empty")
 		}
 
@@ -287,7 +288,7 @@ func (m *Model) initialiseUpdateForm() {
 	name := huh.NewInput().Title("Name").Key("name")
 	name.Value(&m.editedServer.Name)
 	name.Validate(func(s string) error {
-		if s == "" {
+		if strings.TrimSpace(s) == "" {
 			return errors.New("name cannot be empty")
 		}
 
@@ -339,7 +340,6 @@ func (m *Model) initialiseUpdateForm() {
 
 	m.serverForm.WithTheme(styles.ThemeCatppuccin())
 	m.serverForm.WithKeyMap(m.getKeymap())
-
 }
 
 func (m *Model) initialiseSelectForm() {
@@ -457,14 +457,14 @@ func (m Model) getKeymap() *huh.KeyMap {
 }
 
 func validateAddress(address string) error {
-	if address == "" {
+	if strings.TrimSpace(address) == "" {
 		return errors.New("address cannot be empty")
 	}
 	return nil
 }
 
 func validatePort(port string) error {
-	if port == "" {
+	if strings.TrimSpace(port) == "" {
 		return errors.New("port cannot be empty")
 	}
 
@@ -476,14 +476,14 @@ func validatePort(port string) error {
 }
 
 func validateDatabase(database string) error {
-	if database == "" {
+	if strings.TrimSpace(database) == "" {
 		return errors.New("database cannot be empty")
 	}
 	return nil
 }
 
 func validateUsername(username string) error {
-	if username == "" {
+	if strings.TrimSpace(username) == "" {
 		return errors.New("username cannot be empty")
 	}
 	return nil
