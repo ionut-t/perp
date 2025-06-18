@@ -138,13 +138,8 @@ jobs:
           CGO_ENABLED: 0
         run: |
           # Build with version information
-          go build -v \
-            -ldflags="-s -w \
-              -X 'github.com/ionut-t/perp/cmd.version=${{ steps.version.outputs.version }}' \
-              -X 'github.com/ionut-t/perp/cmd.commit=${{ steps.version.outputs.commit }}' \
-              -X 'github.com/ionut-t/perp/cmd.date=${{ steps.version.outputs.build_time }}'" \
-            -o dist/perp-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} \
-            ./cmd/perp
+          go build -v -ldflags="-s -w -X 'github.com/ionut-t/perp/cmd.version=${{ steps.version.outputs.version }}' -X 'github.com/ionut-t/perp/cmd.commit=${{ steps.version.outputs.commit }}' -X 'github.com/ionut-t/perp/cmd.date=${{ steps.version.outputs.build_time }}'" -o dist/perp-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd
+        shell: bash
 
       - name: Test binary version
         run: |
