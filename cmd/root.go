@@ -17,6 +17,7 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		appUI()
 	},
+	Version: versionTemplate(),
 }
 
 func Execute() {

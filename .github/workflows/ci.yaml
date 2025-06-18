@@ -1,0 +1,237 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+
+env:
+  GO_VERSION: '1.24'
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem -run=^$ ./... | tee benchmark_results.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark_results.txt
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        arch: [amd64, arm64]
+        exclude:
+          - os: windows-latest
+            arch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Get version info
+        id: version
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          
+          # Get current commit SHA (short)
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          
+          # Get build timestamp
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          # Determine version
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="${LATEST_TAG}-dev-${COMMIT_SHA}"
+          fi
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "build_time=${BUILD_TIME}" >> $GITHUB_OUTPUT
+          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Build binary
+        env:
+          GOOS: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'macOS' && 'darwin' || 'linux' }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          # Build with version information
+          go build -v \
+            -ldflags="-s -w \
+              -X 'github.com/ionut-t/perp/cmd.version=${{ steps.version.outputs.version }}' \
+              -X 'github.com/ionut-t/perp/cmd.commit=${{ steps.version.outputs.commit }}' \
+              -X 'github.com/ionut-t/perp/cmd.date=${{ steps.version.outputs.build_time }}'" \
+            -o dist/perp-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} \
+            ./cmd/perp
+
+      - name: Test binary version
+        run: |
+          ./dist/perp-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} --version || true
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: perp-${{ runner.os }}-${{ matrix.arch }}
+          path: dist/
+
+  release:
+    name: Release
+    needs: [test, lint, build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Create checksums
+        run: |
+          cd dist
+          find . -type f -name 'perp-*' -exec sha256sum {} \; > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            dist/perp-*/perp-*
+            dist/checksums.txt
+          body: |
+            ## Installation
+            
+            ### Direct Download
+            
+            Download the appropriate binary for your system:
+            - **macOS Intel**: [perp-macOS-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-macOS-amd64)
+            - **macOS Apple Silicon**: [perp-macOS-arm64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-macOS-arm64)
+            - **Linux Intel/AMD**: [perp-Linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-Linux-amd64)
+            - **Linux ARM**: [perp-Linux-arm64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-Linux-arm64)
+            - **Windows**: [perp-Windows-amd64.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-Windows-amd64.exe)
+            
+            ### Quick Install (macOS/Linux)
+            
+            ```bash
+            # Download (auto-detects your platform)
+            curl -L "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-$(uname -s)-$(uname -m | sed 's/x86_64/amd64/')" -o perp
+            
+            # Make executable
+            chmod +x perp
+            
+            # Install system-wide
+            sudo mv perp /usr/local/bin/
+            
+            # Verify installation
+            perp --version
+            ```
+            
+            ### Manual Install
+            
+            1. Download the binary for your platform from the links above
+            2. Make it executable: `chmod +x perp` (macOS/Linux)
+            3. Move it to your PATH: `sudo mv perp /usr/local/bin/` (macOS/Linux)
+            
+            ### Verify Installation
+            
+            ```bash
+            perp --version
+            ```
+            
+            ### Checksums
+            
+            To verify your download:
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/checksums.txt -o checksums.txt
+            sha256sum -c checksums.txt
+            ```
