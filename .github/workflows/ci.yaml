@@ -120,16 +120,16 @@ jobs:
           LDFLAGS="-X 'github.com/ionut-t/perp/cmd.version=${{ env.VERSION }}' -X 'github.com/ionut-t/perp/cmd.commit=$COMMIT' -X 'github.com/ionut-t/perp/cmd.date=$BUILD_DATE'"
           
           # Build for macOS (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/perp-darwin-arm64 ./cmd
+          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/perp-darwin-arm64
 
           # Build for macOS (Intel)
-          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-darwin-amd64 ./cmd
+          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-darwin-amd64
                     
           # Build for Linux (64-bit)
-          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-linux-amd64 ./cmd
+          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-linux-amd64
           
           # Build for Windows (64-bit)
-          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-windows-amd64.exe ./cmd
+          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-windows-amd64.exe
           
           # Make binaries executable
           chmod +x dist/*
