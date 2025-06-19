@@ -85,148 +85,99 @@ jobs:
         with:
           version: latest
 
-  build:
-    name: Build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        arch: [amd64, arm64]
-        exclude:
-          - os: windows-latest
-            arch: arm64
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch all history for tags
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Get version info
-        id: version
-        run: |
-          # Get the latest tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          
-          # Get current commit SHA (short)
-          COMMIT_SHA=$(git rev-parse --short HEAD)
-          
-          # Get build timestamp
-          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
-          # Determine version
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-          else
-            VERSION="${LATEST_TAG}-dev-${COMMIT_SHA}"
-          fi
-          
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "commit=${COMMIT_SHA}" >> $GITHUB_OUTPUT
-          echo "build_time=${BUILD_TIME}" >> $GITHUB_OUTPUT
-          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Build binary
-        env:
-          GOOS: ${{ runner.os == 'Windows' && 'windows' || runner.os == 'macOS' && 'darwin' || 'linux' }}
-          GOARCH: ${{ matrix.arch }}
-          CGO_ENABLED: 0
-        run: |
-          # Build with version information
-          go build -v -ldflags="-s -w -X 'github.com/ionut-t/perp/cmd.version=${{ steps.version.outputs.version }}' -X 'github.com/ionut-t/perp/cmd.commit=${{ steps.version.outputs.commit }}' -X 'github.com/ionut-t/perp/cmd.date=${{ steps.version.outputs.build_time }}'" -o dist/perp-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd
-        shell: bash
-
-      - name: Test binary version
-        run: |
-          ./dist/perp-${{ runner.os }}-${{ matrix.arch }}${{ runner.os == 'Windows' && '.exe' || '' }} --version || true
-        shell: bash
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: perp-${{ runner.os }}-${{ matrix.arch }}
-          path: dist/
-
-  release:
-    name: Release
-    needs: [test, lint, build]
-    if: startsWith(github.ref, 'refs/tags/v')
+  build-and-release:
+    name: Build and Release
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, lint]
     permissions:
       contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
         with:
-          path: dist/
-
-      - name: Create checksums
+          fetch-depth: 0 # Fetch all history for git commands
+        
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          
+      - name: Set release version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          
+      - name: Build binaries
         run: |
-          cd dist
-          find . -type f -name 'perp-*' -exec sha256sum {} \; > checksums.txt
-          cat checksums.txt
+          mkdir -p dist
+          
+          # Get commit hash
+          COMMIT=$(git rev-parse --short HEAD)
+          # Get current date
+          BUILD_DATE=$(date -u +%d/%m/%Y)
+          # Define build flags
+          LDFLAGS="-X 'github.com/ionut-t/perp/cmd.version=${{ env.VERSION }}' -X 'github.com/ionut-t/perp/cmd.commit=$COMMIT' -X 'github.com/ionut-t/perp/cmd.date=$BUILD_DATE'"
+          
+          # Build for macOS (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/perp-darwin-arm64 ./cmd
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+          # Build for macOS (Intel)
+          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-darwin-amd64 ./cmd
+                    
+          # Build for Linux (64-bit)
+          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-linux-amd64 ./cmd
+          
+          # Build for Windows (64-bit)
+          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-windows-amd64.exe ./cmd
+          
+          # Make binaries executable
+          chmod +x dist/*
+          
+          # Create checksums
+          cd dist
+          sha256sum * > checksums.txt
+          cd ..
+      
+      - name: Release
+        uses: softprops/action-gh-release@v1
         with:
+          name: Release ${{ env.VERSION }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
+          prerelease: ${{ contains(env.VERSION, 'alpha') || contains(env.VERSION, 'beta') || contains(env.VERSION, 'rc') }}
           files: |
-            dist/perp-*/perp-*
-            dist/checksums.txt
+            dist/*
           body: |
+            # perp ${{ env.VERSION }}
+            
+            ## What's New
+            
+            <!-- Add release notes here -->
+            
             ## Installation
-            
-            ### Direct Download
-            
-            Download the appropriate binary for your system:
-            - **macOS Intel**: [perp-macOS-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-macOS-amd64)
-            - **macOS Apple Silicon**: [perp-macOS-arm64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-macOS-arm64)
-            - **Linux Intel/AMD**: [perp-Linux-amd64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-Linux-amd64)
-            - **Linux ARM**: [perp-Linux-arm64](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-Linux-arm64)
-            - **Windows**: [perp-Windows-amd64.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-Windows-amd64.exe)
-            
-            ### Quick Install (macOS/Linux)
-            
+
+            ### macOS (Apple Silicon)
             ```bash
-            # Download (auto-detects your platform)
-            curl -L "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/perp-$(uname -s)-$(uname -m | sed 's/x86_64/amd64/')" -o perp
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/perp-darwin-arm64 -o perp && chmod +x perp
+            ```
             
-            # Make executable
-            chmod +x perp
+            ### macOS (Intel)
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/perp-darwin-amd64 -o perp && chmod +x perp
+            ```
             
-            # Install system-wide
+            ### Linux
+            ```bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/perp-linux-amd64 -o perp && chmod +x perp
+            ```
+
+            ### For macOS and Linux
+            ```bash
             sudo mv perp /usr/local/bin/
-            
-            # Verify installation
-            perp --version
+            # or
+            mkdir -p ~/bin && mv perp ~/bin/ && echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
+            source ~/.zshrc
             ```
             
-            ### Manual Install
-            
-            1. Download the binary for your platform from the links above
-            2. Make it executable: `chmod +x perp` (macOS/Linux)
-            3. Move it to your PATH: `sudo mv perp /usr/local/bin/` (macOS/Linux)
-            
-            ### Verify Installation
-            
-            ```bash
-            perp --version
-            ```
-            
-            ### Checksums
-            
-            To verify your download:
-            ```bash
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/checksums.txt -o checksums.txt
-            sha256sum -c checksums.txt
-            ```
+            ### Windows
+            Download the binary from the assets below.
