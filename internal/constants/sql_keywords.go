@@ -1,4 +1,4 @@
-package tui
+package constants
 
 var SQL_KEYWORDS = [...]string{
 	"SELECT",

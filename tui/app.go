@@ -110,9 +110,9 @@ func New(config config.Config) model {
 	editor.ShowMessages(false)
 	editor.SetCursorBlinkMode(true)
 
-	sqlKeywordsMap := make(map[string]lipgloss.Style, len(SQL_KEYWORDS)*2)
+	sqlKeywordsMap := make(map[string]lipgloss.Style, len(constants.SQL_KEYWORDS)*2)
 
-	for _, keyword := range SQL_KEYWORDS {
+	for _, keyword := range constants.SQL_KEYWORDS {
 		highlighted := styles.Accent.Bold(true)
 		sqlKeywordsMap[strings.ToUpper(keyword)] = highlighted
 		sqlKeywordsMap[strings.ToLower(keyword)] = highlighted
