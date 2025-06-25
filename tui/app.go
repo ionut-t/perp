@@ -395,7 +395,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = false
 
-	case utils.ClearNotificationMsg:
+	case utils.ClearMsg:
 		m.notification = ""
 
 	case schemaFetchedMsg:
@@ -776,13 +776,13 @@ func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 func (m *model) successNotification(msg string) tea.Cmd {
 	m.notification = styles.Success.Render(msg)
 
-	return utils.ClearNotification()
+	return utils.ClearAfter(time.Second * 2)
 }
 
 func (m *model) errorNotification(err error) tea.Cmd {
 	m.notification = styles.Error.Render(err.Error())
 
-	return utils.ClearNotification()
+	return utils.ClearAfter(time.Second * 2)
 }
 
 func (m model) closeDbConnection() {

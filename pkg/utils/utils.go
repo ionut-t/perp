@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type ClearNotificationMsg struct{}
+type ClearMsg struct{}
 
 // ParseTableNames is a helper function that extracts and deduplicates table names from a raw input string.
 func ParseTableNames(input string) []string {
@@ -28,12 +28,12 @@ func ParseTableNames(input string) []string {
 	return tables
 }
 
-// ClearNotification returns a command that triggers a notification clear after a specified duration.
-func ClearNotification() tea.Cmd {
+// ClearAfter returns a command that triggers a notification clear after a specified duration.
+func ClearAfter(duration time.Duration) tea.Cmd {
 	return tea.Tick(
-		time.Second*2,
+		duration,
 		func(t time.Time) tea.Msg {
-			return ClearNotificationMsg{}
+			return ClearMsg{}
 		},
 	)
 }

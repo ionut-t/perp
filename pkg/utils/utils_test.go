@@ -123,7 +123,7 @@ func TestParseTableNames(t *testing.T) {
 	}
 }
 
-func TestClearNotification(t *testing.T) {
+func TestClearAfter(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -132,16 +132,16 @@ func TestClearNotification(t *testing.T) {
 	}{
 		{
 			name:        "returns valid tea.Cmd",
-			description: "ClearNotification should return a valid tea.Cmd",
+			description: "ClearAfter should return a valid tea.Cmd",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := ClearNotification()
+			cmd := ClearAfter(time.Second * 1)
 
 			if cmd == nil {
-				t.Error("ClearNotification() returned nil, expected tea.Cmd")
+				t.Error("ClearAfter() returned nil, expected tea.Cmd")
 			}
 
 			// Test that the command can be executed and returns the correct message type
@@ -156,7 +156,7 @@ func TestClearNotification(t *testing.T) {
 					// by checking it's a valid function
 					defer func() {
 						if r := recover(); r != nil {
-							t.Errorf("ClearNotification command panicked: %v", r)
+							t.Errorf("ClearAfter command panicked: %v", r)
 						}
 					}()
 
@@ -164,13 +164,13 @@ func TestClearNotification(t *testing.T) {
 					// we'll just verify the command is callable
 					_ = cmd
 				}
-				msgChan <- ClearNotificationMsg{}
+				msgChan <- ClearMsg{}
 			}()
 
 			select {
 			case msg := <-msgChan:
-				if _, ok := msg.(ClearNotificationMsg); !ok {
-					t.Errorf("Expected ClearNotificationMsg, got %T", msg)
+				if _, ok := msg.(ClearMsg); !ok {
+					t.Errorf("Expected ClearAfterMsg, got %T", msg)
 				}
 			case <-time.After(100 * time.Millisecond):
 				// This is acceptable as we're not testing the actual timing
@@ -179,15 +179,15 @@ func TestClearNotification(t *testing.T) {
 	}
 }
 
-func TestClearNotificationMessage(t *testing.T) {
+func TestClearAfterMessage(t *testing.T) {
 	t.Parallel()
 
-	// Test that ClearNotificationMsg is a valid message type
-	msg := ClearNotificationMsg{}
+	// Test that ClearAfterMsg is a valid message type
+	msg := ClearMsg{}
 
 	// Verify it's the correct type
-	if _, ok := any(msg).(ClearNotificationMsg); !ok {
-		t.Error("ClearNotificationMsg is not of correct type")
+	if _, ok := any(msg).(ClearMsg); !ok {
+		t.Error("ClearAfterMsg is not of correct type")
 	}
 }
 
