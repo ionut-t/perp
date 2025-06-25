@@ -15,8 +15,8 @@ const (
 	LLMApiKey            = "LLM_API_KEY"
 	LLMModelKey          = "LLM_MODEL"
 	EditorKey            = "editor"
-	VertexAIProjectIDKey = "VERTEX_AI_PROJECT_ID"
-	VertexAILocationKey  = "VERTEX_AI_LOCATION"
+	VertexAIProjectIDKey = "VERTEXAI_PROJECT_ID"
+	VertexAILocationKey  = "VERTEXAI_LOCATION"
 
 	rootDir                 = ".perp"
 	configFileName          = ".config.toml"
