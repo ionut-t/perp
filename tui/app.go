@@ -159,9 +159,11 @@ func New(config config.Config) model {
 		instructions = constants.LLMDefaultInstructions
 	}
 
+	llm, err := gemini.New(llmApiKey, llmModel, instructions)
+
 	return model{
 		config:          config,
-		llm:             gemini.New(llmApiKey, llmModel, instructions),
+		llm:             llm,
 		editor:          editor,
 		sqlKeywords:     sqlKeywordsMap,
 		llmKeywords:     llmKeywordsMap,
@@ -171,6 +173,7 @@ func New(config config.Config) model {
 		historyLogs:     historyLogs,
 		content:         content.New(0, 0),
 		help:            help.New(),
+		error:           err,
 	}
 }
 
