@@ -598,6 +598,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case command.LLMUseDatabaseSchemaMsg:
+		if m.llmError != nil {
+			return m, m.errorNotification(fmt.Errorf("LLM is not configured: %w", m.llmError))
+		}
+
 		focusEditor := func() {
 			m.focused = focusedEditor
 			m.editor.Focus()
@@ -622,9 +626,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.successNotification("LLM will no longer use the database schema")
 
 	case command.LLMModelChangedMsg:
+		if m.llmError != nil {
+			return m, m.errorNotification(fmt.Errorf("LLM is not configured: %w", m.llmError))
+		}
+
 		existingModel, _ := m.config.GetLLMModel()
 		if existingModel == msg.Model {
 			return m, m.successNotification("LLM model is already set to " + msg.Model)
+		}
+
+		m.llm.SetModel(msg.Model)
+		if _, err := m.llm.Ask("Test LLM model"); err != nil {
+			m.llm.SetModel(existingModel)
+			return m, m.errorNotification(fmt.Errorf("invalid LLM model: %v", msg.Model))
 		}
 
 		if err := m.config.SetLLMModel(msg.Model); err != nil {
@@ -689,10 +703,6 @@ func (m model) View() string {
 
 	width, height := m.getAvailableSizes()
 
-	if m.llmError != nil {
-		return m.renderLLMError(width, height)
-	}
-
 	if m.error != nil {
 		return m.renderDBError(width, height)
 	}
@@ -756,6 +766,10 @@ func (m model) executeQuery(query string) tea.Cmd {
 
 func (m model) ask(prompt string) tea.Cmd {
 	return func() tea.Msg {
+		if m.llmError != nil {
+			return llmFailureMsg{err: fmt.Errorf("LLM is not configured: %w", m.llmError)}
+		}
+
 		response, err := m.llm.Ask(prompt)
 		if err != nil {
 			return llmFailureMsg{err: err}

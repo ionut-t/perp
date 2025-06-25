@@ -23,22 +23,6 @@ func (m *model) renderDBError(width, height int) string {
 		)
 }
 
-func (m *model) renderLLMError(width, height int) string {
-	return lipgloss.NewStyle().
-		Padding(0, 1).
-		Height(height).
-		Width(width).
-		Border(lipgloss.RoundedBorder()).
-		Render(
-			lipgloss.JoinVertical(
-				lipgloss.Left,
-				styles.Error.Render(m.llmError.Error()),
-				"\n",
-				styles.Subtext0.Render("Press 'q' to exit"),
-			),
-		)
-}
-
 func (m *model) renderServers() string {
 	return styles.ViewPadding.Render(lipgloss.JoinVertical(
 		lipgloss.Left,

@@ -3,6 +3,7 @@ package vertexai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ type vertexAI struct {
 	ctx                  context.Context
 }
 
-func New(projectID, location, model, instructions string) (*vertexAI, error) {
+func New(projectID, location, model, instructions string) (llm.LLM, error) {
 	ctx := context.Background()
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -28,7 +29,7 @@ func New(projectID, location, model, instructions string) (*vertexAI, error) {
 	})
 
 	if err != nil {
-		return &vertexAI{}, err
+		return nil, err
 	}
 
 	return &vertexAI{
@@ -41,7 +42,7 @@ func New(projectID, location, model, instructions string) (*vertexAI, error) {
 
 func (v *vertexAI) Ask(prompt string) (*llm.Response, error) {
 	if v.model == "" {
-		return nil, errors.New("vertex AI model is required")
+		return nil, errors.New("no Vertex AI model specified")
 	}
 
 	timeout := 30 * time.Second
@@ -58,7 +59,7 @@ func (v *vertexAI) Ask(prompt string) (*llm.Response, error) {
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, errors.New("request timed out after " + timeout.String())
+			return nil, fmt.Errorf("request timed out after %v for Vertex AI", timeout)
 		}
 
 		if errors.As(err, &genai.APIError{}) {
@@ -73,7 +74,7 @@ func (v *vertexAI) Ask(prompt string) (*llm.Response, error) {
 		return nil, errors.New("received nil response from Vertex AI")
 	}
 
-	text := sanitise(result.Text())
+	text := llm.SanitiseResponse(result.Text())
 
 	return &llm.Response{
 		Response: text,
@@ -93,18 +94,6 @@ func (v *vertexAI) getInstructions() string {
 	return strings.TrimSpace(v.instructions + "\n" + v.dbSchemaInstructions)
 }
 
-func sanitise(text string) string {
-	text = strings.TrimSpace(text)
-
-	sqlPrefixes := []string{"SQL: ", "sql: ", "Sql: ", "```sql", "```"}
-	for _, prefix := range sqlPrefixes {
-		text = strings.TrimPrefix(text, prefix)
-	}
-
-	sqlSuffixes := []string{"```", "```sql"}
-	for _, suffix := range sqlSuffixes {
-		text = strings.TrimSuffix(text, suffix)
-	}
-
-	return strings.TrimSpace(text)
+func (v *vertexAI) SetModel(model string) {
+	v.model = model
 }

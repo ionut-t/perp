@@ -45,11 +45,7 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 	timeout := 30 * time.Second
 
 	if g.model == "" {
-		return nil, errors.New("a Gemini model is required")
-	}
-
-	if g.apiKey == "" {
-		return nil, errors.New("API key for Gemini is required")
+		return nil, errors.New("no Gemini model specified")
 	}
 
 	ctx, cancel := context.WithTimeout(g.ctx, timeout)
@@ -65,10 +61,12 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 	)
 
 	if err != nil {
+
 		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("request timed out after %v", timeout)
+			return nil, fmt.Errorf("request timed out after %v for Gemini", timeout)
 		}
 
+		// if errors.Is(err, ) {}
 		if errors.As(err, &genai.APIError{}) {
 			apiErr := err.(genai.APIError)
 			return nil, errors.New(apiErr.Message)
@@ -81,7 +79,7 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 		return nil, errors.New("received nil response from Gemini")
 	}
 
-	text := sanitise(result.Text())
+	text := llm.SanitiseResponse(result.Text())
 
 	return &llm.Response{
 		Response: text,
@@ -101,18 +99,6 @@ func (g *gemini) getInstructions() string {
 	return strings.TrimSpace(g.instructions + "\n" + g.dbSchemaInstructions)
 }
 
-func sanitise(text string) string {
-	text = strings.TrimSpace(text)
-
-	sqlPrefixes := []string{"SQL: ", "sql: ", "Sql: ", "```sql", "```"}
-	for _, prefix := range sqlPrefixes {
-		text = strings.TrimPrefix(text, prefix)
-	}
-
-	sqlSuffixes := []string{"```", "```sql"}
-	for _, suffix := range sqlSuffixes {
-		text = strings.TrimSuffix(text, suffix)
-	}
-
-	return strings.TrimSpace(text)
+func (g *gemini) SetModel(model string) {
+	g.model = model
 }
