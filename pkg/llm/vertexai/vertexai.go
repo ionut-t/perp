@@ -1,9 +1,8 @@
-package gemini
+package vertexai
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -11,8 +10,7 @@ import (
 	"google.golang.org/genai"
 )
 
-type gemini struct {
-	apiKey               string
+type vertexAI struct {
 	model                string
 	instructions         string
 	dbSchemaInstructions string
@@ -20,20 +18,20 @@ type gemini struct {
 	ctx                  context.Context
 }
 
-func New(apiKey, model, instructions string) (llm.LLM, error) {
+func New(projectID, location, model, instructions string) (*vertexAI, error) {
 	ctx := context.Background()
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
+		Project:  projectID,
+		Location: location,
+		Backend:  genai.BackendVertexAI,
 	})
 
 	if err != nil {
-		return nil, errors.New("failed to create Gemini client: " + err.Error())
+		return &vertexAI{}, err
 	}
 
-	return &gemini{
-		apiKey:       apiKey,
+	return &vertexAI{
 		model:        model,
 		instructions: instructions,
 		client:       client,
@@ -41,32 +39,26 @@ func New(apiKey, model, instructions string) (llm.LLM, error) {
 	}, nil
 }
 
-func (g *gemini) Ask(prompt string) (*llm.Response, error) {
+func (v *vertexAI) Ask(prompt string) (*llm.Response, error) {
+	if v.model == "" {
+		return nil, errors.New("vertex AI model is required")
+	}
+
 	timeout := 30 * time.Second
-
-	if g.model == "" {
-		return nil, errors.New("a Gemini model is required")
-	}
-
-	if g.apiKey == "" {
-		return nil, errors.New("API key for Gemini is required")
-	}
-
-	ctx, cancel := context.WithTimeout(g.ctx, timeout)
+	ctx, cancel := context.WithTimeout(v.ctx, timeout)
 	defer cancel()
 
-	instructions := g.getInstructions() + "\n" + prompt
-
-	result, err := g.client.Models.GenerateContent(
+	instructions := v.getInstructions() + "\n" + prompt
+	result, err := v.client.Models.GenerateContent(
 		ctx,
-		g.model,
+		v.model,
 		genai.Text(instructions),
 		nil,
 	)
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("request timed out after %v", timeout)
+			return nil, errors.New("request timed out after " + timeout.String())
 		}
 
 		if errors.As(err, &genai.APIError{}) {
@@ -78,7 +70,7 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 	}
 
 	if result == nil {
-		return nil, errors.New("received nil response from Gemini")
+		return nil, errors.New("received nil response from Vertex AI")
 	}
 
 	text := sanitise(result.Text())
@@ -89,16 +81,16 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 	}, nil
 }
 
-func (g *gemini) AppendInstructions(instructions string) {
-	g.dbSchemaInstructions = instructions
+func (v *vertexAI) AppendInstructions(instructions string) {
+	v.dbSchemaInstructions = instructions
 }
 
-func (g *gemini) ResetInstructions() {
-	g.dbSchemaInstructions = ""
+func (v *vertexAI) ResetInstructions() {
+	v.dbSchemaInstructions = ""
 }
 
-func (g *gemini) getInstructions() string {
-	return strings.TrimSpace(g.instructions + "\n" + g.dbSchemaInstructions)
+func (v *vertexAI) getInstructions() string {
+	return strings.TrimSpace(v.instructions + "\n" + v.dbSchemaInstructions)
 }
 
 func sanitise(text string) string {

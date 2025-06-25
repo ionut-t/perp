@@ -18,7 +18,7 @@ import (
 	"github.com/ionut-t/perp/pkg/export"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
-	"github.com/ionut-t/perp/pkg/llm/gemini"
+	llmFactory "github.com/ionut-t/perp/pkg/llm/llm_factory"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/pkg/utils"
@@ -85,6 +85,7 @@ type model struct {
 	error           error
 	loading         bool
 	llm             llm.LLM
+	llmError        error
 	editor          editor.Model
 
 	queryResults          []map[string]any
@@ -112,9 +113,6 @@ type model struct {
 }
 
 func New(config config.Config) model {
-	llmApiKey, _ := config.GetLLMApiKey()
-	llmModel, _ := config.GetLLMModel()
-
 	editor := editor.New(80, 10)
 	editor.ShowMessages(false)
 	editor.SetCursorBlinkMode(true)
@@ -159,7 +157,7 @@ func New(config config.Config) model {
 		instructions = constants.LLMDefaultInstructions
 	}
 
-	llm, err := gemini.New(llmApiKey, llmModel, instructions)
+	llm, err := llmFactory.New(config, instructions)
 
 	return model{
 		config:          config,
@@ -173,7 +171,7 @@ func New(config config.Config) model {
 		historyLogs:     historyLogs,
 		content:         content.New(0, 0),
 		help:            help.New(),
-		error:           err,
+		llmError:        err,
 	}
 }
 
@@ -690,6 +688,10 @@ func (m model) View() string {
 	}
 
 	width, height := m.getAvailableSizes()
+
+	if m.llmError != nil {
+		return m.renderLLMError(width, height)
+	}
 
 	if m.error != nil {
 		return m.renderDBError(width, height)

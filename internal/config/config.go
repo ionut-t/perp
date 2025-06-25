@@ -11,9 +11,12 @@ import (
 )
 
 const (
-	LLMApiKey   = "LLM_API_KEY"
-	LLMModelKey = "LLM_MODEL"
-	EditorKey   = "editor"
+	LLMProviderKey       = "LLM_PROVIDER"
+	LLMApiKey            = "LLM_API_KEY"
+	LLMModelKey          = "LLM_MODEL"
+	EditorKey            = "editor"
+	VertexAIProjectIDKey = "VERTEX_AI_PROJECT_ID"
+	VertexAILocationKey  = "VERTEX_AI_LOCATION"
 
 	rootDir                 = ".perp"
 	configFileName          = ".config.toml"
@@ -26,9 +29,15 @@ type Config interface {
 	Editor() string
 	Storage() string
 	SetEditor(editor string) error
+	GetLLMProvider() (string, error)
+	SetLLMProvider(provider string) error
 	GetLLMApiKey() (string, error)
 	GetLLMModel() (string, error)
 	SetLLMModel(model string) error
+	GetVertexAIProjectID() (string, error)
+	GetVertexAILocation() (string, error)
+	SetVertexAIProjectID(projectID string) error
+	SetVertexAILocation(location string) error
 	GetLLMInstructions() (string, error)
 }
 
@@ -66,6 +75,30 @@ func (m *config) SetEditor(editor string) error {
 	}
 
 	viper.Set("editor", editor)
+
+	return viper.WriteConfig()
+}
+
+func (c *config) GetLLMProvider() (string, error) {
+	provider := viper.GetString(LLMProviderKey)
+
+	if provider == "" {
+		return "", fmt.Errorf("%s not set", LLMProviderKey)
+	}
+
+	return provider, nil
+}
+
+func (c *config) SetLLMProvider(provider string) error {
+	if _, err := InitialiseConfigFile(); err != nil {
+		return err
+	}
+
+	if provider == "" {
+		return fmt.Errorf("%s cannot be empty", LLMProviderKey)
+	}
+
+	viper.Set(LLMProviderKey, provider)
 
 	return viper.WriteConfig()
 }
@@ -127,6 +160,54 @@ func (c *config) GetLLMInstructions() (string, error) {
 	return string(content), nil
 }
 
+func (c *config) GetVertexAIProjectID() (string, error) {
+	projectID := viper.GetString(VertexAIProjectIDKey)
+
+	if projectID == "" {
+		return "", fmt.Errorf("%s not set", VertexAIProjectIDKey)
+	}
+
+	return projectID, nil
+}
+
+func (c *config) GetVertexAILocation() (string, error) {
+	location := viper.GetString(VertexAILocationKey)
+
+	if location == "" {
+		return "", fmt.Errorf("%s not set", VertexAILocationKey)
+	}
+
+	return location, nil
+}
+
+func (c *config) SetVertexAIProjectID(projectID string) error {
+	if _, err := InitialiseConfigFile(); err != nil {
+		return err
+	}
+
+	if projectID == "" {
+		return fmt.Errorf("%s cannot be empty", VertexAIProjectIDKey)
+	}
+
+	viper.Set(VertexAIProjectIDKey, projectID)
+
+	return viper.WriteConfig()
+}
+
+func (c *config) SetVertexAILocation(location string) error {
+	if _, err := InitialiseConfigFile(); err != nil {
+		return err
+	}
+
+	if location == "" {
+		return fmt.Errorf("%s cannot be empty", VertexAILocationKey)
+	}
+
+	viper.Set(VertexAILocationKey, location)
+
+	return viper.WriteConfig()
+}
+
 func getDefaultEditor() string {
 	if editor := os.Getenv("EDITOR"); editor != "" {
 		return editor
@@ -170,6 +251,8 @@ func InitialiseConfigFile() (string, error) {
 			viper.SetDefault(EditorKey, GetEditor())
 			viper.SetDefault(LLMApiKey, "")
 			viper.SetDefault(LLMModelKey, "")
+			viper.SetDefault(VertexAIProjectIDKey, "")
+			viper.SetDefault(VertexAILocationKey, "")
 
 			if err := viper.WriteConfig(); err != nil {
 				return "", err
