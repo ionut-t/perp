@@ -18,8 +18,11 @@ func configCmd() *cobra.Command {
 			configPath := config.GetConfigFilePath()
 
 			editorFlag, _ := cmd.Flags().GetString(config.EditorKey)
+			llmProviderFlag, _ := cmd.Flags().GetString(config.LLMProviderKey)
 			llmApiKeyFlag, _ := cmd.Flags().GetString(config.LLMApiKey)
 			llmModelFlag, _ := cmd.Flags().GetString(config.LLMModelKey)
+			vertexAILocationFlag, _ := cmd.Flags().GetString(config.VertexAILocationKey)
+			vertexAIProjectIDFlag, _ := cmd.Flags().GetString(config.VertexAIProjectIDKey)
 
 			flagsSet := false
 
@@ -27,6 +30,12 @@ func configCmd() *cobra.Command {
 				viper.Set(config.EditorKey, editorFlag)
 				flagsSet = true
 				fmt.Println("Editor set to:", editorFlag)
+			}
+
+			if llmProviderFlag != "" {
+				viper.Set(config.LLMProviderKey, llmProviderFlag)
+				flagsSet = true
+				fmt.Println("LLM provider set to:", llmProviderFlag)
 			}
 
 			if llmApiKeyFlag != "" {
@@ -39,6 +48,18 @@ func configCmd() *cobra.Command {
 				viper.Set(config.LLMModelKey, llmModelFlag)
 				flagsSet = true
 				fmt.Println("LLM model set to:", llmModelFlag)
+			}
+
+			if vertexAIProjectIDFlag != "" {
+				viper.Set(config.VertexAIProjectIDKey, vertexAIProjectIDFlag)
+				flagsSet = true
+				fmt.Println("Vertex AI project ID set to:", vertexAIProjectIDFlag)
+			}
+
+			if vertexAILocationFlag != "" {
+				viper.Set(config.VertexAILocationKey, vertexAILocationFlag)
+				flagsSet = true
+				fmt.Println("Vertex AI location set to:", vertexAILocationFlag)
 			}
 
 			if flagsSet {
@@ -55,8 +76,11 @@ func configCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringP(config.EditorKey, "e", "", "Set the editor to use for editing config")
+	cmd.Flags().StringP(config.LLMProviderKey, "p", "", "Set the LLM provider (e.g., gemini, vertexai)")
 	cmd.Flags().StringP(config.LLMApiKey, "k", "", "Set the LLM API key")
 	cmd.Flags().StringP(config.LLMModelKey, "m", "", "Set the LLM model")
+	cmd.Flags().StringP(config.VertexAILocationKey, "l", "", "Set the Vertex AI location")
+	cmd.Flags().StringP(config.VertexAIProjectIDKey, "v", "", "Set the Vertex AI project ID")
 
 	return cmd
 }
