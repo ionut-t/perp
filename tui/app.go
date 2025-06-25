@@ -19,6 +19,7 @@ import (
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/llm/gemini"
+	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/pkg/utils"
 	exportStore "github.com/ionut-t/perp/store/export"
@@ -74,19 +75,18 @@ const (
 )
 
 type model struct {
-	config                config.Config
-	width, height         int
-	view                  view
-	focused               focused
-	serverSelection       servers.Model
-	server                server.Server
-	db                    db.Database
-	error                 error
-	loading               bool
-	llm                   llm.LLM
-	editor                editor.Model
-	sqlKeywords           map[string]lipgloss.Style
-	llmKeywords           map[string]lipgloss.Style
+	config          config.Config
+	width, height   int
+	view            view
+	focused         focused
+	serverSelection servers.Model
+	server          server.Server
+	db              db.Database
+	error           error
+	loading         bool
+	llm             llm.LLM
+	editor          editor.Model
+
 	queryResults          []map[string]any
 	exportData            exportData.Model
 	command               command.Model
@@ -94,6 +94,15 @@ type model struct {
 	content               content.Model
 	help                  help.Model
 	llmSharedTablesSchema []string
+
+	// styles
+	sqlKeywords  map[string]lipgloss.Style
+	llmKeywords  map[string]lipgloss.Style
+	psqlCommands map[string]lipgloss.Style
+
+	// commands
+	expandedDisplay bool
+	timingEnabled   bool
 
 	// history management
 	historyLogs           []history.HistoryLog
@@ -126,6 +135,13 @@ func New(config config.Config) model {
 		"/remove": styles.Info.Bold(true),
 	}
 
+	psqlCommands := make(map[string]lipgloss.Style, len(psql.PSQL_COMMANDS))
+
+	for cmd := range psql.PSQL_COMMANDS {
+		highlighted := styles.Accent.Bold(true)
+		psqlCommands[cmd] = highlighted
+	}
+
 	editor.SetPlaceholder("Type your SQL query here...")
 
 	editor.Focus()
@@ -149,6 +165,7 @@ func New(config config.Config) model {
 		editor:          editor,
 		sqlKeywords:     sqlKeywordsMap,
 		llmKeywords:     llmKeywordsMap,
+		psqlCommands:    psqlCommands,
 		command:         command.New(),
 		serverSelection: servers.New(config.Storage()),
 		historyLogs:     historyLogs,
@@ -312,7 +329,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					strings.HasPrefix(content, "/add") ||
 					strings.HasPrefix(content, "/remove")
 
-				if !isLLMCommand && strings.HasSuffix(content, ";") && len(content) > 5 {
+				if !isLLMCommand && strings.HasSuffix(content, ";") {
 					m.addToHistory()
 					return m, m.sendQueryCmd()
 				}
@@ -436,6 +453,73 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.content.SetError(msg.err)
 
+	case psqlCommandMsg:
+		m.loading = true
+		return m, m.runPsqlCommand(msg.command)
+
+	case psqlResultMsg:
+		m.loading = false
+		m.editor.SetContent("")
+
+		var timingCmd tea.Cmd
+		if m.timingEnabled {
+			timingCmd = m.successNotification(fmt.Sprintf("Time: %.3fms", msg.result.ExecutionTime.Seconds()*1000))
+		}
+
+		queryResult := content.ParsedQueryResult{
+			Type:    db.QuerySelect,
+			Query:   msg.result.Message,
+			Columns: msg.result.Columns,
+			Rows:    msg.result.Rows,
+		}
+
+		err := m.content.SetQueryResults(queryResult)
+		if err != nil {
+			return m, nil
+		}
+
+		m.focused = focusedContent
+		m.editor.Blur()
+		m.editor.SetNormalMode()
+
+		ed, cmd := m.editor.Update(nil)
+		m.editor = ed.(editor.Model)
+
+		return m, tea.Batch(
+			cmd,
+			timingCmd,
+		)
+
+	case psqlErrorMsg:
+		m.loading = false
+		m.content.SetError(msg.err)
+
+	case toggleExpandedMsg:
+		m.expandedDisplay = !m.expandedDisplay
+		// TODO: Implement expanded display in content
+		// m.content.SetExpandedDisplay(m.expandedDisplay)
+		status := "OFF"
+		if m.expandedDisplay {
+			status = "ON"
+		}
+		return m, m.successNotification(fmt.Sprintf("Expanded display is %s", status))
+
+	case toggleTimingMsg:
+		m.timingEnabled = !m.timingEnabled
+		status := "OFF"
+		if m.timingEnabled {
+			status = "ON"
+		}
+
+		m.editor.SetContent("")
+
+		return m, m.successNotification(fmt.Sprintf("Timing is %s", status))
+
+	case showPsqlHelpMsg:
+		m.content.ShowPsqlHelp()
+		m.editor.SetContent("")
+		return m, nil
+
 	case llmResponseMsg:
 		m.loading = false
 		query := strings.TrimPrefix(m.editor.GetCurrentContent(), "/ask")
@@ -489,7 +573,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.content.SetConnectionInfo(m.server)
 		}
 
-	case command.QuitMsg:
+	case command.QuitMsg, psqlQuitMsg:
 		m.closeDbConnection()
 		return m, tea.Quit
 
@@ -681,6 +765,10 @@ func (m model) setHighlightedKeywords() map[string]lipgloss.Style {
 		return m.llmKeywords
 	}
 
+	if strings.HasPrefix(m.editor.GetCurrentContent(), "\\") {
+		return m.psqlCommands
+	}
+
 	return m.sqlKeywords
 }
 
@@ -740,6 +828,10 @@ func (m model) sendQueryCmd() tea.Cmd {
 
 			return llmSharedSchemaMsg{schema: schema, message: message, tables: m.llmSharedTablesSchema}
 		}
+	}
+
+	if strings.HasPrefix(prompt, "\\") {
+		return m.executePsqlCommand(prompt)
 	}
 
 	return m.executeQuery(prompt)

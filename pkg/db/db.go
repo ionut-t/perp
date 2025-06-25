@@ -15,7 +15,7 @@ import (
 // Database defines the contract for database operations
 type Database interface {
 	// Execute a SQL query and return the result
-	Query(ctx context.Context, query string) (QueryResult, error)
+	Query(ctx context.Context, query string, args ...any) (QueryResult, error)
 	// Generate a human-readable schema of the database
 	GenerateSchema() (string, error)
 	// Generate a human-readable schema for specific tables
@@ -99,9 +99,8 @@ func (d *database) Close() {
 	d.pool.Close()
 }
 
-// Query executes a SQL query and returns the result
-func (d *database) Query(ctx context.Context, query string) (QueryResult, error) {
-	rows, err := d.pool.Query(ctx, query)
+func (d *database) Query(ctx context.Context, query string, args ...any) (QueryResult, error) {
+	rows, err := d.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -111,7 +110,7 @@ func (d *database) Query(ctx context.Context, query string) (QueryResult, error)
 		query: query,
 	}
 
-	q := strings.ToLower(query)
+	q := strings.ToLower(strings.TrimSpace(query))
 	switch {
 	case strings.HasPrefix(q, "select"):
 		result.queryType = QuerySelect
