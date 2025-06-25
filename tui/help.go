@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/keymap"
+	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/ui/help"
 	"github.com/ionut-t/perp/ui/styles"
 )
@@ -85,6 +86,7 @@ func (m model) renderHelp() string {
 		m.renderUsefulHelp(),
 		m.renderLLMHelp(),
 		m.renderEditorHelp(),
+		m.renderPsqlHelp(),
 		m.renderTableHelp(),
 		m.renderCommandHelp(),
 	)
@@ -140,7 +142,7 @@ func (m model) renderLLMHelp() string {
 	title := styles.Text.Bold(true).Render("LLM Commands")
 
 	description := styles.Subtext1.Render(
-		"These commands are available when the editor is in INSERT mode.",
+		styles.Wrap(m.width-1, "These commands are available when the editor is in INSERT mode."),
 	)
 
 	return lipgloss.JoinVertical(
@@ -200,15 +202,15 @@ func (m model) renderEditorHelp() string {
 	description := lipgloss.JoinVertical(
 		lipgloss.Left,
 		styles.Subtext1.Render(
-			"These shortcuts are available when the editor is focused.",
+			styles.Wrap(m.width-1, "These shortcuts are available when the editor is focused."),
 		),
 		styles.Subtext1.Render(
-			"If query ends with a semicolon, it will be executed automatically when enter is pressed.",
+			styles.Wrap(m.width-1, "If query ends with a semicolon, it will be executed automatically when enter is pressed."),
 		),
-		styles.Subtext1.Render(
+		styles.Wrap(m.width-1, styles.Subtext1.Render(
 			"If query starts with ",
 		)+styles.Accent.Render("/ask")+
-			styles.Subtext1.Render(", it will send a request to the LLM when submitted."),
+			styles.Subtext1.Render(", it will send a request to the LLM when submitted.")),
 	)
 
 	return lipgloss.JoinVertical(
@@ -216,6 +218,22 @@ func (m model) renderEditorHelp() string {
 		title,
 		description,
 		help.RenderHelpView(m.width, bindings),
+	)
+}
+
+// Helper to render psql help
+func (m *model) renderPsqlHelp() string {
+	title := styles.Text.Bold(true).Render("PSQL Commands (experimental)")
+
+	description := styles.Subtext1.Render(
+		styles.Wrap(m.width-1, "These commands are available when the editor is focused."),
+	)
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		description,
+		help.RenderCmdHelp(m.width, psql.CommandDescriptions),
 	)
 }
 
@@ -244,10 +262,10 @@ func (m model) renderTableHelp() string {
 	description := lipgloss.JoinVertical(
 		lipgloss.Left,
 		styles.Subtext1.Render(
-			"It is accessible when a query that returns data is executed.",
+			styles.Wrap(m.width-1, "It is accessible when a query that returns data is executed."),
 		),
 		styles.Subtext1.Render(
-			"These shortcuts are available when the table is focused.",
+			styles.Wrap(m.width-1, "These shortcuts are available when the table is focused."),
 		),
 	)
 
@@ -309,12 +327,12 @@ func (m model) renderCommandHelp() string {
 	description := lipgloss.JoinVertical(
 		lipgloss.Left,
 		styles.Subtext1.Render(
-			"These commands are available when the editor is not focused.",
+			styles.Wrap(m.width-1, "These commands are available when the editor is not focused."),
 		),
-		styles.Subtext1.Render(
+		styles.Wrap(m.width-1, styles.Subtext1.Render(
 			"You can access the command palette by pressing ",
 		)+styles.Accent.Render(":")+
-			styles.Subtext1.Render("."),
+			styles.Subtext1.Render(".")),
 	)
 
 	return lipgloss.JoinVertical(

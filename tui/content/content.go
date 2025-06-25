@@ -13,7 +13,9 @@ import (
 	"github.com/ionut-t/perp/pkg/clipboard"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/llm"
+	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/server"
+	"github.com/ionut-t/perp/ui/help"
 	"github.com/ionut-t/perp/ui/list"
 	"github.com/ionut-t/perp/ui/styles"
 )
@@ -46,6 +48,7 @@ const (
 	viewLLMLogs
 	viewLLMSharedSchema
 	viewError
+	viewPSQLHelp
 )
 
 type Model struct {
@@ -153,6 +156,11 @@ func (m *Model) ShowLLMLogs() {
 	m.view = viewLLMLogs
 }
 
+func (m *Model) ShowPsqlHelp() {
+	m.view = viewPSQLHelp
+	m.viewport.SetContent(help.RenderCmdHelp(m.width-1, psql.CommandDescriptions))
+}
+
 func (m *Model) IsViewChangeRequired() bool {
 	if m.view != viewConnectionInfo && len(m.queryResults) > 0 && m.view != viewTable {
 		m.view = viewTable
@@ -218,6 +226,26 @@ func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 
 func (m *Model) GetQueryResults() []map[string]any {
 	return m.queryResults
+}
+
+func (m *Model) SetPsqlResult(result *psql.Result) {
+	m.queryResults = result.Rows
+
+	if len(result.Rows) == 0 {
+		m.table.SetHeaders([]string{})
+		m.table.SetRows([][]string{})
+		m.table.SetSelectedCell(0, 0)
+		m.viewport.SetContent("No results found.")
+		m.view = viewInfo
+		return
+	}
+
+	rows, headers := m.buildDataTable(result.Columns, result.Rows)
+
+	m.table.SetHeaders(headers)
+	m.table.SetRows(rows)
+	m.table.SetSelectedCell(0, 0)
+	m.view = viewTable
 }
 
 func (m *Model) SetLLMLogs(response llm.Response, query string) {

@@ -47,6 +47,7 @@ func (m Model) View() string {
 	return m.viewport.View()
 }
 
+// RenderHelpView renders a help view for key bindings with their descriptions.
 func RenderHelpView(width int, keys []key.Binding) string {
 	var sb strings.Builder
 
@@ -72,7 +73,7 @@ func RenderHelpView(width int, keys []key.Binding) string {
 		currentWidth := lipgloss.Width(renderedKey)
 		padding := bg.Render(strings.Repeat(" ", maxKeyWidth-currentWidth+2))
 
-		totalIndentation := 2 + lipgloss.Width(renderedKey) + maxKeyWidth - currentWidth + 2
+		totalIndentation := 2 + lipgloss.Width(renderedKey) + max(0, maxKeyWidth-currentWidth+2)
 
 		desc := strings.Split(binding.Help().Desc, "\n")
 
@@ -96,4 +97,48 @@ func RenderHelpView(width int, keys []key.Binding) string {
 	}
 
 	return bg.Width(width).Padding(1, 1).Render(strings.Trim(sb.String(), "\n"))
+}
+
+// RenderCmdHelp renders a help view for commands with their descriptions.
+func RenderCmdHelp(width int, entries []struct {
+	Command     string
+	Description string
+}) string {
+	var sb strings.Builder
+	maxKeyWidth := 0
+
+	for _, entry := range entries {
+		renderedWidth := lipgloss.Width(styles.Info.Render(entry.Command))
+		maxKeyWidth = max(maxKeyWidth, renderedWidth)
+	}
+
+	for _, entry := range entries {
+		renderedKey := styles.Info.Render(entry.Command)
+		currentWidth := lipgloss.Width(renderedKey)
+		padding := strings.Repeat(" ", max(0, maxKeyWidth-currentWidth+2))
+
+		totalIndentation := 2 + lipgloss.Width(renderedKey) + maxKeyWidth - currentWidth + 2
+
+		desc := strings.Split(entry.Description, "\n")
+
+		var renderedDescription strings.Builder
+		for i, line := range desc {
+			renderedLine := styles.Text.Render(strings.TrimSpace(line))
+
+			if i != 0 {
+				indentPadding := strings.Repeat(" ", totalIndentation)
+				renderedDescription.WriteString("\n" + indentPadding)
+			}
+
+			renderedDescription.WriteString(renderedLine)
+		}
+
+		sb.WriteString(fmt.Sprintf("• %s%s%s\n",
+			renderedKey,
+			padding,
+			renderedDescription.String(),
+		))
+	}
+
+	return lipgloss.NewStyle().Width(width).Padding(1, 1).Render(strings.Trim(sb.String(), "\n"))
 }
