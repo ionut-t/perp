@@ -409,7 +409,7 @@ func (m *Model) setViewportContent() {
 			lipgloss.NewStyle().Render(fmt.Sprintf("Database: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Database))),
 			lipgloss.NewStyle().Render(fmt.Sprintf("Username: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Username))),
 			lipgloss.NewStyle().Render(fmt.Sprintf("Host: %s", lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s:%d", m.server.Address, m.server.Port)))),
-			lipgloss.NewStyle().Render(fmt.Sprintf("Databse schema enabled for sharing with LLM: %s", lipgloss.NewStyle().Bold(true).Render(dbSchemaShared))),
+			lipgloss.NewStyle().Render(fmt.Sprintf("Database schema enabled for sharing with LLM: %s", lipgloss.NewStyle().Bold(true).Render(dbSchemaShared))),
 			lipgloss.NewStyle().Render(fmt.Sprintf("Tables shared with LLM: %s", lipgloss.NewStyle().Bold(true).Render(m.renderSharedTablesList()))),
 		)
 
