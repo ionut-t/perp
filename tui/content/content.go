@@ -343,7 +343,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	switch m.view {
 	case viewTable:
-		// TODO: Fix the height of the table in gotable library
 		return lipgloss.NewStyle().Height(m.height).Render(m.table.View())
 
 	case viewLLMLogs:

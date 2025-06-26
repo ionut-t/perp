@@ -187,7 +187,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		width, height := m.getAvailableSizes()
 
-		m.editor.SetSize(width, max(height/2-5, 10))
+		m.editor.SetSize(width, max(height/2-4, 10))
 
 		contentHeight := height - lipgloss.Height(m.editor.View()) - lipgloss.Height(m.command.View())
 
