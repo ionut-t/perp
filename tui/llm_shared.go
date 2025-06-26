@@ -51,16 +51,16 @@ func (m *model) addTablesSchemaToLLM() (string, error) {
 }
 
 func (m *model) removeTablesSchemaToLLM() (string, error) {
-	if !m.server.ShareDatabaseSchemaLLM {
-		return "", nil
-	}
-
 	value := m.editor.GetCurrentContent()
 	value = strings.TrimPrefix(value, "/remove")
 	value = strings.TrimSpace(value)
 
 	if value == "" {
 		return "", fmt.Errorf("no tables specified to remove from LLM schema")
+	}
+
+	if !m.server.ShareDatabaseSchemaLLM {
+		return "", nil
 	}
 
 	if value == "*" {

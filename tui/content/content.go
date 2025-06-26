@@ -61,6 +61,7 @@ type Model struct {
 	viewport        viewport.Model
 	table           table.Model
 	server          server.Server
+	llmSharedTables []string
 	llmLogsList     list.Model
 	logs            []chatLog
 }
@@ -114,6 +115,11 @@ func (m *Model) SetSize(width, height int) {
 func (m *Model) SetConnectionInfo(s server.Server) {
 	m.server = s
 	m.view = viewConnectionInfo
+	m.setViewportContent()
+}
+
+func (m *Model) SetLLMSharedTables(tables []string) {
+	m.llmSharedTables = tables
 	m.setViewportContent()
 }
 
@@ -369,7 +375,6 @@ func (m *Model) buildDataTable(headers []string, results []map[string]any) ([][]
 		for j, header := range headers {
 			if val, ok := row[header]; ok {
 				value := fmt.Sprintf("%v", val)
-				// TODO: Consider expanding the table library to handle multiline cells
 				rowData[j] = strings.ReplaceAll(value, "\n", " ")
 			} else {
 				if header == "#" {
@@ -393,12 +398,22 @@ func (m *Model) dispatchClearYankMsg() tea.Cmd {
 func (m *Model) setViewportContent() {
 	switch m.view {
 	case viewConnectionInfo:
+		dbSchemaShared := "No"
+
+		if m.server.ShareDatabaseSchemaLLM {
+			dbSchemaShared = "Yes"
+		}
+
 		content := lipgloss.JoinVertical(
 			lipgloss.Left,
 			lipgloss.NewStyle().Render(fmt.Sprintf("Connected to server: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Name))),
 			lipgloss.NewStyle().Render(fmt.Sprintf("Database: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Database))),
+			lipgloss.NewStyle().Render(fmt.Sprintf("Username: %s", lipgloss.NewStyle().Bold(true).Render(m.server.Username))),
 			lipgloss.NewStyle().Render(fmt.Sprintf("Host: %s", lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("%s:%d", m.server.Address, m.server.Port)))),
+			lipgloss.NewStyle().Render(fmt.Sprintf("Databse schema enabled for sharing with LLM: %s", lipgloss.NewStyle().Bold(true).Render(dbSchemaShared))),
+			lipgloss.NewStyle().Render(fmt.Sprintf("Tables shared with LLM: %s", lipgloss.NewStyle().Bold(true).Render(m.renderSharedTablesList()))),
 		)
+
 		m.viewport.SetContent(padding.Render(content))
 
 	case viewDBSchema:
@@ -500,4 +515,20 @@ func processLogs(logs []chatLog) []list.Item {
 	}
 
 	return items
+}
+
+func (m Model) renderSharedTablesList() string {
+	if len(m.llmSharedTables) == 0 {
+		return "N/A"
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString("\n")
+
+	for _, table := range m.llmSharedTables {
+		sb.WriteString(fmt.Sprintf("- %s\n", table))
+	}
+
+	return lipgloss.NewStyle().Padding(1, 1).Render(strings.TrimSpace(sb.String()))
 }

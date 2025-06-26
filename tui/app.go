@@ -544,6 +544,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.SetContent("")
 		m.content.SetLLMSharedSchema(msg.schema)
 		m.llmSharedTablesSchema = msg.tables
+		m.content.SetLLMSharedTables(m.llmSharedTablesSchema)
 
 		return m, m.successNotification(msg.message)
 
@@ -602,13 +603,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.errorNotification(fmt.Errorf("LLM is not configured: %w", m.llmError))
 		}
 
-		focusEditor := func() {
+		done := func() {
+			m.content.SetConnectionInfo(m.server)
 			m.focused = focusedEditor
 			m.editor.Focus()
 		}
 
 		if m.server.ShareDatabaseSchemaLLM == msg.Enabled {
-			focusEditor()
+			done()
 			return m, m.successNotification("No change in LLM database schema usage")
 		}
 
@@ -617,12 +619,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if msg.Enabled {
-			focusEditor()
+			done()
 			return m, m.successNotification("LLM will now use the database schema")
 		}
 
-		focusEditor()
+		done()
 		m.llm.ResetInstructions()
+		m.llmSharedTablesSchema = []string{}
+		m.content.SetLLMSharedSchema("")
+		m.content.SetLLMSharedTables(m.llmSharedTablesSchema)
 		return m, m.successNotification("LLM will no longer use the database schema")
 
 	case command.LLMModelChangedMsg:
@@ -807,15 +812,15 @@ func (m model) sendQueryCmd() tea.Cmd {
 	}
 
 	if strings.HasPrefix(prompt, "/add") {
+		schema, err := m.addTablesSchemaToLLM()
+
+		if err != nil {
+			m.editor.SetContent("")
+
+			return utils.Dispatch(notificationErrorMsg{err: err})
+		}
+
 		return func() tea.Msg {
-			schema, err := m.addTablesSchemaToLLM()
-
-			if err != nil {
-				m.editor.SetContent("")
-
-				return utils.Dispatch(notificationErrorMsg{err: err})
-			}
-
 			var message string
 			if len(m.llmSharedTablesSchema) == 1 {
 				message = "Table added to LLM schema"
@@ -828,13 +833,13 @@ func (m model) sendQueryCmd() tea.Cmd {
 	}
 
 	if strings.HasPrefix(prompt, "/remove") {
+		schema, err := m.removeTablesSchemaToLLM()
+
+		if err != nil {
+			return utils.Dispatch(notificationErrorMsg{err: err})
+		}
+
 		return func() tea.Msg {
-			schema, err := m.removeTablesSchemaToLLM()
-
-			if err != nil {
-				return m.errorNotification(err)
-			}
-
 			var message string
 			switch len(m.llmSharedTablesSchema) {
 			case 0:

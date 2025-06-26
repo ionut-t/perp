@@ -124,7 +124,7 @@ func (m *model) renderLLMModel() string {
 	}
 
 	if m.server.ShareDatabaseSchemaLLM {
-		return styles.Accent.Render(llmModel + " (DB Schema enabled)")
+		return styles.Accent.Render(llmModel)
 	}
 
 	return styles.Accent.Render(llmModel)
