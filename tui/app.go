@@ -465,11 +465,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ed, cmd := m.editor.Update(nil)
 		m.editor = ed.(editor.Model)
 
+		message := fmt.Sprintf("Query executed successfully. Affected rows: %d", msg.AffectedRows)
+
+		if m.timingEnabled {
+			message += fmt.Sprintf(". Execution time: %s", utils.Duration(msg.ExecutionTime))
+		}
+
 		return m, tea.Batch(
 			cmd,
-			m.successNotification(
-				fmt.Sprintf("Rows affected: %d", msg.AffectedRows),
-			),
+			m.successNotification(message),
 		)
 
 	case queryFailureMsg:
@@ -486,7 +490,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		var timingCmd tea.Cmd
 		if m.timingEnabled {
-			timingCmd = m.successNotification(fmt.Sprintf("Time: %.3fms", msg.result.ExecutionTime.Seconds()*1000))
+			timingCmd = m.successNotification(fmt.Sprintf("Execution time: %s", utils.Duration(msg.result.ExecutionTime)))
 		}
 
 		queryResult := content.ParsedQueryResult{
@@ -518,6 +522,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content.SetError(msg.err)
 
 	case toggleExpandedMsg:
+		m.loading = false
 		m.expandedDisplay = !m.expandedDisplay
 		// TODO: Implement expanded display in content
 		// m.content.SetExpandedDisplay(m.expandedDisplay)
@@ -528,6 +533,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.successNotification(fmt.Sprintf("Expanded display is %s", status))
 
 	case toggleTimingMsg:
+		m.loading = false
 		m.timingEnabled = !m.timingEnabled
 		status := "OFF"
 		if m.timingEnabled {
@@ -783,6 +789,7 @@ func (m model) executeQuery(query string) tea.Cmd {
 		queryResult.AffectedRows = result.Rows().CommandTag().RowsAffected()
 		queryResult.Columns = columns
 		queryResult.Rows = rows
+		queryResult.ExecutionTime = result.ExecutionTime()
 
 		return executeQueryMsg(queryResult)
 	}

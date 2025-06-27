@@ -25,11 +25,12 @@ var (
 )
 
 type ParsedQueryResult struct {
-	Query        string
-	Type         db.QueryType
-	AffectedRows int64
-	Columns      []string
-	Rows         []map[string]any
+	Query         string
+	Type          db.QueryType
+	AffectedRows  int64
+	Columns       []string
+	Rows          []map[string]any
+	ExecutionTime time.Duration
 }
 
 type LLMResponseSelectedMsg struct {

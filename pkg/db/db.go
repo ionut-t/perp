@@ -29,6 +29,7 @@ type QueryResult interface {
 	Type() QueryType
 	Query() string
 	Rows() pgx.Rows
+	ExecutionTime() time.Duration
 }
 
 // QueryType represents the type of SQL query
@@ -76,6 +77,8 @@ type queryResult struct {
 	queryType QueryType
 	query     string
 	rows      pgx.Rows
+	startTime time.Time
+	endTime   time.Time
 }
 
 func (r queryResult) Type() QueryType {
@@ -90,6 +93,10 @@ func (r queryResult) Rows() pgx.Rows {
 	return r.rows
 }
 
+func (r queryResult) ExecutionTime() time.Duration {
+	return r.endTime.Sub(r.startTime)
+}
+
 // Close closes the underlying database connection
 func (d *database) Close() {
 	if d == nil || d.pool == nil {
@@ -100,14 +107,17 @@ func (d *database) Close() {
 }
 
 func (d *database) Query(ctx context.Context, query string, args ...any) (QueryResult, error) {
+	startTime := time.Now()
 	rows, err := d.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 
 	result := queryResult{
-		rows:  rows,
-		query: query,
+		rows:      rows,
+		query:     query,
+		startTime: startTime,
+		endTime:   time.Now(),
 	}
 
 	q := strings.ToLower(strings.TrimSpace(query))

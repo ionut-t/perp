@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -72,5 +73,16 @@ func HandleDataExport(queryResults []map[string]any, rows []int, all bool) (any,
 func Dispatch(msg tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		return msg
+	}
+}
+
+func Duration(duration time.Duration) string {
+	switch {
+	case duration < time.Millisecond:
+		return fmt.Sprintf("%dµs", duration.Microseconds())
+	case duration < time.Second:
+		return fmt.Sprintf("%dms", duration.Milliseconds())
+	default:
+		return fmt.Sprintf("%.3fs", duration.Seconds())
 	}
 }
