@@ -31,6 +31,8 @@ type Config interface {
 	Editor() string
 	Storage() string
 	SetEditor(editor string) error
+	GetMaxHistoryLength() int
+	GetMaxHistoryDays() int
 	GetLLMProvider() (string, error)
 	SetLLMProvider(provider string) error
 	GetLLMApiKey() (string, error)
@@ -75,6 +77,14 @@ func (m *config) SetEditor(editor string) error {
 	viper.Set("editor", editor)
 
 	return viper.WriteConfig()
+}
+
+func (c *config) GetMaxHistoryLength() int {
+	return viper.GetInt(MaxHistoryLengthKey)
+}
+
+func (c *config) GetMaxHistoryDays() int {
+	return viper.GetInt(MaxHistoryDaysKey)
 }
 
 func (c *config) GetLLMProvider() (string, error) {

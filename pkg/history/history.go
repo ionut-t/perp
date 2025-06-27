@@ -13,10 +13,6 @@ import (
 
 const (
 	historyFileName = ".history"
-	// Maximum number of history entries to keep
-	maxHistoryEntries = 1_000
-	// Maximum age for history entries (90 days)
-	maxHistoryAge = 90 * 24 * time.Hour
 )
 
 type HistoryLog struct {
@@ -45,7 +41,15 @@ func getManager(storage string) *manager {
 }
 
 // Add adds a new query to the history and returns the updated history logs.
-func Add(query string, storage string) ([]HistoryLog, error) {
+func Add(query string, storage string, maxEntries, maxAgeInDays int) ([]HistoryLog, error) {
+	if maxEntries <= 0 {
+		maxEntries = 1000
+	}
+
+	if maxAgeInDays <= 0 {
+		maxAgeInDays = 90
+	}
+
 	manager := getManager(storage)
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
@@ -70,10 +74,10 @@ func Add(query string, storage string) ([]HistoryLog, error) {
 	history = append(history, newLog)
 
 	// Clean up old entries before writing
-	history = cleanupHistory(history)
+	history = cleanupHistory(history, maxEntries, time.Duration(maxAgeInDays)*time.Hour*24)
 
 	// Write updated history
-	if err := writeHistoryLogsAtomic(path, history); err != nil {
+	if err := writeHistoryLogs(path, history); err != nil {
 		return nil, err
 	}
 
@@ -99,8 +103,8 @@ func Get(storage string) ([]HistoryLog, error) {
 	return getUniqueSortedHistory(history), nil
 }
 
-// writeHistoryLogsAtomic performs atomic writes to prevent corruption during concurrent access.
-func writeHistoryLogsAtomic(path string, history []HistoryLog) error {
+// writeHistoryLogs performs atomic writes to prevent corruption during concurrent access.
+func writeHistoryLogs(path string, history []HistoryLog) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -184,34 +188,6 @@ func readHistoryLogs(path string) ([]HistoryLog, error) {
 	return history, nil
 }
 
-// writeHistoryLogs writes the history logs to the specified path.
-func writeHistoryLogs(path string, history []HistoryLog) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	var buf bytes.Buffer
-
-	for i, log := range history {
-		if i > 0 {
-			buf.WriteString("\n")
-		}
-
-		buf.WriteString("---\n")
-		buf.WriteString(log.Time.Format(time.RFC3339))
-		buf.WriteString("\n")
-		buf.WriteString(log.Query)
-		buf.WriteString("\n---")
-	}
-
-	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to write history file: %w", err)
-	}
-
-	return nil
-}
-
 func getUniqueSortedHistory(history []HistoryLog) []HistoryLog {
 	slices.SortFunc(history, func(a, b HistoryLog) int {
 		return b.Time.Compare(a.Time)
@@ -232,9 +208,9 @@ func getUniqueSortedHistory(history []HistoryLog) []HistoryLog {
 }
 
 // cleanupHistory removes old entries and keeps only the most recent ones.
-func cleanupHistory(history []HistoryLog) []HistoryLog {
+func cleanupHistory(history []HistoryLog, maxEntries int, maxAge time.Duration) []HistoryLog {
 	now := time.Now()
-	cutoffTime := now.Add(-maxHistoryAge)
+	cutoffTime := now.Add(-maxAge)
 
 	// First, remove entries older than the cutoff time
 	filtered := make([]HistoryLog, 0, len(history))
@@ -250,8 +226,8 @@ func cleanupHistory(history []HistoryLog) []HistoryLog {
 	})
 
 	// Keep only the most recent entries if we exceed the max count
-	if len(filtered) > maxHistoryEntries {
-		filtered = filtered[:maxHistoryEntries]
+	if len(filtered) > maxEntries {
+		filtered = filtered[:maxEntries]
 	}
 
 	return filtered

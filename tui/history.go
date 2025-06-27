@@ -3,7 +3,11 @@ package tui
 import "github.com/ionut-t/perp/pkg/history"
 
 func (m *model) addToHistory() {
-	if logs, err := history.Add(m.editor.GetCurrentContent(), m.config.Storage()); err == nil {
+	if logs, err := history.Add(m.editor.GetCurrentContent(),
+		m.config.Storage(),
+		m.config.GetMaxHistoryLength(),
+		m.config.GetMaxHistoryDays(),
+	); err == nil {
 		m.historyLogs = logs
 	}
 }

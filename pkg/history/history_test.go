@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+const (
+	maxHistoryEntries = 1000
+	maxHistoryAge     = 90
+)
+
 func TestAdd(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -93,7 +98,7 @@ func TestAdd(t *testing.T) {
 				}
 			}
 
-			logs, err := Add(tt.query, tempDir)
+			logs, err := Add(tt.query, tempDir, maxHistoryEntries, maxHistoryAge)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -374,14 +379,16 @@ func TestCleanupHistory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := cleanupHistory(tt.inputLogs)
+			age := maxHistoryAge * time.Hour * 24
+
+			result := cleanupHistory(tt.inputLogs, maxHistoryEntries, age)
 
 			if len(result) != tt.expectedCount {
 				t.Errorf("%s: expected %d entries, got %d", tt.description, tt.expectedCount, len(result))
 			}
 
 			// Verify all remaining entries are within age limit
-			cutoffTime := now.Add(-maxHistoryAge)
+			cutoffTime := now.Add(-age)
 			for _, log := range result {
 				if log.Time.Before(cutoffTime) {
 					t.Errorf("Found entry older than cutoff time: %v", log.Time)
@@ -433,7 +440,7 @@ func TestEdgeCases(t *testing.T) {
 		{
 			name: "invalid storage path",
 			action: func(tempDir string) error {
-				_, err := Add("SELECT 1", "/invalid/path/that/does/not/exist")
+				_, err := Add("SELECT 1", "/invalid/path/that/does/not/exist", maxHistoryEntries, maxHistoryAge)
 				return err
 			},
 			expectError: true,
@@ -443,7 +450,7 @@ func TestEdgeCases(t *testing.T) {
 			name: "very long query",
 			action: func(tempDir string) error {
 				longQuery := strings.Repeat("SELECT ", 10000) + "1"
-				_, err := Add(longQuery, tempDir)
+				_, err := Add(longQuery, tempDir, maxHistoryEntries, maxHistoryAge)
 				return err
 			},
 			expectError: false,
@@ -453,7 +460,7 @@ func TestEdgeCases(t *testing.T) {
 			name: "query with special characters",
 			action: func(tempDir string) error {
 				specialQuery := "SELECT 'test\\nwith\\ttabs\\rand\\\"quotes\\'';"
-				_, err := Add(specialQuery, tempDir)
+				_, err := Add(specialQuery, tempDir, maxHistoryEntries, maxHistoryAge)
 				return err
 			},
 			expectError: false,
@@ -488,7 +495,7 @@ func TestConcurrentAccess(t *testing.T) {
 	for i := range 10 {
 		go func(id int) {
 			query := fmt.Sprintf("SELECT %d", id)
-			_, err := Add(query, tempDir)
+			_, err := Add(query, tempDir, maxHistoryEntries, maxHistoryAge)
 			if err != nil {
 				t.Errorf("Concurrent add failed: %v", err)
 			}
@@ -553,7 +560,7 @@ func BenchmarkAdd(b *testing.B) {
 
 	for i := 0; b.Loop(); i++ {
 		query := fmt.Sprintf("SELECT %d FROM table", i)
-		_, err := Add(query, tempDir)
+		_, err := Add(query, tempDir, maxHistoryEntries, maxHistoryAge)
 		if err != nil {
 			b.Fatalf("Add failed: %v", err)
 		}
@@ -571,7 +578,7 @@ func BenchmarkGet(b *testing.B) {
 	// Setup some history
 	for i := range 100 {
 		query := fmt.Sprintf("SELECT %d FROM table", i)
-		_, _ = Add(query, tempDir)
+		_, _ = Add(query, tempDir, maxHistoryEntries, maxHistoryAge)
 	}
 
 	for b.Loop() {
@@ -586,8 +593,7 @@ func BenchmarkCleanupHistory(b *testing.B) {
 	now := time.Now()
 	logs := generateManyLogs(2000, now)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		cleanupHistory(logs)
+	for b.Loop() {
+		cleanupHistory(logs, maxHistoryEntries, maxHistoryAge)
 	}
 }
