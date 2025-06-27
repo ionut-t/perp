@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
@@ -83,10 +84,12 @@ type model struct {
 	server          server.Server
 	db              db.Database
 	error           error
-	loading         bool
 	llm             llm.LLM
 	llmError        error
 	editor          editor.Model
+
+	loading bool
+	spinner spinner.Model
 
 	queryResults          []map[string]any
 	exportData            exportData.Model
@@ -159,6 +162,10 @@ func New(config config.Config) model {
 
 	llm, err := llmFactory.New(config, instructions)
 
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = styles.Primary
+
 	return model{
 		config:          config,
 		llm:             llm,
@@ -172,11 +179,16 @@ func New(config config.Config) model {
 		content:         content.New(0, 0),
 		help:            help.New(),
 		llmError:        err,
+		spinner:         sp,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return m.editor.CursorBlink()
+	return tea.Batch(
+		tea.SetWindowTitle("perp"),
+		m.spinner.Tick,
+		m.editor.CursorBlink(),
+	)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -194,6 +206,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content.SetSize(width, contentHeight)
 		m.help.SetSize(msg.Width, msg.Height)
 		m.help.SetContent(m.renderHelp())
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 
 	case tea.KeyMsg:
 		if m.historyNavigating && m.editor.IsFocused() && m.focused == focusedEditor {
@@ -324,23 +341,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 
-				m.resetHistory()
-
 				isLLMCommand := strings.HasPrefix(content, "/ask") ||
 					strings.HasPrefix(content, "/add") ||
 					strings.HasPrefix(content, "/remove")
 
 				if !isLLMCommand && strings.HasSuffix(content, ";") {
-					m.addToHistory()
-					return m, m.sendQueryCmd()
+					if !m.loading {
+						m.loading = true
+						m.resetHistory()
+						m.addToHistory()
+						return m, m.sendQueryCmd()
+					}
 				}
 			}
 
 		case key.Matches(msg, executeQuery):
-			m.resetHistory()
-			m.addToHistory()
+			if !m.loading {
+				m.loading = true
+				m.resetHistory()
+				m.addToHistory()
 
-			return m, m.sendQueryCmd()
+				return m, m.sendQueryCmd()
+			}
 
 		case key.Matches(msg, keymap.Cancel):
 			if m.view == viewMain && m.focused == focusedEditor {
@@ -549,6 +571,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.successNotification(msg.message)
 
 	case notificationErrorMsg:
+		m.loading = false
 		return m, m.errorNotification(msg.err)
 
 	case content.LLMResponseSelectedMsg:
@@ -702,10 +725,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	if m.loading {
-		return "Loading...\n"
-	}
-
 	width, height := m.getAvailableSizes()
 
 	if m.error != nil {

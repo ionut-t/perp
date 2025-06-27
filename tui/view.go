@@ -63,10 +63,27 @@ func (m *model) renderMain(width, height int) string {
 		commandLine,
 	)
 
-	return lipgloss.NewStyle().Padding(1, 1, 0).Render(lipgloss.JoinVertical(
+	contentHeight := height - lipgloss.Height(m.editor.View()) - lipgloss.Height(m.command.View()) - styles.ViewPadding.GetVerticalBorderSize()*2 - 2
+
+	padding := lipgloss.NewStyle().Padding(1, 1, 0)
+
+	if m.loading {
+		return padding.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			contentBorder.Width(width).
+				Height(contentHeight+2).
+				AlignHorizontal(lipgloss.Center).
+				AlignVertical(lipgloss.Center).
+				Render(
+					m.spinner.View(),
+				),
+			primaryView))
+	}
+
+	return padding.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
 		contentBorder.Width(width).
-			Height(height-lipgloss.Height(m.editor.View())-lipgloss.Height(m.command.View())-styles.ViewPadding.GetVerticalBorderSize()*2-2).
+			Height(contentHeight).
 			Render(m.content.View()),
 		primaryView))
 }
