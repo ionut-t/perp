@@ -2,6 +2,7 @@ package llm_factory
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/pkg/llm"
@@ -11,6 +12,8 @@ import (
 
 func New(config config.Config, instructions string) (llm.LLM, error) {
 	provider, err := config.GetLLMProvider()
+
+	provider = strings.ToLower(provider)
 
 	if err != nil {
 		provider = "gemini"

@@ -11,10 +11,12 @@ import (
 )
 
 const (
+	EditorKey            = "EDITOR"
+	MaxHistoryLengthKey  = "MAX_HISTORY_LENGTH"
+	MaxHistoryDaysKey    = "MAX_HISTORY_AGE_IN_DAYS"
 	LLMProviderKey       = "LLM_PROVIDER"
 	LLMApiKey            = "LLM_API_KEY"
 	LLMModelKey          = "LLM_MODEL"
-	EditorKey            = "editor"
 	VertexAIProjectIDKey = "VERTEXAI_PROJECT_ID"
 	VertexAILocationKey  = "VERTEXAI_LOCATION"
 
@@ -229,13 +231,15 @@ func InitialiseConfigFile() (string, error) {
 
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			viper.SetDefault(EditorKey, GetEditor())
+			viper.SetDefault(MaxHistoryLengthKey, 1000)
+			viper.SetDefault(MaxHistoryDaysKey, 90)
 			viper.SetDefault(LLMProviderKey, "")
 			viper.SetDefault(LLMApiKey, "")
 			viper.SetDefault(LLMModelKey, "")
 			viper.SetDefault(VertexAIProjectIDKey, "")
 			viper.SetDefault(VertexAILocationKey, "")
 
-			if err := viper.WriteConfig(); err != nil {
+			if err := writeDefaultConfig(); err != nil {
 				return "", err
 			}
 
@@ -280,4 +284,49 @@ func GetLLMInstructionsFilePath() string {
 	}
 
 	return filepath.Join(home, rootDir, llmInstructionsFileName)
+}
+
+func writeDefaultConfig() error {
+	var sb strings.Builder
+
+	sb.WriteString("# This is the configuration file for perp\n")
+	sb.WriteString("\n")
+
+	sb.WriteString("# The keys are case insensitive\n")
+	sb.WriteString("\n")
+
+	sb.WriteString("# The editor will be used to edit the config file, LLM instructions and exported data\n")
+	sb.WriteString(fmt.Sprintf("%s = '%s'\n", EditorKey, GetEditor()))
+	sb.WriteString("\n")
+
+	sb.WriteString("# The maximum number of history entries to keep\n")
+	sb.WriteString(fmt.Sprintf("%s = %d\n", MaxHistoryLengthKey, viper.GetInt(MaxHistoryLengthKey)))
+	sb.WriteString("\n")
+
+	sb.WriteString("# The maximum number of days to keep history entries\n")
+	sb.WriteString(fmt.Sprintf("%s = %d\n", MaxHistoryDaysKey, viper.GetInt(MaxHistoryDaysKey)))
+	sb.WriteString("\n")
+
+	sb.WriteString("# It can be set to 'Gemini' or 'VertexAI' (case insensitive)\n")
+	sb.WriteString("# If unset, Gemini will be used\n")
+	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMProviderKey, viper.GetString(LLMProviderKey)))
+	sb.WriteString("\n")
+
+	sb.WriteString("# The LLM API key is required if the provider is Gemini\n")
+	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMApiKey, viper.GetString(LLMApiKey)))
+	sb.WriteString("\n")
+
+	sb.WriteString("# The LLM model is required for both Gemini and VertexAI\n")
+	sb.WriteString("# ex: 'gemini-2.5-pro'\n")
+	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMModelKey, viper.GetString(LLMModelKey)))
+	sb.WriteString("\n")
+
+	sb.WriteString("# The Vertex AI project ID is required if the provider is VertexAI\n")
+	sb.WriteString(fmt.Sprintf("%s = '%s'\n", VertexAIProjectIDKey, viper.GetString(VertexAIProjectIDKey)))
+	sb.WriteString("\n")
+
+	sb.WriteString("# The Vertex AI location is required if the provider is VertexAI\n")
+	sb.WriteString(fmt.Sprintf("%s = '%s'\n", VertexAILocationKey, viper.GetString(VertexAILocationKey)))
+
+	return os.WriteFile(GetConfigFilePath(), []byte(sb.String()), 0644)
 }
