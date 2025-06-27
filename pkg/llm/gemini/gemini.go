@@ -66,7 +66,6 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 			return nil, fmt.Errorf("request timed out after %v for Gemini", timeout)
 		}
 
-		// if errors.Is(err, ) {}
 		if errors.As(err, &genai.APIError{}) {
 			apiErr := err.(genai.APIError)
 			return nil, errors.New(apiErr.Message)
