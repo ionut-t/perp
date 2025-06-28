@@ -9,6 +9,9 @@
 - **Run queries**: run queries and view results.
 - **LLM integration**:
   - Use `/ask` to translate natural language to SQL.
+  - Use `/explain` to explain a SQL query.
+  - Use `/optimise` to optimise a SQL query.
+  - Use `/fix` to fix a SQL query.
   - Use `/add` to add tables to the LLM context.
   - Use `/remove` to remove tables from the LLM context.
   - Enable/disable database schema in LLM queries.
@@ -115,6 +118,8 @@ perp llm-instructions
 
 This will open the LLM instructions file in the default editor. The file is located at `~/.perp/llm_instructions.md`.
 
+The default instructions can be found [here](internal/config/llm_instructions.md).
+
 ## Development
 
 - Written in Go
@@ -128,6 +133,7 @@ This will open the LLM instructions file in the default editor. The file is loca
 | [Bubble Tea](https://github.com/charmbracelet/bubbletea) | Building the TUI                                |
 | [Lip Gloss](https://github.com/charmbracelet/lipgloss)   | Styling terminal UI components                  |
 | [Bubbles](https://github.com/charmbracelet/bubbles)      | Reusable TUI components                         |
+| [glamour](https://github.com/charmbracelet/glamour)      | Rendering markdown in the terminal              |
 | [clipboard](https://github.com/atotto/clipboard)         | Clipboard operations                            |
 | [editor](https://github.com/ionut-t/goeditor)            | The editor component used for running queries   |
 | [table](https://github.com/ionut-t/gotable)              | The table component used for displaying results |
