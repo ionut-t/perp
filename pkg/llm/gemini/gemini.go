@@ -3,29 +3,23 @@ package gemini
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
-	"time"
 
 	"github.com/ionut-t/perp/pkg/llm"
-	"google.golang.org/genai"
+	"github.com/ionut-t/perp/pkg/llm/genai"
+	go_genai "google.golang.org/genai"
 )
 
 type gemini struct {
-	apiKey               string
-	model                string
-	instructions         string
-	dbSchemaInstructions string
-	client               *genai.Client
-	ctx                  context.Context
+	apiKey string
+	genai.GenAI
 }
 
 func New(apiKey, model, instructions string) (llm.LLM, error) {
 	ctx := context.Background()
 
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+	client, err := go_genai.NewClient(ctx, &go_genai.ClientConfig{
 		APIKey:  apiKey,
-		Backend: genai.BackendGeminiAPI,
+		Backend: go_genai.BackendGeminiAPI,
 	})
 
 	if err != nil {
@@ -33,80 +27,16 @@ func New(apiKey, model, instructions string) (llm.LLM, error) {
 	}
 
 	return &gemini{
-		apiKey:       apiKey,
-		model:        model,
-		instructions: instructions,
-		client:       client,
-		ctx:          ctx,
+		apiKey: apiKey,
+		GenAI: genai.GenAI{
+			Model:        model,
+			Instructions: instructions,
+			Client:       client,
+			Ctx:          ctx,
+		},
 	}, nil
 }
 
 func (g *gemini) Ask(prompt string, cmd llm.Command) (*llm.Response, error) {
-	timeout := 30 * time.Second
-
-	if g.model == "" {
-		return nil, errors.New("no Gemini model specified")
-	}
-
-	ctx, cancel := context.WithTimeout(g.ctx, timeout)
-	defer cancel()
-
-	instructions := g.getInstructions() + "\n" + "Prompt: \n" + prompt
-
-	result, err := g.client.Models.GenerateContent(
-		ctx,
-		g.model,
-		genai.Text(instructions),
-		nil,
-	)
-
-	if err != nil {
-
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("request timed out after %v for Gemini", timeout)
-		}
-
-		if errors.As(err, &genai.APIError{}) {
-			apiErr := err.(genai.APIError)
-			return nil, errors.New(apiErr.Message)
-		}
-
-		return nil, err
-	}
-
-	if result == nil {
-		return nil, errors.New("received nil response from Gemini")
-	}
-
-	text := result.Text()
-
-	if strings.HasPrefix(text, "INFO:") {
-		cmd = llm.Info
-	}
-
-	if cmd == llm.Ask {
-		text = llm.SanitiseResponse(text)
-	}
-
-	return &llm.Response{
-		Response: text,
-		Time:     time.Now(),
-		Command:  cmd,
-	}, nil
-}
-
-func (g *gemini) AppendInstructions(instructions string) {
-	g.dbSchemaInstructions = instructions
-}
-
-func (g *gemini) ResetInstructions() {
-	g.dbSchemaInstructions = ""
-}
-
-func (g *gemini) getInstructions() string {
-	return strings.TrimSpace(g.instructions + "\n" + g.dbSchemaInstructions)
-}
-
-func (g *gemini) SetModel(model string) {
-	g.model = model
+	return g.GenAI.Ask(prompt, cmd, "Gemini")
 }
