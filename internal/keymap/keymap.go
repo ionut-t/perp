@@ -18,8 +18,8 @@ var Help = key.NewBinding(
 )
 
 var Editor = key.NewBinding(
-	key.WithKeys("e"),
-	key.WithHelp("e", "open in external editor"),
+	key.WithKeys("ctrl+e"),
+	key.WithHelp("ctrl+e", "open in external editor"),
 )
 
 var Copy = key.NewBinding(

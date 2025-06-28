@@ -393,11 +393,9 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 	if m.view == viewSplit {
 		listWidth := min(availableWidth/2, minListWidth)
 
-		// Set list dimensions
 		m.list.SetHeight(availableHeight)
 		m.list.SetWidth(listWidth)
 
-		// Set note view dimensions
 		m.editor.SetSize(availableWidth-listWidth, availableHeight)
 	}
 }
