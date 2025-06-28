@@ -5,13 +5,32 @@ import (
 	"time"
 )
 
+type Command int
+
+const (
+	Ask Command = iota
+	Explain
+	Optimise
+	Fix
+)
+
+var LLMKeywords = [...]string{
+	"/ask",
+	"/add",
+	"/remove",
+	"/explain",
+	"/optimise",
+	"/fix",
+}
+
 type Response struct {
 	Response string
 	Time     time.Time
+	Command  Command
 }
 
 type LLM interface {
-	Ask(prompt string) (*Response, error)
+	Ask(prompt string, cmd Command) (*Response, error)
 	AppendInstructions(instructions string)
 	ResetInstructions()
 	SetModel(model string)

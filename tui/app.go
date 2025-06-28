@@ -123,24 +123,22 @@ func New(config config.Config) model {
 	sqlKeywordsMap := make(map[string]lipgloss.Style, len(constants.SQL_KEYWORDS)*2)
 
 	for _, keyword := range constants.SQL_KEYWORDS {
-		highlighted := styles.Accent.Bold(true)
+		highlighted := styles.Primary.Bold(true)
 		sqlKeywordsMap[strings.ToUpper(keyword)] = highlighted
 		sqlKeywordsMap[strings.ToLower(keyword)] = highlighted
 	}
 
 	editor.SetHighlightedWords(sqlKeywordsMap)
 
-	llmKeywordsMap := map[string]lipgloss.Style{
-		"/ask":    styles.Info.Bold(true),
-		"/add":    styles.Info.Bold(true),
-		"/remove": styles.Info.Bold(true),
+	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
+	for _, keyword := range llm.LLMKeywords {
+		llmKeywordsMap[keyword] = styles.Accent.Bold(true)
 	}
 
 	psqlCommands := make(map[string]lipgloss.Style, len(psql.PSQL_COMMANDS))
 
 	for cmd := range psql.PSQL_COMMANDS {
-		highlighted := styles.Accent.Bold(true)
-		psqlCommands[cmd] = highlighted
+		psqlCommands[cmd] = styles.Primary.Bold(true)
 	}
 
 	editor.SetPlaceholder("Type your SQL query here...")
@@ -341,9 +339,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break
 				}
 
-				isLLMCommand := strings.HasPrefix(content, "/ask") ||
-					strings.HasPrefix(content, "/add") ||
-					strings.HasPrefix(content, "/remove")
+				trimmedContent := strings.TrimSpace(content)
+				isLLMCommand := false
+				for _, prefix := range llm.LLMKeywords {
+					if strings.HasPrefix(trimmedContent, prefix) {
+						isLLMCommand = true
+						break
+					}
+				}
 
 				if !isLLMCommand && strings.HasSuffix(content, ";") {
 					if !m.loading {
@@ -551,8 +554,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case llmResponseMsg:
 		m.loading = false
-		query := strings.TrimPrefix(m.editor.GetCurrentContent(), "/ask")
-		query = strings.TrimSpace(query)
+		query := strings.TrimSpace(m.editor.GetCurrentContent())
 		m.content.SetLLMLogs(llm.Response(msg), query)
 		m.editor.SetContent("")
 		m.focused = focusedContent
@@ -565,10 +567,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case llmFailureMsg:
 		m.loading = false
-		query := strings.Trim(m.editor.GetCurrentContent(), "/ask")
+		query := m.editor.GetCurrentContent()
+
+		for _, keyword := range llm.LLMKeywords {
+			query = strings.TrimPrefix(query, keyword)
+		}
+
+		query = strings.TrimSpace(query)
 		m.content.SetLLMLogsError(msg.err, query)
 
 	case llmSharedSchemaMsg:
+		m.loading = false
 		m.editor.SetContent("")
 		m.content.SetLLMSharedSchema(msg.schema)
 		m.llmSharedTablesSchema = msg.tables
@@ -670,7 +679,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.llm.SetModel(msg.Model)
-		if _, err := m.llm.Ask("Test LLM model"); err != nil {
+		if _, err := m.llm.Ask("Test LLM model", llm.Ask); err != nil {
 			m.llm.SetModel(existingModel)
 			return m, m.errorNotification(fmt.Errorf("invalid LLM model: %v", msg.Model))
 		}
@@ -795,13 +804,13 @@ func (m model) executeQuery(query string) tea.Cmd {
 	}
 }
 
-func (m model) ask(prompt string) tea.Cmd {
+func (m model) ask(prompt string, cmd llm.Command) tea.Cmd {
 	return func() tea.Msg {
 		if m.llmError != nil {
 			return llmFailureMsg{err: fmt.Errorf("LLM is not configured: %w", m.llmError)}
 		}
 
-		response, err := m.llm.Ask(prompt)
+		response, err := m.llm.Ask(prompt, cmd)
 		if err != nil {
 			return llmFailureMsg{err: err}
 		}
@@ -834,7 +843,29 @@ func (m model) sendQueryCmd() tea.Cmd {
 	if strings.HasPrefix(prompt, "/ask") {
 		m.focused = focusedContent
 
-		return m.ask(strings.Trim(prompt, "/ask "))
+		return m.ask(prompt, llm.Ask)
+	}
+
+	if strings.HasPrefix(prompt, "/explain") {
+		m.focused = focusedContent
+
+		return m.ask(prompt, llm.Explain)
+	}
+
+	if strings.HasPrefix(prompt, "/optimise") {
+		m.focused = focusedContent
+
+		return m.ask(prompt, llm.Optimise)
+	}
+
+	if strings.HasPrefix(prompt, "/fix") {
+		m.focused = focusedContent
+
+		if m.error != nil {
+			prompt += "\nError: " + m.error.Error()
+		}
+
+		return m.ask(prompt, llm.Fix)
 	}
 
 	if strings.HasPrefix(prompt, "/add") {

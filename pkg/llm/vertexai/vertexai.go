@@ -40,7 +40,7 @@ func New(projectID, location, model, instructions string) (llm.LLM, error) {
 	}, nil
 }
 
-func (v *vertexAI) Ask(prompt string) (*llm.Response, error) {
+func (v *vertexAI) Ask(prompt string, cmd llm.Command) (*llm.Response, error) {
 	if v.model == "" {
 		return nil, errors.New("no Vertex AI model specified")
 	}
@@ -49,7 +49,7 @@ func (v *vertexAI) Ask(prompt string) (*llm.Response, error) {
 	ctx, cancel := context.WithTimeout(v.ctx, timeout)
 	defer cancel()
 
-	instructions := v.getInstructions() + "\n" + prompt
+	instructions := v.getInstructions() + "\n" + "Prompt: \n" + prompt
 	result, err := v.client.Models.GenerateContent(
 		ctx,
 		v.model,
@@ -74,11 +74,16 @@ func (v *vertexAI) Ask(prompt string) (*llm.Response, error) {
 		return nil, errors.New("received nil response from Vertex AI")
 	}
 
-	text := llm.SanitiseResponse(result.Text())
+	text := result.Text()
+
+	if cmd != llm.Explain {
+		text = llm.SanitiseResponse(text)
+	}
 
 	return &llm.Response{
 		Response: text,
 		Time:     time.Now(),
+		Command:  cmd,
 	}, nil
 }
 

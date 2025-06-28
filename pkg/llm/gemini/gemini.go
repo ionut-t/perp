@@ -41,7 +41,7 @@ func New(apiKey, model, instructions string) (llm.LLM, error) {
 	}, nil
 }
 
-func (g *gemini) Ask(prompt string) (*llm.Response, error) {
+func (g *gemini) Ask(prompt string, cmd llm.Command) (*llm.Response, error) {
 	timeout := 30 * time.Second
 
 	if g.model == "" {
@@ -51,7 +51,7 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 	ctx, cancel := context.WithTimeout(g.ctx, timeout)
 	defer cancel()
 
-	instructions := g.getInstructions() + "\n" + prompt
+	instructions := g.getInstructions() + "\n" + "Prompt: \n" + prompt
 
 	result, err := g.client.Models.GenerateContent(
 		ctx,
@@ -78,11 +78,16 @@ func (g *gemini) Ask(prompt string) (*llm.Response, error) {
 		return nil, errors.New("received nil response from Gemini")
 	}
 
-	text := llm.SanitiseResponse(result.Text())
+	text := result.Text()
+
+	if cmd != llm.Explain {
+		text = llm.SanitiseResponse(text)
+	}
 
 	return &llm.Response{
 		Response: text,
 		Time:     time.Now(),
+		Command:  cmd,
 	}, nil
 }
 

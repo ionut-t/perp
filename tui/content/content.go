@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/pkg/clipboard"
@@ -47,6 +48,7 @@ const (
 	viewTable
 	viewInfo
 	viewLLMLogs
+	viewLLMExplanation
 	viewLLMSharedSchema
 	viewError
 	viewPSQLHelp
@@ -102,7 +104,7 @@ func (m *Model) SetSize(width, height int) {
 
 	m.table.SetSize(width-1, height)
 
-	m.llmLogsList.SetSize(width, height)
+	m.llmLogsList.SetSize(width, height-1)
 
 	switch m.view {
 	case viewConnectionInfo, viewInfo, viewDBSchema, viewLLMSharedSchema:
@@ -256,6 +258,25 @@ func (m *Model) SetPsqlResult(result *psql.Result) {
 }
 
 func (m *Model) SetLLMLogs(response llm.Response, query string) {
+	if response.Command == llm.Explain {
+
+		theme := "light"
+		if lipgloss.HasDarkBackground() {
+			theme = "dark"
+		}
+
+		if out, err := glamour.Render(response.Response, theme); err != nil {
+			m.error = fmt.Errorf("failed to render LLM response: %w", err)
+			m.view = viewError
+		} else {
+			m.viewport.SetContent(out)
+			m.viewport.YOffset = 0
+			m.view = viewLLMExplanation
+		}
+
+		return
+	}
+
 	newLog := chatLog{
 		Prompt:   query,
 		Response: response.Response,
@@ -494,8 +515,18 @@ func processLogs(logs []chatLog) []list.Item {
 	items := make([]list.Item, len(logs))
 
 	for i, n := range logs {
+		var titleBuilder strings.Builder
+
+		for _, prefix := range llm.LLMKeywords {
+			if strings.HasPrefix(n.Prompt, prefix) {
+				titleBuilder.WriteString(styles.Accent.Render(prefix))
+				titleBuilder.WriteString(strings.TrimPrefix(n.Prompt, prefix))
+				break
+			}
+		}
+
 		items[i] = list.Item{
-			Title:       n.Prompt,
+			Title:       titleBuilder.String(),
 			Subtitle:    n.Time.Format("02/01/2006, 15:04:05"),
 			Description: n.Response,
 		}
