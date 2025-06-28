@@ -3,6 +3,7 @@ package gemini
 import (
 	"context"
 	"errors"
+	"os"
 
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/llm/genai"
@@ -10,12 +11,16 @@ import (
 )
 
 type gemini struct {
-	apiKey string
 	genai.GenAI
 }
 
-func New(apiKey, model, instructions string) (llm.LLM, error) {
+func New(model, instructions string) (llm.LLM, error) {
 	ctx := context.Background()
+
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		return nil, errors.New("GEMINI_API_KEY environment variable not set")
+	}
 
 	client, err := go_genai.NewClient(ctx, &go_genai.ClientConfig{
 		APIKey:  apiKey,
@@ -27,7 +32,6 @@ func New(apiKey, model, instructions string) (llm.LLM, error) {
 	}
 
 	return &gemini{
-		apiKey: apiKey,
 		GenAI: genai.GenAI{
 			Model:        model,
 			Instructions: instructions,

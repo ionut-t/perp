@@ -14,14 +14,11 @@ import (
 var defaultLLMInstructions string
 
 const (
-	EditorKey            = "EDITOR"
-	MaxHistoryLengthKey  = "MAX_HISTORY_LENGTH"
-	MaxHistoryDaysKey    = "MAX_HISTORY_AGE_IN_DAYS"
-	LLMProviderKey       = "LLM_PROVIDER"
-	LLMApiKey            = "LLM_API_KEY"
-	LLMModelKey          = "LLM_MODEL"
-	VertexAIProjectIDKey = "VERTEXAI_PROJECT_ID"
-	VertexAILocationKey  = "VERTEXAI_LOCATION"
+	EditorKey           = "EDITOR"
+	MaxHistoryLengthKey = "MAX_HISTORY_LENGTH"
+	MaxHistoryDaysKey   = "MAX_HISTORY_AGE_IN_DAYS"
+	LLMProviderKey      = "LLM_PROVIDER"
+	LLMModelKey         = "LLM_MODEL"
 
 	rootDir                 = ".perp"
 	configFileName          = ".config.toml"
@@ -38,13 +35,8 @@ type Config interface {
 	GetMaxHistoryDays() int
 	GetLLMProvider() (string, error)
 	SetLLMProvider(provider string) error
-	GetLLMApiKey() (string, error)
 	GetLLMModel() (string, error)
 	SetLLMModel(model string) error
-	GetVertexAIProjectID() (string, error)
-	GetVertexAILocation() (string, error)
-	SetVertexAIProjectID(projectID string) error
-	SetVertexAILocation(location string) error
 	GetLLMInstructions() string
 }
 
@@ -110,16 +102,6 @@ func (c *config) SetLLMProvider(provider string) error {
 	return viper.WriteConfig()
 }
 
-func (c *config) GetLLMApiKey() (string, error) {
-	apiKey := viper.GetString(LLMApiKey)
-
-	if apiKey == "" {
-		return "", fmt.Errorf("%s not set", LLMApiKey)
-	}
-
-	return apiKey, nil
-}
-
 func (c *config) GetLLMModel() (string, error) {
 	model := viper.GetString(LLMModelKey)
 
@@ -154,46 +136,6 @@ func (c *config) GetLLMInstructions() string {
 	}
 
 	return string(content)
-}
-
-func (c *config) GetVertexAIProjectID() (string, error) {
-	projectID := viper.GetString(VertexAIProjectIDKey)
-
-	if projectID == "" {
-		return "", fmt.Errorf("%s not set", VertexAIProjectIDKey)
-	}
-
-	return projectID, nil
-}
-
-func (c *config) GetVertexAILocation() (string, error) {
-	location := viper.GetString(VertexAILocationKey)
-
-	if location == "" {
-		return "", fmt.Errorf("%s not set", VertexAILocationKey)
-	}
-
-	return location, nil
-}
-
-func (c *config) SetVertexAIProjectID(projectID string) error {
-	if projectID == "" {
-		return fmt.Errorf("%s cannot be empty", VertexAIProjectIDKey)
-	}
-
-	viper.Set(VertexAIProjectIDKey, projectID)
-
-	return viper.WriteConfig()
-}
-
-func (c *config) SetVertexAILocation(location string) error {
-	if location == "" {
-		return fmt.Errorf("%s cannot be empty", VertexAILocationKey)
-	}
-
-	viper.Set(VertexAILocationKey, location)
-
-	return viper.WriteConfig()
 }
 
 func getDefaultEditor() string {
@@ -240,10 +182,7 @@ func InitialiseConfigFile() (string, error) {
 			viper.SetDefault(MaxHistoryLengthKey, 1000)
 			viper.SetDefault(MaxHistoryDaysKey, 90)
 			viper.SetDefault(LLMProviderKey, "")
-			viper.SetDefault(LLMApiKey, "")
 			viper.SetDefault(LLMModelKey, "")
-			viper.SetDefault(VertexAIProjectIDKey, "")
-			viper.SetDefault(VertexAILocationKey, "")
 
 			if err := writeDefaultConfig(); err != nil {
 				return "", err
@@ -330,21 +269,10 @@ func writeDefaultConfig() error {
 	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMProviderKey, viper.GetString(LLMProviderKey)))
 	sb.WriteString("\n")
 
-	sb.WriteString("# The LLM API key is required if the provider is Gemini\n")
-	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMApiKey, viper.GetString(LLMApiKey)))
-	sb.WriteString("\n")
-
 	sb.WriteString("# The LLM model is required for both Gemini and VertexAI\n")
 	sb.WriteString("# ex: 'gemini-2.5-pro'\n")
 	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMModelKey, viper.GetString(LLMModelKey)))
 	sb.WriteString("\n")
-
-	sb.WriteString("# The Vertex AI project ID is required if the provider is VertexAI\n")
-	sb.WriteString(fmt.Sprintf("%s = '%s'\n", VertexAIProjectIDKey, viper.GetString(VertexAIProjectIDKey)))
-	sb.WriteString("\n")
-
-	sb.WriteString("# The Vertex AI location is required if the provider is VertexAI\n")
-	sb.WriteString(fmt.Sprintf("%s = '%s'\n", VertexAILocationKey, viper.GetString(VertexAILocationKey)))
 
 	return os.WriteFile(GetConfigFilePath(), []byte(sb.String()), 0644)
 }

@@ -2,6 +2,8 @@ package vertexai
 
 import (
 	"context"
+	"errors"
+	"os"
 
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/llm/genai"
@@ -12,8 +14,18 @@ type vertexAI struct {
 	genai.GenAI
 }
 
-func New(projectID, location, model, instructions string) (llm.LLM, error) {
+func New(model, instructions string) (llm.LLM, error) {
 	ctx := context.Background()
+
+	projectID := os.Getenv("VERTEXAI_PROJECT_ID")
+	if projectID == "" {
+		return nil, errors.New("VERTEXAI_PROJECT_ID environment variable not set")
+	}
+
+	location := os.Getenv("VERTEXAI_LOCATION")
+	if location == "" {
+		return nil, errors.New("VERTEXAI_LOCATION environment variable not set")
+	}
 
 	client, err := go_genai.NewClient(ctx, &go_genai.ClientConfig{
 		Project:  projectID,

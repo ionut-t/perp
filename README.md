@@ -88,10 +88,7 @@ The following keys are available:
 | `MAX_HISTORY_LENGTH`      | The maximum number of history entries to keep.                            |
 | `MAX_HISTORY_AGE_IN_DAYS` | The maximum number of days to keep history entries.                       |
 | `LLM_PROVIDER`            | The LLM provider to use. It can be set to `Gemini` or `VertexAI`.         |
-| `LLM_API_KEY`             | The LLM API key is required if the provider is `Gemini`.                  |
 | `LLM_MODEL`               | The LLM model is required for both `Gemini` and `VertexAI`.               |
-| `VERTEXAI_PROJECT_ID`     | The Vertex AI project ID is required if the provider is `VertexAI`.       |
-| `VERTEXAI_LOCATION`       | The Vertex AI location is required if the provider is `VertexAI`.         |
 
 The `config` command can be used to manage the configuration:
 
@@ -105,8 +102,15 @@ Some configuration keys can be set using command-line flags:
 
 ```sh
 perp config -e vim
-perp config -p Gemini -k YOUR_API_KEY -m gemini-1.5-flash
+perp config -p Gemini -m gemini-2.5-pro
 ```
+
+### Environment Variables
+
+For LLM integration, you need to set the appropriate environment variables based on the chosen LLM provider:
+
+- **Gemini**: Set the `GEMINI_API_KEY` environment variable to your Gemini API key.
+- **VertexAI**: Set the `VERTEXAI_PROJECT_ID` and `VERTEXAI_LOCATION` environment variables.
 
 ## LLM Instructions
 

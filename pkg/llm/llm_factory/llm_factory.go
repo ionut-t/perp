@@ -23,12 +23,9 @@ func New(config config.Config, instructions string) (llm.LLM, error) {
 
 	switch provider {
 	case "gemini":
-		llmApiKey, _ := config.GetLLMApiKey()
-		return gemini.New(llmApiKey, llmModel, instructions)
+		return gemini.New(llmModel, instructions)
 	case "vertexai":
-		vertexAIProjectID, _ := config.GetVertexAIProjectID()
-		vertexAILocation, _ := config.GetVertexAILocation()
-		return vertexai.New(vertexAIProjectID, vertexAILocation, llmModel, instructions)
+		return vertexai.New(llmModel, instructions)
 	default:
 		return nil, errors.New("unsupported LLM provider: " + provider)
 	}
