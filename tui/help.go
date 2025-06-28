@@ -124,6 +124,27 @@ func (m model) renderLLMHelp() string {
 		),
 		key.NewBinding(
 			key.WithKeys(""),
+			key.WithHelp("/explain", `explains the provided query
+						 Example:
+						 /explain SELECT * FROM users
+						 `),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("/optimise", `optimises the provided query
+						 Example:
+						 /optimise SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE created_at > '2024-01-01')
+						 `),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("/fix", `fixes the provided query
+						 Example:
+						 /fix SELECT name, COUNT(*) FROM users JOIN orders ON users.id = orders.user_id
+						 `),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
 			key.WithHelp("/add", `adds tables to the LLM instructions
 						 Example:
 						 /add users, orders
