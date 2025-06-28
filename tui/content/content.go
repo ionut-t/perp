@@ -193,6 +193,10 @@ func (m *Model) SetError(err error) {
 	m.view = viewError
 }
 
+func (m *Model) GetError() error {
+	return m.error
+}
+
 func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 	m.queryResults = nil
 
@@ -258,8 +262,7 @@ func (m *Model) SetPsqlResult(result *psql.Result) {
 }
 
 func (m *Model) SetLLMLogs(response llm.Response, query string) {
-	if response.Command == llm.Explain {
-
+	if response.Command != llm.Ask {
 		theme := "light"
 		if lipgloss.HasDarkBackground() {
 			theme = "dark"
@@ -515,18 +518,11 @@ func processLogs(logs []chatLog) []list.Item {
 	items := make([]list.Item, len(logs))
 
 	for i, n := range logs {
-		var titleBuilder strings.Builder
-
-		for _, prefix := range llm.LLMKeywords {
-			if strings.HasPrefix(n.Prompt, prefix) {
-				titleBuilder.WriteString(styles.Accent.Render(prefix))
-				titleBuilder.WriteString(strings.TrimPrefix(n.Prompt, prefix))
-				break
-			}
-		}
+		prompt := strings.TrimPrefix(n.Prompt, "/ask")
+		prompt = strings.TrimSpace(prompt)
 
 		items[i] = list.Item{
-			Title:       titleBuilder.String(),
+			Title:       "Prompt: " + prompt,
 			Subtitle:    n.Time.Format("02/01/2006, 15:04:05"),
 			Description: n.Response,
 		}

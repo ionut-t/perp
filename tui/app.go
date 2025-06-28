@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"strings"
 	"time"
@@ -550,10 +551,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		query := strings.TrimSpace(m.editor.GetCurrentContent())
 		m.content.SetLLMLogs(llm.Response(msg), query)
-		m.editor.SetContent("")
-		m.focused = focusedContent
-		m.editor.Blur()
-		m.editor.SetNormalMode()
+
+		if msg.Command == llm.Optimise || msg.Command == llm.Fix {
+			content := llm.ExtractQuery(string(msg.Response))
+			m.editor.SetContent(content)
+		} else {
+			m.editor.SetContent("")
+			m.editor.Blur()
+			m.editor.SetNormalMode()
+			m.focused = focusedContent
+		}
 
 		ed, cmd := m.editor.Update(nil)
 		m.editor = ed.(editor.Model)
@@ -814,6 +821,17 @@ func (m model) ask(prompt string, cmd llm.Command) tea.Cmd {
 }
 
 func (m model) setHighlightedKeywords() map[string]lipgloss.Style {
+	prefixes := []string{"/optimise", "/fix"}
+
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(m.editor.GetCurrentContent(), prefix) {
+			mp := m.sqlKeywords
+			maps.Copy(mp, m.llmKeywords)
+
+			return mp
+		}
+	}
+
 	if strings.HasPrefix(m.editor.GetCurrentContent(), "/") {
 		return m.llmKeywords
 	}
@@ -855,8 +873,9 @@ func (m model) sendQueryCmd() tea.Cmd {
 	if strings.HasPrefix(prompt, "/fix") {
 		m.focused = focusedContent
 
-		if m.error != nil {
-			prompt += "\nError: " + m.error.Error()
+		error := m.content.GetError()
+		if error != nil {
+			prompt += "\nError: " + error.Error()
 		}
 
 		return m.ask(prompt, llm.Fix)

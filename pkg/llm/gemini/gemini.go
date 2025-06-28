@@ -80,7 +80,11 @@ func (g *gemini) Ask(prompt string, cmd llm.Command) (*llm.Response, error) {
 
 	text := result.Text()
 
-	if cmd != llm.Explain {
+	if strings.HasPrefix(text, "INFO:") {
+		cmd = llm.Info
+	}
+
+	if cmd == llm.Ask {
 		text = llm.SanitiseResponse(text)
 	}
 

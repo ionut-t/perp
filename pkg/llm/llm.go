@@ -12,6 +12,7 @@ const (
 	Explain
 	Optimise
 	Fix
+	Info
 )
 
 var LLMKeywords = [...]string{
@@ -50,4 +51,29 @@ func SanitiseResponse(text string) string {
 	}
 
 	return strings.TrimSpace(text)
+}
+
+func ExtractQuery(text string) string {
+	startIndex := strings.Index(strings.ToLower(text), "```sql")
+	if startIndex == -1 {
+		startIndex = strings.Index(text, "```")
+	}
+
+	if startIndex != -1 {
+		startIndex += len("```sql")
+	} else {
+		return text
+	}
+
+	endIndex := strings.Index(text[startIndex:], "```")
+	if endIndex != -1 {
+		endIndex += startIndex
+	} else {
+		endIndex = len(text)
+	}
+
+	query := text[startIndex:endIndex]
+	query = strings.TrimSpace(query)
+
+	return strings.TrimSpace(query)
 }
