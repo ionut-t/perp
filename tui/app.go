@@ -152,13 +152,7 @@ func New(config config.Config) model {
 		historyLogs = []history.HistoryLog{}
 	}
 
-	instructions, err := config.GetLLMInstructions()
-
-	if err != nil || instructions == "" {
-		instructions = constants.LLMDefaultInstructions
-	}
-
-	llm, err := llmFactory.New(config, instructions)
+	llm, err := llmFactory.New(config, config.GetLLMInstructions())
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot

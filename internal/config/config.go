@@ -1,14 +1,17 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/ionut-t/perp/internal/constants"
 	"github.com/spf13/viper"
 )
+
+//go:embed llm_instructions.md
+var defaultLLMInstructions string
 
 const (
 	EditorKey            = "EDITOR"
@@ -42,7 +45,7 @@ type Config interface {
 	GetVertexAILocation() (string, error)
 	SetVertexAIProjectID(projectID string) error
 	SetVertexAILocation(location string) error
-	GetLLMInstructions() (string, error)
+	GetLLMInstructions() string
 }
 
 type config struct {
@@ -137,27 +140,20 @@ func (c *config) SetLLMModel(model string) error {
 	return viper.WriteConfig()
 }
 
-func (c *config) GetLLMInstructions() (string, error) {
+func (c *config) GetLLMInstructions() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return defaultLLMInstructions
 	}
 
 	llmInstructionsPath := filepath.Join(home, rootDir, llmInstructionsFileName)
 
-	if _, err := os.Stat(llmInstructionsPath); os.IsNotExist(err) {
-		defaultInstructions := strings.TrimSpace(constants.LLMDefaultInstructions)
-		if err := os.WriteFile(llmInstructionsPath, []byte(defaultInstructions), 0644); err != nil {
-			return "", err
-		}
-	}
-
 	content, err := os.ReadFile(llmInstructionsPath)
-	if err != nil {
-		return "", err
+	if err != nil || len(content) == 0 {
+		return defaultLLMInstructions
 	}
 
-	return string(content), nil
+	return string(content)
 }
 
 func (c *config) GetVertexAIProjectID() (string, error) {
@@ -261,6 +257,18 @@ func InitialiseConfigFile() (string, error) {
 	}
 
 	return configPath, nil
+}
+
+func InitializeLLMInstructions() error {
+	llmInstructionsPath := GetLLMInstructionsFilePath()
+
+	if _, err := os.Stat(llmInstructionsPath); os.IsNotExist(err) {
+		if err := os.WriteFile(llmInstructionsPath, []byte(defaultLLMInstructions), 0644); err != nil {
+			return fmt.Errorf("failed to write LLM instructions: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func GetConfigFilePath() string {

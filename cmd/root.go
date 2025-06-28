@@ -32,6 +32,10 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+
+	if err := config.InitializeLLMInstructions(); err != nil {
+		fmt.Printf("Error writing default LLM instructions: %v", err)
+	}
 }
 
 func appUI() {
