@@ -334,7 +334,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.error != nil {
-		return styles.Error.Render("Error loading export records: " + m.error.Error())
+		return styles.Error.Render(m.error.Error())
 	}
 
 	switch m.view {

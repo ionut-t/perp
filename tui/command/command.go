@@ -232,6 +232,5 @@ func parseExportCommand(value string) ([]int, bool, string, error) {
 		}
 	}
 
-	fileName = strings.TrimSuffix(fileName, ".json")
 	return rows, all, fileName, nil
 }

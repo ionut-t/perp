@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -37,37 +36,6 @@ func ClearAfter(duration time.Duration) tea.Cmd {
 			return ClearMsg{}
 		},
 	)
-}
-
-// HandleDataExport processes query results and selected rows for export.
-func HandleDataExport(queryResults []map[string]any, rows []int, all bool) (any, error) {
-	if queryResults != nil {
-		var data any
-		if len(rows) > 1 {
-			data = make([]map[string]any, 0)
-
-			for _, rowIdx := range rows {
-				idx := rowIdx - 1
-				if idx >= 0 && idx < len(queryResults) {
-					data = append(data.([]map[string]any), queryResults[idx])
-				}
-			}
-		} else if len(rows) == 1 {
-			idx := rows[0] - 1
-			if idx >= 0 && idx < len(queryResults) {
-				data = queryResults[idx]
-			}
-		}
-
-		if all {
-			data = make([]map[string]any, 0)
-			data = append(data.([]map[string]any), queryResults...)
-		}
-
-		return data, nil
-	}
-
-	return nil, errors.New("no query results to export")
 }
 
 func Dispatch(msg tea.Msg) tea.Cmd {

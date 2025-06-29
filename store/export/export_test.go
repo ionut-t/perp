@@ -52,7 +52,7 @@ func TestStore_Load_SingleFile(t *testing.T) {
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
 	modTime := time.Now().Add(-time.Hour)
-	writeTestFile(t, storage, "foo.txt", "hello", modTime)
+	writeTestFile(t, storage, "foo.json", "hello", modTime)
 	s := New(storage, "vim").(*store)
 	records, err := s.Load()
 	if err != nil {
@@ -62,14 +62,14 @@ func TestStore_Load_SingleFile(t *testing.T) {
 		t.Fatalf("expected 1 record, got %d", len(records))
 	}
 	rec := records[0]
-	if rec.Name != "foo" || rec.Content != "hello" || rec.Extension != ".txt" {
+	if rec.Name != "foo.json" || rec.Content != "hello" {
 		t.Errorf("unexpected record: %+v", rec)
 	}
-	if s.currentRecordName != "foo" {
-		t.Errorf("expected currentRecordName to be 'foo', got '%s'", s.currentRecordName)
+	if s.currentRecordName != "foo.json" {
+		t.Errorf("expected currentRecordName to be 'foo.json', got '%s'", s.currentRecordName)
 	}
-	if got, ok := s.recordsMap["foo"]; !ok || got.Name != "foo" {
-		t.Errorf("expected recordsMap to contain 'foo'")
+	if got, ok := s.recordsMap["foo.json"]; !ok || got.Name != "foo.json" {
+		t.Errorf("expected recordsMap to contain 'foo.json'")
 	}
 }
 
@@ -80,8 +80,8 @@ func TestStore_Load_MultipleFiles_SetsCurrentRecordName(t *testing.T) {
 	defer cleanup()
 	modTime1 := time.Now().Add(-2 * time.Hour)
 	modTime2 := time.Now().Add(-1 * time.Hour)
-	writeTestFile(t, storage, "a.txt", "A", modTime1)
-	writeTestFile(t, storage, "b.txt", "B", modTime2)
+	writeTestFile(t, storage, "a.json", "A", modTime1)
+	writeTestFile(t, storage, "b.json", "B", modTime2)
 	s := New(storage, "vim").(*store)
 	records, err := s.Load()
 	if err != nil {
@@ -91,14 +91,14 @@ func TestStore_Load_MultipleFiles_SetsCurrentRecordName(t *testing.T) {
 		t.Fatalf("expected 2 records, got %d", len(records))
 	}
 	// Should be "b" as it has more recent modTime and records are sorted by UpdatedAt desc
-	if s.currentRecordName != "b" {
-		t.Errorf("expected currentRecordName to be 'b' (most recent), got '%s'", s.currentRecordName)
+	if s.currentRecordName != "b.json" {
+		t.Errorf("expected currentRecordName to be 'b.json' (most recent), got '%s'", s.currentRecordName)
 	}
-	if _, ok := s.recordsMap["a"]; !ok {
-		t.Errorf("expected recordsMap to contain 'a'")
+	if _, ok := s.recordsMap["a.json"]; !ok {
+		t.Errorf("expected recordsMap to contain 'a.json'")
 	}
-	if _, ok := s.recordsMap["b"]; !ok {
-		t.Errorf("expected recordsMap to contain 'b'")
+	if _, ok := s.recordsMap["b.json"]; !ok {
+		t.Errorf("expected recordsMap to contain 'b.json'")
 	}
 }
 
@@ -107,8 +107,8 @@ func TestStore_Load_ExistingCurrentRecordName(t *testing.T) {
 
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
-	writeTestFile(t, storage, "foo.txt", "hello", time.Now())
-	writeTestFile(t, storage, "bar.txt", "world", time.Now().Add(time.Hour))
+	writeTestFile(t, storage, "foo.json", "hello", time.Now())
+	writeTestFile(t, storage, "bar.json", "world", time.Now().Add(time.Hour))
 	s := New(storage, "vim").(*store)
 	s.currentRecordName = "foo"
 	_, err := s.Load()
@@ -127,15 +127,14 @@ func TestStore_Update_CreatesFile(t *testing.T) {
 	defer cleanup()
 	s := New(storage, "vim").(*store)
 	rec := Record{
-		Name:      "testfile",
-		Content:   "test content",
-		Extension: ".txt",
+		Name:    "testfile.json",
+		Content: "test content",
 	}
 	err := s.Update(rec)
 	if err != nil {
 		t.Fatalf("Update returned error: %v", err)
 	}
-	path := filepath.Join(storage, "testfile.txt")
+	path := filepath.Join(storage, "testfile.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("expected file to exist, got error: %v", err)
@@ -152,9 +151,8 @@ func TestStore_Update_OverwritesFile(t *testing.T) {
 	defer cleanup()
 	s := New(storage, "vim").(*store)
 	rec := Record{
-		Name:      "testfile",
-		Content:   "first content",
-		Extension: ".txt",
+		Name:    "testfile.json",
+		Content: "first content",
 	}
 	err := s.Update(rec)
 	if err != nil {
@@ -165,7 +163,7 @@ func TestStore_Update_OverwritesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update returned error on overwrite: %v", err)
 	}
-	path := filepath.Join(storage, "testfile.txt")
+	path := filepath.Join(storage, "testfile.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("expected file to exist, got error: %v", err)
@@ -183,9 +181,8 @@ func TestStore_Update_ErrorOnInvalidPath(t *testing.T) {
 	s := New(storage, "vim").(*store)
 	// Use a name with a path separator to cause an error
 	rec := Record{
-		Name:      "invalid/name",
-		Content:   "content",
-		Extension: ".txt",
+		Name:    "invalid/name",
+		Content: "content",
 	}
 	err := s.Update(rec)
 	if err == nil {
@@ -199,7 +196,7 @@ func TestStore_Delete_RemovesFile(t *testing.T) {
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
 	modTime := time.Now()
-	fileName := "todelete.txt"
+	fileName := "todelete.json"
 	writeTestFile(t, storage, fileName, "delete me", modTime)
 	s := New(storage, "vim").(*store)
 
@@ -208,8 +205,7 @@ func TestStore_Delete_RemovesFile(t *testing.T) {
 		t.Fatalf("unexpected error loading records: %v", err)
 	}
 	rec := Record{
-		Name:      "todelete",
-		Extension: ".txt",
+		Name: "todelete",
 	}
 	err = s.Delete(rec)
 	if err != nil {
@@ -228,8 +224,7 @@ func TestStore_Delete_NonExistentFile(t *testing.T) {
 	defer cleanup()
 	s := New(storage, "vim").(*store)
 	rec := Record{
-		Name:      "doesnotexist",
-		Extension: ".txt",
+		Name: "doesnotexist",
 	}
 	err := s.Delete(rec)
 	if err == nil {
@@ -244,8 +239,7 @@ func TestStore_Delete_InvalidFileName(t *testing.T) {
 	defer cleanup()
 	s := New(storage, "vim").(*store)
 	rec := Record{
-		Name:      "invalid/name",
-		Extension: ".txt",
+		Name: "invalid/name",
 	}
 	err := s.Delete(rec)
 	if err == nil {
@@ -259,7 +253,7 @@ func TestStore_Rename_ChangesFileNameAndUpdatesRecord(t *testing.T) {
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
 	modTime := time.Now()
-	oldName := "oldname.txt"
+	oldName := "oldname.json"
 	oldContent := "old content"
 	writeTestFile(t, storage, oldName, oldContent, modTime)
 
@@ -274,7 +268,7 @@ func TestStore_Rename_ChangesFileNameAndUpdatesRecord(t *testing.T) {
 	rec := &records[0]
 	origPath := rec.Path
 
-	newName := "newname"
+	newName := "newname.json"
 	err = s.Rename(rec, newName)
 	if err != nil {
 		t.Fatalf("Rename returned error: %v", err)
@@ -286,7 +280,7 @@ func TestStore_Rename_ChangesFileNameAndUpdatesRecord(t *testing.T) {
 	}
 
 	// New file should exist
-	newPath := filepath.Join(storage, newName+".txt")
+	newPath := filepath.Join(storage, newName)
 	data, err := os.ReadFile(newPath)
 	if err != nil {
 		t.Fatalf("expected new file to exist, got error: %v", err)
@@ -317,8 +311,8 @@ func TestStore_Rename_CaseInsensitiveConflict(t *testing.T) {
 	defer cleanup()
 
 	// Create two files
-	writeTestFile(t, storage, "data.txt", "lowercase", time.Now())
-	writeTestFile(t, storage, "other.txt", "other content", time.Now())
+	writeTestFile(t, storage, "data.json", "lowercase", time.Now())
+	writeTestFile(t, storage, "other.json", "other content", time.Now())
 
 	s := New(storage, "vim").(*store)
 	records, err := s.Load()
@@ -329,14 +323,14 @@ func TestStore_Rename_CaseInsensitiveConflict(t *testing.T) {
 	// Find the "other" record
 	var otherRec *Record
 	for i := range records {
-		if records[i].Name == "other" {
+		if records[i].Name == "other.json" {
 			otherRec = &records[i]
 			break
 		}
 	}
 
 	if otherRec == nil {
-		t.Fatal("could not find 'other' record")
+		t.Fatal("could not find 'other.json' record")
 	}
 
 	// Try to rename "other" to "DATA" (uppercase)
@@ -356,8 +350,8 @@ func TestStore_Rename_GeneratesUniqueName(t *testing.T) {
 
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
-	writeTestFile(t, storage, "foo.txt", "foo", time.Now())
-	writeTestFile(t, storage, "bar.txt", "bar", time.Now())
+	writeTestFile(t, storage, "foo.json", "foo", time.Now())
+	writeTestFile(t, storage, "bar.json", "bar", time.Now())
 
 	s := New(storage, "vim").(*store)
 	records, err := s.Load()
@@ -367,19 +361,19 @@ func TestStore_Rename_GeneratesUniqueName(t *testing.T) {
 
 	var barRec *Record
 	for i := range records {
-		if records[i].Name == "bar" {
+		if records[i].Name == "bar.json" {
 			barRec = &records[i]
 			break
 		}
 	}
 
 	if barRec == nil {
-		t.Fatal("could not find 'bar' record")
+		t.Fatal("could not find 'bar.json' record")
 	}
 
 	// The current generateUniqueName implementation has a bug where it doesn't
 	// properly check all existing names. This test documents the current behavior.
-	err = s.Rename(barRec, "foo")
+	err = s.Rename(barRec, "foo.json")
 	if err != nil {
 		t.Fatalf("Rename returned error: %v", err)
 	}
@@ -394,7 +388,7 @@ func TestStore_Rename_UpdatesCurrentRecordName(t *testing.T) {
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
 
-	writeTestFile(t, storage, "current.txt", "content", time.Now())
+	writeTestFile(t, storage, "current.json", "content", time.Now())
 
 	s := New(storage, "vim").(*store)
 	records, err := s.Load()
@@ -402,19 +396,18 @@ func TestStore_Rename_UpdatesCurrentRecordName(t *testing.T) {
 		t.Fatalf("unexpected error loading records: %v", err)
 	}
 
-	// current.txt should be the current record
-	if s.currentRecordName != "current" {
+	if s.currentRecordName != "current.json" {
 		t.Fatalf("expected currentRecordName to be 'current', got '%s'", s.currentRecordName)
 	}
 
 	rec := &records[0]
-	err = s.Rename(rec, "renamed")
+	err = s.Rename(rec, "renamed.json")
 	if err != nil {
 		t.Fatalf("Rename returned error: %v", err)
 	}
 
-	if s.currentRecordName != "renamed" {
-		t.Errorf("expected currentRecordName to be updated to 'renamed', got '%s'", s.currentRecordName)
+	if s.currentRecordName != "renamed.json" {
+		t.Errorf("expected currentRecordName to be updated to 'renamed.json', got '%s'", s.currentRecordName)
 	}
 }
 
@@ -425,9 +418,9 @@ func TestStore_Rename_ErrorOnInvalidOldPath(t *testing.T) {
 	defer cleanup()
 	s := New(storage, "vim").(*store)
 	rec := Record{
-		Name:      "doesnotexist",
-		Extension: ".txt",
-		Path:      filepath.Join(storage, "doesnotexist.txt"),
+		Name: "doesnotexist",
+
+		Path: filepath.Join(storage, "doesnotexist.json"),
 	}
 	err := s.Rename(&rec, "newname")
 	if err == nil {
@@ -440,7 +433,7 @@ func TestStore_Rename_ErrorOnInvalidNewName(t *testing.T) {
 
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
-	oldPath := writeTestFile(t, storage, "foo.txt", "foo", time.Now())
+	oldPath := writeTestFile(t, storage, "foo.json", "foo", time.Now())
 	s := New(storage, "vim").(*store)
 	records, err := s.Load()
 	if err != nil {
@@ -464,7 +457,7 @@ func TestStore_GetCurrentRecord(t *testing.T) {
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
 
-	writeTestFile(t, storage, "test.txt", "content", time.Now())
+	writeTestFile(t, storage, "test.json", "content", time.Now())
 
 	s := New(storage, "vim").(*store)
 	_, err := s.Load()
@@ -473,8 +466,8 @@ func TestStore_GetCurrentRecord(t *testing.T) {
 	}
 
 	current := s.GetCurrentRecord()
-	if current.Name != "test" {
-		t.Errorf("expected current record name to be 'test', got '%s'", current.Name)
+	if current.Name != "test.json" {
+		t.Errorf("expected current record name to be 'test.json', got '%s'", current.Name)
 	}
 }
 
@@ -484,8 +477,8 @@ func TestStore_SetCurrentRecordName(t *testing.T) {
 	storage, cleanup := setupTestDir(t)
 	defer cleanup()
 
-	writeTestFile(t, storage, "a.txt", "A", time.Now())
-	writeTestFile(t, storage, "b.txt", "B", time.Now().Add(time.Hour))
+	writeTestFile(t, storage, "a.json", "A", time.Now())
+	writeTestFile(t, storage, "b.json", "B", time.Now().Add(time.Hour))
 
 	s := New(storage, "vim").(*store)
 	_, err := s.Load()
@@ -493,9 +486,9 @@ func TestStore_SetCurrentRecordName(t *testing.T) {
 		t.Fatalf("unexpected error loading records: %v", err)
 	}
 
-	s.SetCurrentRecordName("a")
-	if s.currentRecordName != "a" {
-		t.Errorf("expected currentRecordName to be 'a', got '%s'", s.currentRecordName)
+	s.SetCurrentRecordName("a.json")
+	if s.currentRecordName != "a.json" {
+		t.Errorf("expected currentRecordName to be 'a.json', got '%s'", s.currentRecordName)
 	}
 
 	// Setting non-existent name should clear current
@@ -510,32 +503,4 @@ func TestStore_Editor(t *testing.T) {
 	if s.Editor() != "emacs" {
 		t.Errorf("expected editor to be 'emacs', got '%s'", s.Editor())
 	}
-}
-
-func TestStore_GenerateUniqueName_Bug(t *testing.T) {
-	t.Parallel()
-
-	storage, cleanup := setupTestDir(t)
-	defer cleanup()
-
-	// This test documents the bug in generateUniqueName
-	s := New(storage, "vim").(*store)
-
-	// Add some records to the store
-	s.records = []Record{
-		{Name: "test"},
-		{Name: "TEST"},
-	}
-
-	// The current implementation has a bug: it checks if strings.EqualFold matches,
-	// but then continues the loop with the same name instead of checking the
-	// incremented name against all records
-	unique := s.generateUniqueName("test")
-
-	// Due to the bug, this might return "test-1" or might not properly handle
-	// case-insensitive conflicts
-	t.Logf("Generated name: %s", unique)
-
-	// The bug is that the counter increments but the loop continues,
-	// so it doesn't properly check the new name against all existing names
 }

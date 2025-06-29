@@ -932,20 +932,31 @@ func (m model) sendQueryCmd() tea.Cmd {
 }
 
 func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
+	if filepath.Ext(msg.Filename) != ".json" && filepath.Ext(msg.Filename) != ".csv" {
+		return m, m.errorNotification(
+			fmt.Errorf("invalid file extension: %s. Supported extensions are .json and .csv", msg.Filename),
+		)
+	}
+
+	if filepath.Ext(msg.Filename) == ".csv" {
+		return m.handleExportAsCsv(msg)
+	}
+
+	return m.handleExportAsJson(msg)
+}
+
+func (m model) handleExportAsJson(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 	queryResults := m.content.GetQueryResults()
 
-	data, err := utils.HandleDataExport(queryResults, msg.Rows, msg.All)
-
+	data, err := export.PrepareJSON(queryResults, msg.Rows, msg.All)
 	if err != nil {
 		m.focused = focusedEditor
 		m.editor.Focus()
-
 		return m, m.errorNotification(err)
 	}
 
 	storage := filepath.Join(m.config.Storage(), m.server.Name)
 	fileName, err := export.AsJson(storage, data, msg.Filename)
-
 	if err != nil {
 		return m, m.errorNotification(err)
 	}
@@ -955,7 +966,32 @@ func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 	m.command.Reset()
 
 	return m, m.successNotification(
-		fmt.Sprintf("Data exported successfully to %s.json", fileName),
+		fmt.Sprintf("Data exported successfully as JSON to %s", fileName),
+	)
+}
+
+func (m model) handleExportAsCsv(msg command.ExportMsg) (tea.Model, tea.Cmd) {
+	queryResults := m.content.GetQueryResults()
+
+	data, err := export.PrepareCSV(queryResults, msg.Rows, msg.All)
+	if err != nil {
+		m.focused = focusedEditor
+		m.editor.Focus()
+		return m, m.errorNotification(err)
+	}
+
+	storage := filepath.Join(m.config.Storage(), m.server.Name)
+	fileName, err := export.AsCsv(storage, data, msg.Filename)
+	if err != nil {
+		return m, m.errorNotification(err)
+	}
+
+	m.focused = focusedEditor
+	m.editor.Focus()
+	m.command.Reset()
+
+	return m, m.successNotification(
+		fmt.Sprintf("Data exported successfully as CSV to %s", fileName),
 	)
 }
 

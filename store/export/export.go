@@ -1,6 +1,7 @@
 package export
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,7 +14,6 @@ type Record struct {
 	Name      string
 	Content   string
 	UpdatedAt time.Time
-	Extension string
 	Path      string
 }
 
@@ -60,7 +60,7 @@ func (s *store) Load() ([]Record, error) {
 }
 
 func (s *store) Update(record Record) error {
-	path := filepath.Join(s.storage, record.Name+record.Extension)
+	path := filepath.Join(s.storage, record.Name)
 
 	if err := os.WriteFile(path, []byte(record.Content), 0644); err != nil {
 		return err
@@ -70,7 +70,7 @@ func (s *store) Update(record Record) error {
 }
 
 func (s *store) Delete(record Record) error {
-	path := filepath.Join(s.storage, record.Name+record.Extension)
+	path := filepath.Join(s.storage, record.Name)
 
 	if len(s.records) == 1 {
 		if err := os.RemoveAll(filepath.Dir(path)); err != nil {
@@ -100,10 +100,21 @@ func (s *store) SetCurrentRecordName(name string) {
 }
 
 func (s *store) Rename(record *Record, newName string) error {
-	uniqueName := s.generateUniqueName(newName)
+	ext := filepath.Ext(newName)
+
+	if ext == "" {
+		ext = filepath.Ext(record.Name)
+		newName += ext
+	}
+
+	if ext != filepath.Ext(record.Name) {
+		return errors.New("cannot change file extension when renaming record")
+	}
+
+	uniqueName := s.generateUniqueName(newName, record.Name)
 
 	oldPath := record.Path
-	newPath := filepath.Join(s.storage, uniqueName+record.Extension)
+	newPath := filepath.Join(s.storage, uniqueName)
 
 	if err := os.Rename(oldPath, newPath); err != nil {
 		return err
@@ -136,19 +147,29 @@ func (s *store) Editor() string {
 	return s.editor
 }
 
-func (s store) generateUniqueName(name string) string {
+func (s store) generateUniqueName(name string, oldName string) string {
+	ext := filepath.Ext(name)
+
+	var records []string
+	for _, r := range s.records {
+		if filepath.Ext(r.Name) == ext && r.Name != oldName {
+			records = append(records, strings.TrimSuffix(r.Name, ext))
+		}
+	}
+
+	name = strings.TrimSuffix(name, ext)
 	originalName := name
 	counter := 1
 
-	for _, record := range s.records {
-		if strings.EqualFold(record.Name, name) {
+	for _, record := range records {
+		if strings.EqualFold(record, name) {
 			name = originalName + "-" + strconv.Itoa(counter)
 			counter++
 			continue
 		}
 	}
 
-	return name
+	return name + ext
 }
 
 func loadRecordFromFile(path string) (Record, error) {
@@ -160,8 +181,6 @@ func loadRecordFromFile(path string) (Record, error) {
 
 	content := strings.TrimSuffix(string(data), "\n")
 
-	extension := filepath.Ext(path)
-
 	fileInfo, err := os.Stat(path)
 
 	if err != nil {
@@ -169,9 +188,8 @@ func loadRecordFromFile(path string) (Record, error) {
 	}
 
 	return Record{
-		Name:      strings.TrimSuffix(filepath.Base(path), extension),
+		Name:      filepath.Base(path),
 		Content:   content,
-		Extension: extension,
 		UpdatedAt: fileInfo.ModTime(),
 		Path:      path,
 	}, nil

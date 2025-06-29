@@ -19,7 +19,7 @@
   - View LLM logs.
 - **PSQL commands**: run psql commands (e.g. `\d`, `\dt`, `\l`, etc.).
 - **Export data**:
-  - Export all data returned by the query as JSON to a file.
+  - Export all data returned by the query as JSON/CSV to a file.
   - Export specific rows to a file.
   - Manage exported data in the export view (accessible with `g`):
     - View a list of exported files.
@@ -53,16 +53,16 @@ Or install the binary from the [Releases](https://github.com/ionut-t/perp/releas
 
 ## Key Bindings
 
-| Key                 | Action                                    |
-| ------------------- | ----------------------------------------- |
-| `i`                 | Enter insert mode                         |
-| `esc`               | Return to normal mode                     |
-| `alt+enter/ctrl+s`  | Send query                                |
-| `y`                 | Yank/copy selected cell                   |
-| `Y`                 | Yank/copy selected row as JSON            |
-| `p`                 | Paste in the editor                       |
-| `export 1,2,3 data` | Export selected rows as JSON to data.json |
-| `export * data`     | Export all results as JSON to data.json   |
+| Key                     | Action                         |
+| ----------------------- | ------------------------------ |
+| `i`                     | Enter insert mode              |
+| `esc`                   | Return to normal mode          |
+| `alt+enter/ctrl+s`      | Send query                     |
+| `y`                     | Yank/copy selected cell        |
+| `Y`                     | Yank/copy selected row as JSON |
+| `p`                     | Paste in the editor            |
+| `export 1,2,3 data.csv` | Export selected rows as CSV    |
+| `export * data.json`    | Export all rows as JSON        |
 
 A complete list of key bindings and commands is accessible through the help menu.
 

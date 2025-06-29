@@ -354,7 +354,7 @@ func TestModel_View_ErrorState(t *testing.T) {
 
 	view := m.View()
 
-	if !strings.Contains(view, "Error loading export records: test error") {
+	if !strings.Contains(view, "test error") {
 		t.Errorf("expected view to contain error message, got %q", view)
 	}
 }
@@ -553,7 +553,7 @@ func TestModel_Update_EditorRenameMsg(t *testing.T) {
 	}
 	m := New(store, server, 100, 40)
 
-	newName := "newname"
+	newName := "newname.json"
 
 	msg := editor.RenameMsg{FileName: newName}
 
