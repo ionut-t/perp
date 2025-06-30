@@ -17,12 +17,13 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		appUI()
 	},
-	Version: versionTemplate(),
+	Version: version,
 }
 
 func Execute() {
 	rootCmd.AddCommand(configCmd())
 	rootCmd.AddCommand(llmInstructionsCmd())
+
 	err := rootCmd.Execute()
 
 	if err != nil {
@@ -31,6 +32,8 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.SetVersionTemplate(versionTemplate())
+
 	cobra.OnInitialize(initConfig)
 
 	if err := config.InitializeLLMInstructions(); err != nil {
