@@ -9,9 +9,9 @@
 - **Run queries**: run queries and view results.
 - **LLM integration**:
   - Use `/ask` to translate natural language to SQL.
-  - Use `/explain` to explain a SQL query.
-  - Use `/optimise` to optimise a SQL query.
-  - Use `/fix` to fix a SQL query.
+  - Use `-- EXPLAIN` (case-insensitive) to explain a SQL query.
+  - Use `-- OPTIMISE` (case-insensitive) to optimise a SQL query.
+  - Use `-- FIX` (case-insensitive) to fix a SQL query.
   - Use `/add` to add tables to the LLM context.
   - Use `/remove` to remove tables from the LLM context.
   - Enable/disable database schema in LLM queries.

@@ -3,6 +3,7 @@ package export_data
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -84,6 +85,7 @@ func New(store export.Store, server server.Server, width, height int) Model {
 	editorModel := editor.New(80, 20)
 	editorModel.SetCursorBlinkMode(true)
 	editorModel.WithTheme(styles.EditorTheme())
+	editorModel.SetLanguage("json", styles.HighlighterTheme())
 
 	if len(records) > 0 {
 		editorModel.SetContent(records[0].Content)
@@ -322,6 +324,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		current := m.store.GetCurrentRecord()
 		m.editor.SetContent(current.Content)
+
+		lang := "json"
+		if filepath.Ext(current.Path) == ".json" {
+			lang = "json"
+		} else if filepath.Ext(current.Path) == ".csv" {
+			lang = "csv"
+		}
+
+		m.editor.SetLanguage(lang, styles.HighlighterTheme())
+		cmds = append(cmds, cmd)
+		_, cmd = m.editor.Update(nil)
 		cmds = append(cmds, cmd)
 	}
 

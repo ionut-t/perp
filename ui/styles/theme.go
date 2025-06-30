@@ -59,3 +59,11 @@ func ThemeCatppuccin() *huh.Theme {
 
 	return t
 }
+
+func HighlighterTheme() string {
+	if lipgloss.HasDarkBackground() {
+		return "catppuccin-mocha"
+	}
+
+	return "catppuccin-latte"
+}

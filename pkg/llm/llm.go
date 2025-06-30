@@ -19,9 +19,6 @@ var LLMKeywords = [...]string{
 	"/ask",
 	"/add",
 	"/remove",
-	"/explain",
-	"/optimise",
-	"/fix",
 }
 
 type Response struct {
@@ -76,4 +73,24 @@ func ExtractQuery(text string) string {
 	query = strings.TrimSpace(query)
 
 	return strings.TrimSpace(query)
+}
+
+func IsAskCommand(text string) bool {
+	text = strings.TrimSpace(strings.ToLower(text))
+	return strings.HasPrefix(text, "/ask")
+}
+
+func IsExplainCommand(text string) bool {
+	text = strings.TrimSpace(strings.ToLower(text))
+	return strings.Contains(text, "-- explain") || strings.Contains(text, "--explain")
+}
+
+func IsOptimiseCommand(text string) bool {
+	text = strings.TrimSpace(strings.ToLower(text))
+	return strings.Contains(text, "-- optimise") || strings.Contains(text, "--optimise")
+}
+
+func IsFixCommand(text string) bool {
+	text = strings.TrimSpace(strings.ToLower(text))
+	return strings.Contains(text, "-- fix") || strings.Contains(text, "--fix")
 }

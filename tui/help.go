@@ -37,7 +37,7 @@ var changeFocused = key.NewBinding(
 
 var executeQuery = key.NewBinding(
 	key.WithKeys("alt+enter", "ctrl+s"),
-	key.WithHelp("alt+enter/ctrl+s", "execute query"),
+	key.WithHelp("alt+enter/ctrl+s", "execute query (no matter the editor mode)"),
 )
 
 var accessExportedData = key.NewBinding(
@@ -119,28 +119,30 @@ func (m model) renderLLMHelp() string {
 			key.WithHelp("/ask", `send a query to the LLM
 						 Example:
 						 /ask join all users with their orders and return the user name, email and order total
-						 `,
-			),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("/explain", `explains the provided query
-						 Example:
-						 /explain SELECT * FROM users
 						 `),
 		),
 		key.NewBinding(
 			key.WithKeys(""),
-			key.WithHelp("/optimise", `optimises the provided query
+			key.WithHelp("-- EXPLAIN (case-insensitive)", `explains the provided query
 						 Example:
-						 /optimise SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE created_at > '2024-01-01')
+						 -- EXPLAIN 
+						 SELECT * FROM users
 						 `),
 		),
 		key.NewBinding(
 			key.WithKeys(""),
-			key.WithHelp("/fix", `fixes the provided query
+			key.WithHelp("-- OPTIMISE (case-insensitive)", `optimises the provided query
 						 Example:
-						 /fix SELECT name, COUNT(*) FROM users JOIN orders ON users.id = orders.user_id
+						 -- OPTIMISE 
+						 SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE created_at > '2024-01-01')
+						 `),
+		),
+		key.NewBinding(
+			key.WithKeys(""),
+			key.WithHelp("-- FIX (case-insensitive)", `fixes the provided query
+						 Example:
+						 -- FIX 
+						 SELECT name, COUNT(*) FROM users JOIN orders ON users.id = orders.user_id
 						 `),
 		),
 		key.NewBinding(
@@ -226,7 +228,7 @@ func (m model) renderEditorHelp() string {
 			styles.Wrap(m.width-1, "These shortcuts are available when the editor is focused."),
 		),
 		styles.Subtext1.Render(
-			styles.Wrap(m.width-1, "If query ends with a semicolon, it will be executed automatically when enter is pressed."),
+			styles.Wrap(m.width-1, "If the editor is in NORMAL mode, the query will be executed automatically when enter is pressed."),
 		),
 		styles.Wrap(m.width-1, styles.Subtext1.Render(
 			"If query starts with ",

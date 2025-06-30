@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"maps"
 	"path/filepath"
 	"strings"
 	"time"
@@ -129,8 +128,6 @@ func New(config config.Config) model {
 		sqlKeywordsMap[strings.ToLower(keyword)] = highlighted
 	}
 
-	editor.SetHighlightedWords(sqlKeywordsMap)
-
 	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
 	for _, keyword := range llm.LLMKeywords {
 		llmKeywordsMap[keyword] = styles.Accent.Bold(true)
@@ -147,6 +144,7 @@ func New(config config.Config) model {
 	editor.Focus()
 	editor.DisableCommandMode(true)
 	editor.WithTheme(styles.EditorTheme())
+	editor.SetLanguage("postgres", styles.HighlighterTheme())
 
 	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
@@ -327,29 +325,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, keymap.Submit):
-			if m.editor.IsInsertMode() || m.editor.IsNormalMode() {
+			if m.editor.IsNormalMode() {
 				content := m.editor.GetCurrentContent()
 
 				if content == "" {
 					break
 				}
 
-				trimmedContent := strings.TrimSpace(content)
-				isLLMCommand := false
-				for _, prefix := range llm.LLMKeywords {
-					if strings.HasPrefix(trimmedContent, prefix) {
-						isLLMCommand = true
-						break
-					}
-				}
-
-				if !isLLMCommand && strings.HasSuffix(content, ";") {
-					if !m.loading {
-						m.loading = true
-						m.resetHistory()
-						m.addToHistory()
-						return m, m.sendQueryCmd()
-					}
+				if !m.loading {
+					m.loading = true
+					m.resetHistory()
+					m.addToHistory()
+					return m, m.sendQueryCmd()
 				}
 			}
 
@@ -558,9 +545,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.editor.SetContent("")
 			m.editor.Blur()
-			m.editor.SetNormalMode()
 			m.focused = focusedContent
 		}
+
+		m.editor.SetNormalMode()
 
 		ed, cmd := m.editor.Update(nil)
 		m.editor = ed.(editor.Model)
@@ -593,7 +581,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case content.LLMResponseSelectedMsg:
 		m.editor.SetContent(msg.Response)
 		m.editor.Focus()
-		m.editor.SetInsertMode()
 		_ = m.editor.SetCursorPositionEnd()
 		m.view = viewMain
 		m.focused = focusedEditor
@@ -699,9 +686,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmds []tea.Cmd
 
-	m.editor.SetHighlightedWords(m.setHighlightedKeywords())
-
 	if m.view == viewMain && m.focused == focusedEditor {
+		m.editor.SetHighlightedWords(m.setHighlightedKeywords())
+		lang := "postgres"
+		if strings.HasPrefix(m.editor.GetCurrentContent(), "/") {
+			lang = "markdown"
+		}
+
+		m.editor.SetLanguage(lang, styles.HighlighterTheme())
+
 		editorModel, cmd := m.editor.Update(msg)
 		m.editor = editorModel.(editor.Model)
 		cmds = append(cmds, cmd)
@@ -821,17 +814,6 @@ func (m model) ask(prompt string, cmd llm.Command) tea.Cmd {
 }
 
 func (m model) setHighlightedKeywords() map[string]lipgloss.Style {
-	prefixes := []string{"/optimise", "/fix"}
-
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(m.editor.GetCurrentContent(), prefix) {
-			mp := m.sqlKeywords
-			maps.Copy(mp, m.llmKeywords)
-
-			return mp
-		}
-	}
-
 	if strings.HasPrefix(m.editor.GetCurrentContent(), "/") {
 		return m.llmKeywords
 	}
@@ -840,7 +822,7 @@ func (m model) setHighlightedKeywords() map[string]lipgloss.Style {
 		return m.psqlCommands
 	}
 
-	return m.sqlKeywords
+	return nil
 }
 
 func (m model) sendQueryCmd() tea.Cmd {
@@ -852,32 +834,27 @@ func (m model) sendQueryCmd() tea.Cmd {
 
 	prompt = strings.TrimSpace(prompt)
 
-	if strings.HasPrefix(prompt, "/ask") {
+	if llm.IsAskCommand(prompt) {
 		m.focused = focusedContent
-
 		return m.ask(prompt, llm.Ask)
 	}
 
-	if strings.HasPrefix(prompt, "/explain") {
+	if llm.IsExplainCommand(prompt) {
 		m.focused = focusedContent
-
 		return m.ask(prompt, llm.Explain)
 	}
 
-	if strings.HasPrefix(prompt, "/optimise") {
+	if llm.IsOptimiseCommand(prompt) {
 		m.focused = focusedContent
-
 		return m.ask(prompt, llm.Optimise)
 	}
 
-	if strings.HasPrefix(prompt, "/fix") {
+	if llm.IsFixCommand(prompt) {
 		m.focused = focusedContent
-
 		error := m.content.GetError()
 		if error != nil {
 			prompt += "\nError: " + error.Error()
 		}
-
 		return m.ask(prompt, llm.Fix)
 	}
 
