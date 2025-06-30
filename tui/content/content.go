@@ -265,7 +265,7 @@ func (m *Model) SetLLMLogs(response llm.Response, query string) {
 	if response.Command != llm.Ask {
 		theme := "light"
 		if lipgloss.HasDarkBackground() {
-			theme = "dark"
+			theme = "tokyo-night"
 		}
 
 		if out, err := glamour.Render(response.Response, theme); err != nil {
