@@ -398,7 +398,14 @@ func (m *Model) buildDataTable(headers []string, results []map[string]any) ([][]
 		rowData := make([]string, len(headers))
 		for j, header := range headers {
 			if val, ok := row[header]; ok {
-				value := fmt.Sprintf("%v", val)
+
+				var value string
+				if val == nil {
+					value = "NULL"
+				} else {
+					value = fmt.Sprintf("%v", val)
+				}
+
 				rowData[j] = strings.ReplaceAll(value, "\n", " ")
 			} else {
 				if header == "#" {
