@@ -456,9 +456,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			message += fmt.Sprintf(". Execution time: %s", utils.Duration(msg.ExecutionTime))
 		}
 
+		var schemaCmd tea.Cmd
+		if msg.Type == db.QueryCreate ||
+			msg.Type == db.QueryDrop ||
+			msg.Type == db.QueryAlter {
+			schemaCmd = m.generateSchema()
+		}
+
 		return m, tea.Batch(
 			cmd,
 			m.successNotification(message),
+			schemaCmd,
 		)
 
 	case queryFailureMsg:

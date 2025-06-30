@@ -40,6 +40,9 @@ const (
 	QueryInsert
 	QueryUpdate
 	QueryDelete
+	QueryCreate
+	QueryDrop
+	QueryAlter
 	QueryUnknown
 )
 
@@ -138,6 +141,15 @@ func (d *database) Query(ctx context.Context, query string, args ...any) (QueryR
 		}
 	case strings.HasPrefix(q, "delete"):
 		result.queryType = QueryDelete
+
+	case strings.HasPrefix(q, "create table"):
+		result.queryType = QueryCreate
+
+	case strings.HasPrefix(q, "drop table"):
+		result.queryType = QueryDrop
+
+	case strings.HasPrefix(q, "alter table"):
+		result.queryType = QueryAlter
 	default:
 		result.queryType = QueryUnknown
 	}
