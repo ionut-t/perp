@@ -87,7 +87,10 @@ func IsExplainCommand(text string) bool {
 
 func IsOptimiseCommand(text string) bool {
 	text = strings.TrimSpace(strings.ToLower(text))
-	return strings.Contains(text, "-- optimise") || strings.Contains(text, "--optimise")
+	return strings.Contains(text, "-- optimise") ||
+		strings.Contains(text, "--optimise") ||
+		strings.Contains(text, "-- optimize") ||
+		strings.Contains(text, "--optimize")
 }
 
 func IsFixCommand(text string) bool {
