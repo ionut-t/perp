@@ -113,53 +113,38 @@ func (m model) renderUsefulHelp() string {
 }
 
 func (m model) renderLLMHelp() string {
-	bindings := []key.Binding{
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("/ask", `send a query to the LLM
-						 Example:
-						 /ask join all users with their orders and return the user name, email and order total
-						 `),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("-- EXPLAIN (case-insensitive)", `explains the provided query
-						 Example:
-						 -- EXPLAIN 
-						 SELECT * FROM users
-						 `),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("-- OPTIMISE (case-insensitive)", `optimises the provided query
-						 Example:
-						 -- OPTIMISE 
-						 SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE created_at > '2024-01-01')
-						 `),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("-- FIX (case-insensitive)", `fixes the provided query
-						 Example:
-						 -- FIX 
-						 SELECT name, COUNT(*) FROM users JOIN orders ON users.id = orders.user_id
-						 `),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("/add", `adds tables to the LLM instructions
-						 Example:
-						 /add users, orders
-						 `),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("/remove", `removes tables from the LLM instructions
-						 Example:
-						 /remove users, orders
-						 /remove * -> removes all tables from the LLM instructions
-						 `),
-		),
+	commands := []struct {
+		Command     string
+		Description string
+	}{
+		{"/ask", `sends a query to the LLM
+				 Example:
+				 /ask join all users with their orders and return the user name, email and order total
+				 `},
+		{"-- EXPLAIN", `explains the provided query
+				 Example:
+				 -- EXPLAIN	
+				 SELECT * FROM users;
+				 `},
+		{"-- OPTIMISE", `optimises the provided query
+				 Example:
+				 -- OPTIMISE
+				 SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE created_at > '2024-01-01');
+				 `},
+		{"-- FIX", `fixes the provided query
+				 Example:
+				 -- FIX
+				 SELECT name, COUNT(*) FROM users JOIN orders ON users.id = orders.user_id;
+				 `},
+		{"/add", `adds tables to the LLM instructions
+				 Example:
+				 /add users, orders
+				 `},
+		{"/remove", `removes tables from the LLM instructions
+				 Example:
+				 /remove users, orders
+				 /remove * -> removes all tables from the LLM instructions
+				 `},
 	}
 
 	title := styles.Text.Bold(true).Render("LLM Commands")
@@ -172,52 +157,27 @@ func (m model) renderLLMHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderHelpView(m.width, bindings),
+		help.RenderCmdHelp(m.width, commands),
 	)
 }
 
 func (m model) renderEditorHelp() string {
-	bindings := []key.Binding{
-		keymap.Insert,
-		key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "new line (insert mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "back to normal mode"),
-		),
-		key.NewBinding(
-			key.WithKeys("v"),
-			key.WithHelp("v", "visual mode (select text)"),
-		),
-		key.NewBinding(
-			key.WithKeys("V"),
-			key.WithHelp("V", "visual line mode (select text)"),
-		),
-		key.NewBinding(
-			key.WithKeys("p"),
-			key.WithHelp("p", "paste (normal mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("u"),
-			key.WithHelp("u", "undo (normal mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("U"),
-			key.WithHelp("U", "redo (normal mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("d"),
-			key.WithHelp("d", "delete selected text"),
-		),
-		key.NewBinding(
-			key.WithKeys("dd"),
-			key.WithHelp("dd/D", "delete row"),
-		),
-		previousHistory,
-		nextHistory,
-		executeQuery,
+	commands := []struct {
+		Command     string
+		Description string
+	}{
+		{"i", "insert mode"},
+		{"v", "visual mode (select text)"},
+		{"V", "visual line mode (select text)"},
+		{"y", "yank selected text (copy to clipboard)"},
+		{"p", "paste (normal mode)"},
+		{"u", "undo (normal mode)"},
+		{"U", "redo (normal mode)"},
+		{"d", "delete selected text"},
+		{"dd/D", "delete row"},
+		{"enter", "new line (insert mode) / execute query (normal mode)"},
+		{"esc", "back to normal mode"},
+		{"alt+enter/ctrl+s", "execute query (no matter the editor mode)"},
 	}
 
 	title := styles.Text.Bold(true).Render("Editor")
@@ -240,7 +200,7 @@ func (m model) renderEditorHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderHelpView(m.width, bindings),
+		help.RenderCmdHelp(m.width, commands),
 	)
 }
 
@@ -301,48 +261,38 @@ func (m model) renderTableHelp() string {
 }
 
 func (m model) renderCommandHelp() string {
-	bindings := []key.Binding{
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("export * <file>", `export all data returned by the query as JSON/CSV to a file
+	commands := []struct {
+		Command     string
+		Description string
+	}{
+		{"export * <file>", `export all data returned by the query as JSON/CSV to a file
 						 Example:
 						 export * data.json
 						 it exports to data.json
-						 if the file already exists, it will create a new file with unique name derived from the input name
-						 `,
-			),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("export <rows> <file>", `export specific rows to a file
+						 if the file already exists, it will create a new file with unique name derived from the	 input name
+						 `},
+		{"export <rows> <file>", `export specific rows to a file
 						 Example:
 						 export 1,2,3 data.json
 						 it exports rows 1,2,3 to data.json;
-						 if the file already exists, it will create a new file with unique name derived from the input name
-						 `,
-			),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("set-editor <editor>", `sets the external editor to use for editing configuration or exported data
-			`),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("llm-db-schema-enable", `enables the usage of database schema in LLM queries for the current server
-						 `),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("llm-db-schema-disable", `disables the usage of database schema in LLM queries for the current server
-						 `),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("llm-model <model>", `sets the LLM model to use for queries
+						 if the file already exists, it will create a new file with unique name derived from the	 input name
+						 `},
+		{"set-editor <editor>", `sets the external editor to use for editing configuration or exported data
+						 Example:
+						 set-editor vim
+						 `},
+		{"llm-db-schema-enable", `enables the usage of database schema in LLM queries for the current server
+						 Example:
+						 llm-db-schema-enable
+						 `},
+		{"llm-db-schema-disable", `disables the usage of database schema in LLM queries for the current server
+						 Example:
+						 llm-db-schema-disable
+						 `},
+		{"llm-model <model>", `sets the LLM model to use for queries
 						Example:
-						llm-model gemini-1.5-flash`),
-		),
+						llm-model gemini-1.5-flash
+						`},
 	}
 
 	title := styles.Text.Bold(true).Render("Command Palette")
@@ -362,6 +312,6 @@ func (m model) renderCommandHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderHelpView(m.width, bindings),
+		help.RenderCmdHelp(m.width, commands),
 	)
 }

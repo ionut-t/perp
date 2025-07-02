@@ -73,6 +73,11 @@ func New(storage string) Model {
 	return m
 }
 
+func (m *Model) SetSize(width, height int) {
+	m.width = width
+	m.height = height
+}
+
 func (m Model) Init() tea.Cmd {
 	return cursor.Blink
 }

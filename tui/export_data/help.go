@@ -19,7 +19,6 @@ func (m Model) renderHelp() string {
 		m.renderUsefulHelp(),
 		m.renderListHelp(),
 		m.renderEditorHelp(),
-		m.renderCommandHelp(),
 	)
 }
 
@@ -42,44 +41,24 @@ func (m Model) renderUsefulHelp() string {
 }
 
 func (m Model) renderEditorHelp() string {
-	bindings := []key.Binding{
-		keymap.Insert,
-		key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "new line (insert mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "back to normal mode"),
-		),
-		key.NewBinding(
-			key.WithKeys("v"),
-			key.WithHelp("v", "visual mode (select text)"),
-		),
-		key.NewBinding(
-			key.WithKeys("V"),
-			key.WithHelp("V", "visual line mode (select text)"),
-		),
-		key.NewBinding(
-			key.WithKeys("p"),
-			key.WithHelp("p", "paste (normal mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("u"),
-			key.WithHelp("u", "undo (normal mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("U"),
-			key.WithHelp("U", "redo (normal mode)"),
-		),
-		key.NewBinding(
-			key.WithKeys("d"),
-			key.WithHelp("d", "delete selected text"),
-		),
-		key.NewBinding(
-			key.WithKeys("dd"),
-			key.WithHelp("dd/D", "delete row"),
-		),
+	commands := []struct {
+		Command     string
+		Description string
+	}{
+		{"esc", "back to normal mode"},
+		{"i", "insert mode"},
+		{"v", "visual mode (select text)"},
+		{"V", "visual line mode (select text)"},
+		{"y", "yank selected text (copy to clipboard)"},
+		{"p", "paste (normal mode)"},
+		{"u", "undo (normal mode)"},
+		{"U", "redo (normal mode)"},
+		{"d", "delete selected text"},
+		{"dd/D", "delete row"},
+		{":w", "saves the current file"},
+		{":rename <file>", "renames the current file to <file>"},
+		{":delete", "deletes the current file"},
+		{"esc", "back to normal mode"},
 	}
 
 	title := styles.Text.Bold(true).Render("Editor")
@@ -92,7 +71,7 @@ func (m Model) renderEditorHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderHelpView(m.width, bindings),
+		help.RenderCmdHelp(m.width, commands),
 	)
 }
 
@@ -107,39 +86,6 @@ func (m Model) renderListHelp() string {
 
 	description := styles.Subtext1.Render(
 		"These shortcuts are available when the list is focused.",
-	)
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		description,
-		help.RenderHelpView(m.width, bindings),
-	)
-}
-
-func (m Model) renderCommandHelp() string {
-	bindings := []key.Binding{
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("rename <file>", "renames the current file to <file>"),
-		),
-		key.NewBinding(
-			key.WithKeys(""),
-			key.WithHelp("delete", "deletes the current file"),
-		),
-	}
-
-	title := styles.Text.Bold(true).Render("Command Mode")
-
-	description := lipgloss.JoinVertical(
-		lipgloss.Left,
-		styles.Subtext1.Render(
-			"These commands are available when the editor is focused.",
-		),
-		styles.Subtext1.Render(
-			"You can execute commands by pressing ",
-		)+styles.Accent.Render(":")+
-			styles.Subtext1.Render("."),
 	)
 
 	return lipgloss.JoinVertical(

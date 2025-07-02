@@ -304,6 +304,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.editor.IsNormalMode() {
 				m.serverSelection = servers.New(m.config.Storage())
 				_, cmd := m.serverSelection.Update(nil)
+				m.serverSelection.SetSize(m.width, m.height)
 
 				m.view = viewServers
 				m.error = nil
