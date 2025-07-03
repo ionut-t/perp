@@ -123,7 +123,9 @@ func (d *database) Query(ctx context.Context, query string, args ...any) (QueryR
 		endTime:   time.Now(),
 	}
 
-	q := strings.ToLower(strings.TrimSpace(query))
+	q := stripSQLComments(query)
+	q = strings.ToLower(strings.TrimSpace(q))
+
 	switch {
 	case strings.HasPrefix(q, "select"):
 		result.queryType = QuerySelect
