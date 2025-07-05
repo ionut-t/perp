@@ -487,17 +487,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			timingCmd = m.successNotification(fmt.Sprintf("Execution time: %s", utils.Duration(msg.result.ExecutionTime)))
 		}
 
-		queryResult := content.ParsedQueryResult{
-			Type:     db.QuerySelect,
-			Query:    msg.result.Message,
-			Columns:  msg.result.Columns,
-			PsqlRows: msg.result.Rows,
-		}
-
-		err := m.content.SetQueryResults(queryResult)
-		if err != nil {
-			return m, nil
-		}
+		m.content.SetPsqlResult(msg.result)
 
 		m.focused = focusedContent
 		m.editor.Blur()
