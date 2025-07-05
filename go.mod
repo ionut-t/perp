@@ -3,6 +3,7 @@ module github.com/ionut-t/perp
 go 1.24.0
 
 require (
+	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/catppuccin/go v0.3.0
 	github.com/charmbracelet/bubbles v0.21.0
@@ -25,6 +26,7 @@ require (
 	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.18.0 // indirect
+	github.com/alecthomas/repr v0.4.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.3.1 // indirect
@@ -44,6 +46,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ionut-t/goeditor/core v0.1.6 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

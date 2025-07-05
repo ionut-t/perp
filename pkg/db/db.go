@@ -7,7 +7,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/jackc/pgx/pgtype"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -157,59 +156,6 @@ func (d *database) Query(ctx context.Context, query string, args ...any) (QueryR
 	}
 
 	return result, nil
-}
-
-// ExtractResultsFromRows processes the pgx.Rows and returns a slice of maps and column names.
-func ExtractResultsFromRows(rows pgx.Rows) ([]map[string]any, []string, error) {
-	defer rows.Close()
-
-	fieldDescriptions := rows.FieldDescriptions()
-	columns := make([]string, len(fieldDescriptions))
-	for i, fd := range fieldDescriptions {
-		columns[i] = string(fd.Name)
-	}
-
-	var results []map[string]any
-	for rows.Next() {
-		scanTargets := make([]any, len(columns))
-
-		for i, fd := range fieldDescriptions {
-			switch fd.DataTypeOID {
-			case pgtype.UUIDOID:
-				var uuid pgtype.UUID
-				scanTargets[i] = &uuid
-			default:
-				scanTargets[i] = new(any)
-			}
-		}
-
-		if err := rows.Scan(scanTargets...); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-
-		rowMap := make(map[string]any)
-		for i, col := range columns {
-			switch v := scanTargets[i].(type) {
-			case *pgtype.UUID:
-				if v.Status == pgtype.Present {
-					rowMap[col] = fmt.Sprintf("%x-%x-%x-%x-%x",
-						v.Bytes[0:4], v.Bytes[4:6], v.Bytes[6:8],
-						v.Bytes[8:10], v.Bytes[10:16])
-				} else {
-					rowMap[col] = nil
-				}
-			default:
-				rowMap[col] = *(v.(*any))
-			}
-		}
-		results = append(results, rowMap)
-	}
-
-	if rows.Err() != nil {
-		return nil, nil, fmt.Errorf("error after iterating rows: %w", rows.Err())
-	}
-
-	return results, columns, nil
 }
 
 // GenerateSchema fetches schema from DB and formats it as a human-readable string

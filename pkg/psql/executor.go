@@ -196,7 +196,7 @@ func (e *executor) listRelations(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list relations: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,7 @@ func (e *executor) describeTable(ctx context.Context, tableName string) (*Result
 		return nil, fmt.Errorf("failed to describe table: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +351,7 @@ func (e *executor) getTableIndexes(ctx context.Context, tableName string) ([]map
 		return nil, err
 	}
 
-	rows, _, err := db.ExtractResultsFromRows(result.Rows())
+	rows, _, err := db.ExtractPsqlResults(result.Rows())
 	return rows, err
 }
 
@@ -371,7 +371,7 @@ func (e *executor) getTableConstraints(ctx context.Context, tableName string) ([
 		return nil, err
 	}
 
-	rows, _, err := db.ExtractResultsFromRows(result.Rows())
+	rows, _, err := db.ExtractPsqlResults(result.Rows())
 	return rows, err
 }
 
@@ -391,7 +391,7 @@ func (e *executor) getTableForeignKeys(ctx context.Context, tableName string) ([
 		return nil, err
 	}
 
-	rows, _, err := db.ExtractResultsFromRows(result.Rows())
+	rows, _, err := db.ExtractPsqlResults(result.Rows())
 	return rows, err
 }
 
@@ -411,7 +411,7 @@ func (e *executor) getTableReferencedBy(ctx context.Context, tableName string) (
 		return nil, err
 	}
 
-	rows, _, err := db.ExtractResultsFromRows(result.Rows())
+	rows, _, err := db.ExtractPsqlResults(result.Rows())
 	return rows, err
 }
 
@@ -440,7 +440,7 @@ func (e *executor) listTables(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +484,7 @@ func (e *executor) listTablesExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +520,7 @@ func (e *executor) listViews(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list views: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +563,7 @@ func (e *executor) listViewsExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list views: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -601,7 +601,7 @@ func (e *executor) listIndexes(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list indexes: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +646,7 @@ func (e *executor) listIndexesExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list indexes: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -676,7 +676,7 @@ func (e *executor) listDatabases(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -714,7 +714,7 @@ func (e *executor) listDatabasesExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +741,7 @@ func (e *executor) listSchemas(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list schemas: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -770,7 +770,7 @@ func (e *executor) listSchemasExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list schemas: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -804,7 +804,7 @@ func (e *executor) listSequences(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list sequences: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -845,7 +845,7 @@ func (e *executor) listSequencesExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list sequences: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -877,7 +877,7 @@ func (e *executor) listUsers(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -936,7 +936,7 @@ func (e *executor) listUsersExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -989,7 +989,7 @@ func (e *executor) listFunctions(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list functions: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -1047,7 +1047,7 @@ func (e *executor) listFunctionsExtended(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list functions: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -1083,7 +1083,7 @@ func (e *executor) listForeignTables(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("failed to list foreign tables: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -1124,7 +1124,7 @@ func (e *executor) listForeignTablesExtended(ctx context.Context) (*Result, erro
 		return nil, fmt.Errorf("failed to list foreign tables: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}
@@ -1207,7 +1207,7 @@ func (e *executor) listTablesWithPattern(ctx context.Context, pattern string) (*
 		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
 
-	rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
 	if err != nil {
 		return nil, err
 	}

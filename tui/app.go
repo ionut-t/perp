@@ -488,10 +488,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		queryResult := content.ParsedQueryResult{
-			Type:    db.QuerySelect,
-			Query:   msg.result.Message,
-			Columns: msg.result.Columns,
-			Rows:    msg.result.Rows,
+			Type:     db.QuerySelect,
+			Query:    msg.result.Message,
+			Columns:  msg.result.Columns,
+			PsqlRows: msg.result.Rows,
 		}
 
 		err := m.content.SetQueryResults(queryResult)
@@ -789,7 +789,7 @@ func (m model) executeQuery(query string) tea.Cmd {
 
 		var queryResult content.ParsedQueryResult
 
-		rows, columns, err := db.ExtractResultsFromRows(result.Rows())
+		rows, columns, err := db.ExtractResults(result.Rows())
 
 		if err != nil {
 			return queryFailureMsg{err: err}

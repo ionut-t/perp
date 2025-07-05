@@ -19,6 +19,7 @@ import (
 	"github.com/ionut-t/perp/ui/help"
 	"github.com/ionut-t/perp/ui/list"
 	"github.com/ionut-t/perp/ui/styles"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var (
@@ -30,7 +31,8 @@ type ParsedQueryResult struct {
 	Type          db.QueryType
 	AffectedRows  int64
 	Columns       []string
-	Rows          []map[string]any
+	Rows          []map[string]db.RowResult
+	PsqlRows      []map[string]any // For psql results
 	ExecutionTime time.Duration
 }
 
@@ -216,7 +218,18 @@ func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 		return nil
 	}
 
-	m.queryResults = result.Rows
+	m.queryResults = make([]map[string]any, len(result.Rows))
+	for i, row := range result.Rows {
+		converted := make(map[string]any, len(row))
+		for k, v := range row {
+			if v.Type == pgtype.UUIDOID {
+				converted[k] = db.FormatValue(v.Value, v.Type)
+			} else {
+				converted[k] = v.Value
+			}
+		}
+		m.queryResults[i] = converted
+	}
 
 	if len(result.Rows) == 0 {
 		m.table.SetHeaders([]string{})
@@ -227,7 +240,7 @@ func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 		return nil
 	}
 
-	rows, headers := m.buildDataTable(result.Columns, result.Rows)
+	rows, headers := m.buildQueryResultsTable(result.Columns, result.Rows)
 
 	m.table.SetHeaders(headers)
 	m.table.SetRows(rows)
@@ -253,7 +266,7 @@ func (m *Model) SetPsqlResult(result *psql.Result) {
 		return
 	}
 
-	rows, headers := m.buildDataTable(result.Columns, result.Rows)
+	rows, headers := m.buildPsqlCommandTable(result.Columns, result.Rows)
 
 	m.table.SetHeaders(headers)
 	m.table.SetRows(rows)
@@ -389,7 +402,38 @@ func (m *Model) renderError(width, height int) string {
 		Render(m.error.Error())
 }
 
-func (m *Model) buildDataTable(headers []string, results []map[string]any) ([][]string, []string) {
+func (m *Model) buildQueryResultsTable(headers []string, results []map[string]db.RowResult) ([][]string, []string) {
+	rows := [][]string{}
+
+	headers = append([]string{"#"}, headers...)
+
+	for i, row := range results {
+		rowData := make([]string, len(headers))
+		for j, header := range headers {
+			if val, ok := row[header]; ok {
+
+				var value string
+				if val.Value == nil {
+					value = "NULL"
+				} else {
+					value = fmt.Sprintf("%v", db.FormatValue(val.Value, val.Type))
+				}
+
+				rowData[j] = strings.ReplaceAll(value, "\n", " ")
+			} else {
+				if header == "#" {
+					rowData[j] = fmt.Sprintf("%d", i+1)
+				} else {
+					rowData[j] = "NULL"
+				}
+			}
+		}
+		rows = append(rows, rowData)
+	}
+	return rows, headers
+}
+
+func (m *Model) buildPsqlCommandTable(headers []string, results []map[string]any) ([][]string, []string) {
 	rows := [][]string{}
 
 	headers = append([]string{"#"}, headers...)
