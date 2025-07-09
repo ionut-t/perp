@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/fang"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/tui"
+	"github.com/ionut-t/perp/ui/styles"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +27,13 @@ func Execute() {
 	rootCmd.AddCommand(configCmd())
 	rootCmd.AddCommand(llmInstructionsCmd())
 
-	err := rootCmd.Execute()
+	err := fang.Execute(
+		context.Background(),
+		rootCmd,
+		fang.WithNotifySignal(os.Interrupt, os.Kill),
+		fang.WithColorSchemeFunc(styles.FangColorScheme),
+		fang.WithoutCompletions(),
+	)
 
 	if err != nil {
 		os.Exit(1)
