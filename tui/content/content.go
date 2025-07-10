@@ -276,12 +276,7 @@ func (m *Model) SetPsqlResult(result *psql.Result) {
 
 func (m *Model) SetLLMLogs(response llm.Response, query string) {
 	if response.Command != llm.Ask {
-		theme := "light"
-		if lipgloss.HasDarkBackground() {
-			theme = "tokyo-night"
-		}
-
-		if out, err := glamour.Render(response.Response, theme); err != nil {
+		if out, err := glamour.Render(response.Response, styles.GlamourTheme()); err != nil {
 			m.error = fmt.Errorf("failed to render LLM response: %w", err)
 			m.view = viewError
 		} else {

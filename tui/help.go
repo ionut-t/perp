@@ -80,6 +80,11 @@ var viewLLMLogs = key.NewBinding(
 	key.WithHelp("}", "view LLM logs (available when the editor is not focused)"),
 )
 
+var viewHistoryEntries = key.NewBinding(
+	key.WithKeys("ctrl+r"),
+	key.WithHelp("ctrl+r", "view history logs"),
+)
+
 func (m model) renderHelp() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -105,6 +110,7 @@ func (m model) renderUsefulHelp() string {
 		accessServers,
 		enterCommand,
 		viewLLMLogs,
+		viewHistoryEntries,
 	}
 
 	title := styles.Text.Bold(true).Render("Useful Shortcuts")

@@ -15,7 +15,7 @@ const (
 	historyFileName = ".history"
 )
 
-type HistoryLog struct {
+type Entry struct {
 	Query string
 	Time  time.Time
 }
@@ -41,7 +41,7 @@ func getManager(storage string) *manager {
 }
 
 // Add adds a new query to the history and returns the updated history logs.
-func Add(query string, storage string, maxEntries, maxAgeInDays int) ([]HistoryLog, error) {
+func Add(query string, storage string, maxEntries, maxAgeInDays int) ([]Entry, error) {
 	if maxEntries <= 0 {
 		maxEntries = 1000
 	}
@@ -67,7 +67,7 @@ func Add(query string, storage string, maxEntries, maxAgeInDays int) ([]HistoryL
 	}
 
 	// Add new entry
-	newLog := HistoryLog{
+	newLog := Entry{
 		Query: query,
 		Time:  time.Now(),
 	}
@@ -85,7 +85,7 @@ func Add(query string, storage string, maxEntries, maxAgeInDays int) ([]HistoryL
 }
 
 // Get retrieves the history logs from the storage.
-func Get(storage string) ([]HistoryLog, error) {
+func Get(storage string) ([]Entry, error) {
 	manager := getManager(storage)
 	manager.mu.RLock()
 	defer manager.mu.RUnlock()
@@ -95,7 +95,7 @@ func Get(storage string) ([]HistoryLog, error) {
 	history, err := readHistoryLogs(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []HistoryLog{}, nil
+			return []Entry{}, nil
 		}
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func Get(storage string) ([]HistoryLog, error) {
 }
 
 // writeHistoryLogs performs atomic writes to prevent corruption during concurrent access.
-func writeHistoryLogs(path string, history []HistoryLog) error {
+func writeHistoryLogs(path string, history []Entry) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -141,13 +141,13 @@ func writeHistoryLogs(path string, history []HistoryLog) error {
 }
 
 // readHistoryLogs reads the history logs from the specified path.
-func readHistoryLogs(path string) ([]HistoryLog, error) {
+func readHistoryLogs(path string) ([]Entry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var history []HistoryLog
+	var history []Entry
 	entries := bytes.SplitSeq(data, []byte("\n---\n"))
 
 	for entry := range entries {
@@ -178,7 +178,7 @@ func readHistoryLogs(path string) ([]HistoryLog, error) {
 
 		query := string(queryContent)
 		if query != "" {
-			history = append(history, HistoryLog{
+			history = append(history, Entry{
 				Query: query,
 				Time:  parsedTime,
 			})
@@ -188,12 +188,12 @@ func readHistoryLogs(path string) ([]HistoryLog, error) {
 	return history, nil
 }
 
-func getUniqueSortedHistory(history []HistoryLog) []HistoryLog {
-	slices.SortFunc(history, func(a, b HistoryLog) int {
+func getUniqueSortedHistory(history []Entry) []Entry {
+	slices.SortFunc(history, func(a, b Entry) int {
 		return b.Time.Compare(a.Time)
 	})
 
-	uniqueHistory := make([]HistoryLog, 0, len(history))
+	uniqueHistory := make([]Entry, 0, len(history))
 	seen := make(map[string]bool)
 
 	for _, log := range history {
@@ -208,12 +208,12 @@ func getUniqueSortedHistory(history []HistoryLog) []HistoryLog {
 }
 
 // cleanupHistory removes old entries and keeps only the most recent ones.
-func cleanupHistory(history []HistoryLog, maxEntries int, maxAge time.Duration) []HistoryLog {
+func cleanupHistory(history []Entry, maxEntries int, maxAge time.Duration) []Entry {
 	now := time.Now()
 	cutoffTime := now.Add(-maxAge)
 
 	// First, remove entries older than the cutoff time
-	filtered := make([]HistoryLog, 0, len(history))
+	filtered := make([]Entry, 0, len(history))
 	for _, log := range history {
 		if log.Time.After(cutoffTime) {
 			filtered = append(filtered, log)
@@ -221,7 +221,7 @@ func cleanupHistory(history []HistoryLog, maxEntries int, maxAge time.Duration) 
 	}
 
 	// Sort by time (newest first)
-	slices.SortFunc(filtered, func(a, b HistoryLog) int {
+	slices.SortFunc(filtered, func(a, b Entry) int {
 		return b.Time.Compare(a.Time)
 	})
 

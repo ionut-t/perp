@@ -18,10 +18,10 @@ func TestAdd(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
-		existingLogs   []HistoryLog
+		existingLogs   []Entry
 		expectedCount  int
 		expectError    bool
-		validateResult func(t *testing.T, logs []HistoryLog)
+		validateResult func(t *testing.T, logs []Entry)
 	}{
 		{
 			name:          "add new query to empty history",
@@ -29,7 +29,7 @@ func TestAdd(t *testing.T) {
 			existingLogs:  nil,
 			expectedCount: 1,
 			expectError:   false,
-			validateResult: func(t *testing.T, logs []HistoryLog) {
+			validateResult: func(t *testing.T, logs []Entry) {
 				if logs[0].Query != "SELECT * FROM users" {
 					t.Errorf("Expected query 'SELECT * FROM users', got '%s'", logs[0].Query)
 				}
@@ -38,12 +38,12 @@ func TestAdd(t *testing.T) {
 		{
 			name:  "add query to existing history",
 			query: "INSERT INTO users VALUES (1, 'John')",
-			existingLogs: []HistoryLog{
+			existingLogs: []Entry{
 				{Query: "SELECT * FROM users", Time: time.Now().Add(-time.Hour)},
 			},
 			expectedCount: 2,
 			expectError:   false,
-			validateResult: func(t *testing.T, logs []HistoryLog) {
+			validateResult: func(t *testing.T, logs []Entry) {
 				// Should be sorted newest first
 				if logs[0].Query != "INSERT INTO users VALUES (1, 'John')" {
 					t.Errorf("Expected newest query first, got '%s'", logs[0].Query)
@@ -67,12 +67,12 @@ func TestAdd(t *testing.T) {
 		{
 			name:  "add duplicate query",
 			query: "SELECT * FROM users",
-			existingLogs: []HistoryLog{
+			existingLogs: []Entry{
 				{Query: "SELECT * FROM users", Time: time.Now().Add(-time.Hour)},
 			},
 			expectedCount: 1,
 			expectError:   false,
-			validateResult: func(t *testing.T, logs []HistoryLog) {
+			validateResult: func(t *testing.T, logs []Entry) {
 				// Should keep the newer entry
 				if time.Since(logs[0].Time) > time.Minute {
 					t.Error("Expected the newer duplicate to be kept")
@@ -121,7 +121,7 @@ func TestAdd(t *testing.T) {
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name          string
-		setupLogs     []HistoryLog
+		setupLogs     []Entry
 		expectedCount int
 		expectError   bool
 	}{
@@ -133,7 +133,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name: "get from existing history",
-			setupLogs: []HistoryLog{
+			setupLogs: []Entry{
 				{Query: "SELECT 1", Time: time.Now().Add(-time.Hour)},
 				{Query: "SELECT 2", Time: time.Now().Add(-2 * time.Hour)},
 			},
@@ -142,7 +142,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name: "get sorted history (newest first)",
-			setupLogs: []HistoryLog{
+			setupLogs: []Entry{
 				{Query: "Old query", Time: time.Now().Add(-2 * time.Hour)},
 				{Query: "New query", Time: time.Now().Add(-time.Hour)},
 			},
@@ -191,13 +191,13 @@ func TestReadHistoryLogs(t *testing.T) {
 	tests := []struct {
 		name         string
 		fileContent  string
-		expectedLogs []HistoryLog
+		expectedLogs []Entry
 		expectError  bool
 	}{
 		{
 			name:        "read valid history file",
 			fileContent: "---\n2024-01-01T12:00:00Z\nSELECT * FROM users\n---\n\n---\n2024-01-01T13:00:00Z\nINSERT INTO users VALUES (1)\n---",
-			expectedLogs: []HistoryLog{
+			expectedLogs: []Entry{
 				{Query: "SELECT * FROM users", Time: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)},
 				{Query: "INSERT INTO users VALUES (1)", Time: time.Date(2024, 1, 1, 13, 0, 0, 0, time.UTC)},
 			},
@@ -269,7 +269,7 @@ func TestWriteHistoryLogs(t *testing.T) {
 	defer removeTempDir(t, tempDir)
 
 	historyPath := filepath.Join(tempDir, historyFileName)
-	logs := []HistoryLog{
+	logs := []Entry{
 		{Query: "SELECT 1", Time: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)},
 		{Query: "SELECT 2", Time: time.Date(2024, 1, 1, 13, 0, 0, 0, time.UTC)},
 	}
@@ -309,7 +309,7 @@ func TestWriteHistoryLogs(t *testing.T) {
 
 func TestGetUniqueSortedHistory(t *testing.T) {
 	now := time.Now()
-	logs := []HistoryLog{
+	logs := []Entry{
 		{Query: "SELECT 1", Time: now.Add(-3 * time.Hour)},
 		{Query: "SELECT 2", Time: now.Add(-time.Hour)},
 		{Query: "SELECT 1", Time: now.Add(-2 * time.Hour)}, // Duplicate
@@ -346,13 +346,13 @@ func TestCleanupHistory(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		inputLogs     []HistoryLog
+		inputLogs     []Entry
 		expectedCount int
 		description   string
 	}{
 		{
 			name: "cleanup old entries",
-			inputLogs: []HistoryLog{
+			inputLogs: []Entry{
 				{Query: "Recent", Time: now.Add(-time.Hour)},
 				{Query: "Old", Time: now.Add(-100 * 24 * time.Hour)}, // Older than 90 days
 				{Query: "Recent2", Time: now.Add(-2 * time.Hour)},
@@ -368,7 +368,7 @@ func TestCleanupHistory(t *testing.T) {
 		},
 		{
 			name: "no cleanup needed",
-			inputLogs: []HistoryLog{
+			inputLogs: []Entry{
 				{Query: "Recent1", Time: now.Add(-time.Hour)},
 				{Query: "Recent2", Time: now.Add(-2 * time.Hour)},
 			},
@@ -413,7 +413,7 @@ func TestFilePermissions(t *testing.T) {
 	subDir := filepath.Join(tempDir, "subdir")
 	historyPath := filepath.Join(subDir, historyFileName)
 
-	logs := []HistoryLog{
+	logs := []Entry{
 		{Query: "SELECT 1", Time: time.Now()},
 	}
 
@@ -537,10 +537,10 @@ func setupTempDir(t *testing.T) string {
 	return tempDir
 }
 
-func generateManyLogs(count int, baseTime time.Time) []HistoryLog {
-	logs := make([]HistoryLog, count)
+func generateManyLogs(count int, baseTime time.Time) []Entry {
+	logs := make([]Entry, count)
 	for i := range count {
-		logs[i] = HistoryLog{
+		logs[i] = Entry{
 			Query: fmt.Sprintf("SELECT %d", i),
 			Time:  baseTime.Add(-time.Duration(i) * time.Minute),
 		}

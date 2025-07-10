@@ -27,6 +27,7 @@ import (
 	"github.com/ionut-t/perp/tui/command"
 	"github.com/ionut-t/perp/tui/content"
 	exportData "github.com/ionut-t/perp/tui/export_data"
+	historyView "github.com/ionut-t/perp/tui/history"
 	"github.com/ionut-t/perp/tui/servers"
 	"github.com/ionut-t/perp/ui/help"
 	"github.com/ionut-t/perp/ui/styles"
@@ -64,6 +65,7 @@ const (
 	viewMain
 	viewExportData
 	viewHelp
+	viewHistory
 )
 
 type focused int
@@ -73,6 +75,7 @@ const (
 	focusedEditor
 	focusedContent
 	focusedCommand
+	focusedHistory
 )
 
 type model struct {
@@ -109,10 +112,11 @@ type model struct {
 	timingEnabled   bool
 
 	// history management
-	historyLogs           []history.HistoryLog
+	historyLogs           []history.Entry
 	currentHistoryIndex   int
 	historyNavigating     bool
 	originalEditorContent string
+	history               historyView.Model
 }
 
 func New(config config.Config) model {
@@ -148,7 +152,7 @@ func New(config config.Config) model {
 
 	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
-		historyLogs = []history.HistoryLog{}
+		historyLogs = []history.Entry{}
 	}
 
 	llm, err := llmFactory.New(config, config.GetLLMInstructions())
@@ -198,6 +202,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.help.SetSize(msg.Width, msg.Height)
 		m.help.SetContent(m.renderHelp())
 
+		if m.view == viewHistory {
+			m.history.SetSize(width, height)
+		}
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -217,7 +225,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		if m.focused == focusedCommand || m.view == viewServers || m.view == viewExportData {
+		if m.focused == focusedCommand ||
+			m.view == viewServers ||
+			m.view == viewExportData ||
+			m.view == viewHistory {
 			break
 		}
 
@@ -385,6 +396,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.content.ShowLLMLogs()
 			}
 
+		case key.Matches(msg, viewHistoryEntries):
+			if entries, err := history.Get(m.config.Storage()); err != nil {
+				m.content.SetError(err)
+			} else {
+				m.view = viewHistory
+				m.focused = focusedHistory
+				m.editor.Blur()
+				m.historyLogs = entries
+
+				m.history = historyView.New(entries, m.width, m.height)
+			}
 		case key.Matches(msg, keymap.Help):
 			if m.editor.IsInsertMode() {
 				break
@@ -600,6 +622,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.content.SetConnectionInfo(m.server)
 		}
 
+	case historyView.ClosedMsg:
+		m.view = viewMain
+		m.focused = focusedEditor
+		m.editor.Focus()
+
+		return m, m.editor.CursorBlink()
+
 	case command.QuitMsg, psqlQuitMsg:
 		m.closeDbConnection()
 		return m, tea.Quit
@@ -681,6 +710,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case command.ErrorMsg:
 		return m, m.errorNotification(msg.Err)
+
+	case historyView.SelectedMsg:
+		m.editor.SetContent(msg.Query)
+		m.editor.Focus()
+		_ = m.editor.SetCursorPositionEnd()
+		m.view = viewMain
+		m.focused = focusedEditor
+		ed, cmd := m.editor.Update(nil)
+		m.editor = ed.(editor.Model)
+		return m, tea.Batch(
+			cmd,
+			m.editor.CursorBlink(),
+		)
 	}
 
 	var cmds []tea.Cmd
@@ -729,6 +771,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	if m.view == viewHistory {
+		historyModel, cmd := m.history.Update(msg)
+		m.history = historyModel.(historyView.Model)
+		cmds = append(cmds, cmd)
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -751,6 +799,9 @@ func (m model) View() string {
 
 	case viewHelp:
 		return m.help.View()
+
+	case viewHistory:
+		return m.history.View()
 	}
 
 	return ""
