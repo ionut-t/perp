@@ -8,7 +8,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/pkg/clipboard"
@@ -18,6 +17,7 @@ import (
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/ui/help"
 	"github.com/ionut-t/perp/ui/list"
+	"github.com/ionut-t/perp/ui/markdown"
 	"github.com/ionut-t/perp/ui/styles"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -69,6 +69,7 @@ type Model struct {
 	llmSharedTables []string
 	llmLogsList     list.Model
 	logs            []chatLog
+	markdown        markdown.Model
 }
 
 type chatLog struct {
@@ -94,6 +95,7 @@ func New(width, height int) Model {
 		table:           t,
 		llmLogsList:     ls,
 		llmSharedSchema: "No schema shared with LLM.",
+		markdown:        markdown.New(),
 	}
 }
 
@@ -276,7 +278,7 @@ func (m *Model) SetPsqlResult(result *psql.Result) {
 
 func (m *Model) SetLLMLogs(response llm.Response, query string) {
 	if response.Command != llm.Ask {
-		if out, err := glamour.Render(response.Response, styles.GlamourTheme()); err != nil {
+		if out, err := m.markdown.Render(response.Response); err != nil {
 			m.error = fmt.Errorf("failed to render LLM response: %w", err)
 			m.view = viewError
 		} else {

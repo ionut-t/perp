@@ -67,11 +67,3 @@ func HighlighterTheme() string {
 
 	return "catppuccin-latte"
 }
-
-func GlamourTheme() string {
-	if lipgloss.HasDarkBackground() {
-		return "tokyo-night"
-	}
-
-	return "light"
-}

@@ -9,12 +9,12 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/utils"
+	"github.com/ionut-t/perp/ui/markdown"
 	"github.com/ionut-t/perp/ui/styles"
 )
 
@@ -37,6 +37,7 @@ type Model struct {
 	err           error
 	viewport      viewport.Model
 	focused       focused
+	markdown      markdown.Model
 }
 
 type item struct {
@@ -99,6 +100,7 @@ func New(entries []history.Entry, width, height int) Model {
 		height:   height,
 		list:     ls,
 		viewport: vp,
+		markdown: markdown.New(),
 	}
 
 	m.SetSize(width, height)
@@ -175,7 +177,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
-				if out, err := glamour.Render(query, styles.GlamourTheme()); err != nil {
+				if out, err := m.markdown.Render(query); err != nil {
 					m.err = err
 				} else {
 					m.viewport.SetContent(out)
