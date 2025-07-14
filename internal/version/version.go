@@ -14,7 +14,7 @@ var (
 func init() {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if info.Main.Version != "(devel)" && info.Main.Version != "" {
-			version = info.Main.Version + "-rc"
+			version = info.Main.Version
 		}
 
 		for _, setting := range info.Settings {
