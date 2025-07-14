@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/fang"
 	"github.com/ionut-t/perp/internal/config"
+	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/tui"
 	"github.com/ionut-t/perp/ui/styles"
 	"github.com/spf13/cobra"
@@ -20,7 +21,7 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		appUI()
 	},
-	Version: version,
+	Version: version.Version(),
 }
 
 func Execute() {

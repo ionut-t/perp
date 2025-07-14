@@ -85,6 +85,16 @@ var viewHistoryEntries = key.NewBinding(
 	key.WithHelp("ctrl+r", "view history logs"),
 )
 
+var openRelease = key.NewBinding(
+	key.WithKeys("ctrl+u"),
+	key.WithHelp("ctrl+u", "open release notes in browser"),
+)
+
+var dismissUpdate = key.NewBinding(
+	key.WithKeys("ctrl+x"),
+	key.WithHelp("ctrl+x", "dismiss release"),
+)
+
 func (m model) renderHelp() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

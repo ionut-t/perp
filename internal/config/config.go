@@ -19,6 +19,7 @@ const (
 	MaxHistoryDaysKey   = "MAX_HISTORY_AGE_IN_DAYS"
 	LLMProviderKey      = "LLM_PROVIDER"
 	LLMModelKey         = "LLM_MODEL"
+	AutoUpdateKey       = "AUTO_UPDATE_ENABLED"
 
 	rootDir                 = ".perp"
 	configFileName          = ".config.toml"
@@ -38,6 +39,7 @@ type Config interface {
 	GetLLMModel() (string, error)
 	SetLLMModel(model string) error
 	GetLLMInstructions() string
+	AutoUpdateEnabled() bool
 }
 
 type config struct {
@@ -54,6 +56,10 @@ func New() (Config, error) {
 	return &config{
 		storage: storage,
 	}, nil
+}
+
+func (c *config) AutoUpdateEnabled() bool {
+	return viper.GetBool(AutoUpdateKey)
 }
 
 func (c *config) Editor() string {
@@ -178,6 +184,7 @@ func InitialiseConfigFile() (string, error) {
 		viper.SetConfigFile(configPath)
 
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			viper.SetDefault(AutoUpdateKey, true)
 			viper.SetDefault(EditorKey, GetEditor())
 			viper.SetDefault(MaxHistoryLengthKey, 1000)
 			viper.SetDefault(MaxHistoryDaysKey, 90)
@@ -252,6 +259,10 @@ func writeDefaultConfig() error {
 	sb.WriteString("# The keys are case insensitive\n")
 	sb.WriteString("\n")
 
+	sb.WriteString("# Auto-update feature can be enabled or disabled\n")
+	sb.WriteString(fmt.Sprintf("%s = %t\n", AutoUpdateKey, viper.GetBool(AutoUpdateKey)))
+	sb.WriteString("\n")
+
 	sb.WriteString("# The editor will be used to edit the config file, LLM instructions and exported data\n")
 	sb.WriteString(fmt.Sprintf("%s = '%s'\n", EditorKey, GetEditor()))
 	sb.WriteString("\n")
@@ -269,8 +280,7 @@ func writeDefaultConfig() error {
 	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMProviderKey, viper.GetString(LLMProviderKey)))
 	sb.WriteString("\n")
 
-	sb.WriteString("# The LLM model is required for both Gemini and VertexAI\n")
-	sb.WriteString("# ex: 'gemini-2.5-pro'\n")
+	sb.WriteString("# The LLM model is required for both Gemini and VertexAI. Ex: 'gemini-2.5-pro'\n")
 	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMModelKey, viper.GetString(LLMModelKey)))
 	sb.WriteString("\n")
 

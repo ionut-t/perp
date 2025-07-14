@@ -10,8 +10,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/perp/internal/constants"
+	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/ui/styles"
+)
+
+const (
+	selectionListHeight    = 6
+	selectionViewMinHeight = 12
 )
 
 type SelectedServerMsg struct {
@@ -26,8 +33,7 @@ const (
 )
 
 type Model struct {
-	storage string
-
+	storage       string
 	servers       []server.Server
 	serverForm    *huh.Form
 	selectForm    *huh.Form
@@ -87,8 +93,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		m.SetSize(msg.Width, msg.Height)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -190,21 +195,14 @@ func (m Model) View() string {
 	if m.view == viewSelect {
 		server := m.selectForm.GetFocusedField().GetValue().(server.Server)
 
-		serverSelect := lipgloss.NewStyle().Width(m.width / 2).Height(m.height - 4).Render(
-			lipgloss.JoinVertical(
-				lipgloss.Left,
-				m.selectForm.View(),
-				"\n",
-				styles.Overlay0.Render(
-					lipgloss.JoinVertical(
-						lipgloss.Left,
-						"Press n to create a new server",
-						"Press e to edit the selected server",
-						"Press ctrl+d to delete the selected server",
-					),
-				),
-			),
-		)
+		logo := m.renderLogo()
+		logoHeight := lipgloss.Height(logo)
+
+		if m.height-lipgloss.Height(logo) <= selectionViewMinHeight {
+			logoHeight = 2
+		}
+
+		serverSelect := m.renderServerSelect(m.width/2, m.height-logoHeight)
 
 		createdAt := server.CreatedAt.Local().Format("02/01/2006 15:04:05")
 		updatedAt := server.UpdatedAt.Local().Format("02/01/2006 15:04:05")
@@ -216,7 +214,7 @@ func (m Model) View() string {
 
 		serverInfo := lipgloss.NewStyle().
 			Width(m.width/2).
-			Height(m.height-4).
+			Height(m.height-4-logoHeight).
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("5")).
@@ -235,10 +233,27 @@ func (m Model) View() string {
 				),
 			)
 
-		return lipgloss.JoinHorizontal(
+		if m.width <= 80 {
+			serverInfo = ""
+			serverSelect = m.renderServerSelect(m.width-2, m.height-logoHeight)
+		}
+
+		if m.height-lipgloss.Height(logo) <= selectionViewMinHeight {
+			return lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				serverSelect,
+				serverInfo,
+			)
+		}
+
+		return lipgloss.JoinVertical(
 			lipgloss.Left,
-			serverSelect,
-			serverInfo,
+			logo,
+			lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				serverSelect,
+				serverInfo,
+			),
 		)
 	}
 
@@ -353,6 +368,7 @@ func (m *Model) initialiseSelectForm() {
 	selectServer.Title("Select a server")
 	selectServer.Key("select")
 	options := make([]huh.Option[server.Server], len(m.servers))
+	selectServer.Height(selectionListHeight)
 
 	for i, srv := range m.servers {
 		options[i] = huh.NewOption(srv.Name, srv)
@@ -492,4 +508,47 @@ func validateUsername(username string) error {
 		return errors.New("username cannot be empty")
 	}
 	return nil
+}
+
+func (m *Model) renderServerSelect(width, height int) string {
+	return lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		Render(
+			lipgloss.JoinVertical(
+				lipgloss.Left,
+				m.selectForm.View(),
+				"\n",
+				styles.Overlay0.Render(
+					lipgloss.JoinVertical(
+						lipgloss.Left,
+						"Press n to create a new server",
+						"Press e to edit the selected server",
+						"Press ctrl+d to delete the selected server",
+					),
+				),
+			),
+		)
+}
+
+func (m *Model) renderLogo() string {
+	logo := constants.Logo
+
+	logoW := lipgloss.Width(logo)
+
+	version := lipgloss.Place(
+		logoW,
+		1,
+		lipgloss.Center,
+		lipgloss.Center,
+		styles.Primary.Render(version.Version()),
+	)
+
+	return lipgloss.Place(
+		m.width,
+		lipgloss.Height(logo)+4,
+		lipgloss.Center,
+		lipgloss.Center,
+		styles.Primary.Render(logo+version),
+	)
 }

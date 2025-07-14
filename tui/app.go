@@ -183,6 +183,7 @@ func (m model) Init() tea.Cmd {
 		tea.SetWindowTitle("perp"),
 		m.spinner.Tick,
 		m.editor.CursorBlink(),
+		m.checkForUpdates(),
 	)
 }
 
@@ -407,6 +408,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				m.history = historyView.New(entries, m.width, m.height)
 			}
+
+		case key.Matches(msg, openRelease):
+			return m.openReleaseNotes()
+
+		case key.Matches(msg, dismissUpdate):
+			return m.dismissUpdate()
+
 		case key.Matches(msg, keymap.Help):
 			if m.editor.IsInsertMode() {
 				break
@@ -445,6 +453,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case utils.ClearMsg:
 		m.notification = ""
+
+	case updateAvailableMsg:
+		m.content.SetLatestReleaseInfo(msg.release)
 
 	case schemaFetchedMsg:
 		schema := string(msg)

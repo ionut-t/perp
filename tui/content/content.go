@@ -10,11 +10,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	table "github.com/ionut-t/gotable"
+	"github.com/ionut-t/perp/internal/constants"
+	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/pkg/clipboard"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/server"
+	"github.com/ionut-t/perp/pkg/update"
 	"github.com/ionut-t/perp/ui/help"
 	"github.com/ionut-t/perp/ui/list"
 	"github.com/ionut-t/perp/ui/markdown"
@@ -57,19 +60,20 @@ const (
 )
 
 type Model struct {
-	width, height   int
-	view            view
-	error           error
-	dbSchema        string
-	llmSharedSchema string
-	queryResults    []map[string]any
-	viewport        viewport.Model
-	table           table.Model
-	server          server.Server
-	llmSharedTables []string
-	llmLogsList     list.Model
-	logs            []chatLog
-	markdown        markdown.Model
+	width, height     int
+	view              view
+	error             error
+	dbSchema          string
+	llmSharedSchema   string
+	queryResults      []map[string]any
+	viewport          viewport.Model
+	table             table.Model
+	server            server.Server
+	llmSharedTables   []string
+	llmLogsList       list.Model
+	logs              []chatLog
+	markdown          markdown.Model
+	latestReleaseInfo *update.LatestReleaseInfo
 }
 
 type chatLog struct {
@@ -111,9 +115,13 @@ func (m *Model) SetSize(width, height int) {
 	m.llmLogsList.SetSize(width, height-1)
 
 	switch m.view {
-	case viewConnectionInfo, viewInfo, viewDBSchema, viewLLMSharedSchema:
+	case viewInfo, viewDBSchema, viewLLMSharedSchema:
 		m.viewport.Height = height
 		m.viewport.Width = width
+
+	case viewConnectionInfo:
+		m.viewport.Height = height
+		m.viewport.Width = width - lipgloss.Width(m.renderLogo())
 	case viewTable:
 		m.table.SetSize(width, height)
 	}
@@ -123,6 +131,18 @@ func (m *Model) SetConnectionInfo(s server.Server) {
 	m.server = s
 	m.view = viewConnectionInfo
 	m.setViewportContent()
+}
+
+func (m *Model) SetLatestReleaseInfo(release *update.LatestReleaseInfo) {
+	m.latestReleaseInfo = release
+}
+
+func (m *Model) GetLatestReleaseInfo() (*update.LatestReleaseInfo, bool) {
+	if m.latestReleaseInfo == nil {
+		return nil, false
+	}
+
+	return m.latestReleaseInfo, true
 }
 
 func (m *Model) SetLLMSharedTables(tables []string) {
@@ -386,6 +406,13 @@ func (m Model) View() string {
 	case viewError:
 		return m.renderError(m.width, m.height)
 
+	case viewConnectionInfo:
+		return lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			m.viewport.View(),
+			m.renderLogo(),
+		)
+
 	default:
 		return m.viewport.View()
 	}
@@ -606,4 +633,31 @@ func (m Model) renderSharedTablesList() string {
 	}
 
 	return lipgloss.NewStyle().Padding(1, 1).Render(strings.TrimSpace(sb.String()))
+}
+
+func (m *Model) renderLogo() string {
+	logo := constants.Logo
+
+	logoW := lipgloss.Width(logo)
+
+	var newVersion string
+	if m.latestReleaseInfo != nil && m.latestReleaseInfo.HasUpdate {
+		newVersion = styles.Warning.Render(styles.Wrap(logoW, fmt.Sprintf("New version available: %s. Press 'ctrl+u' to update or 'ctrl+x' to ignore.", m.latestReleaseInfo.TagName)))
+	}
+
+	version := lipgloss.Place(
+		logoW,
+		1,
+		lipgloss.Center,
+		lipgloss.Center,
+		styles.Primary.Render(version.Version()),
+	)
+
+	return lipgloss.Place(
+		logoW+2,
+		m.height,
+		lipgloss.Right,
+		lipgloss.Bottom,
+		styles.Primary.Padding(0, 1).Render(logo+version+"\n"+newVersion),
+	)
 }

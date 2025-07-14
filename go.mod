@@ -21,6 +21,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
+	golang.org/x/mod v0.17.0
 	google.golang.org/genai v1.12.0
 )
 
