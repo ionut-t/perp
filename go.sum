@@ -124,10 +124,10 @@ github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUq
 github.com/hexops/gotextdiff v1.0.3/go.mod h1:pSWU5MAI3yDq+fZBTazCSJysOMbxWL1BSow5/V2vxeg=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
-github.com/ionut-t/goeditor/adapter-bubbletea v0.1.12 h1:3fFFLqzLtzdDpPQGt6Yje0Xl8t8jc+HZF7lfziro/IY=
-github.com/ionut-t/goeditor/adapter-bubbletea v0.1.12/go.mod h1:EbJBbJyp6jbqRR7B9SknTB9+o1J5v7EBq0Qs0LEHUB4=
-github.com/ionut-t/goeditor/core v0.1.7 h1:/9IsKOB9HTYN4hobzjvg+CTYLuyfCBBUPHVA5D+slFA=
-github.com/ionut-t/goeditor/core v0.1.7/go.mod h1:sFe2iuAcaU8xyaYiiPEZBoY+0N+rljwdGH75msGiyBU=
+github.com/ionut-t/goeditor/adapter-bubbletea v0.1.13 h1:kTm8SNZJvt8YOD50wkomZ3HNl8n9253hNdLC6NcEOrk=
+github.com/ionut-t/goeditor/adapter-bubbletea v0.1.13/go.mod h1:4VAAb7Rjm2+ODKKmGD8kfBMYQmyu9/3TjyAD1K9UhFw=
+github.com/ionut-t/goeditor/core v0.1.8 h1:3+BKf8q6yHnBrzu69A0xiGi4dXS52OpONcYGvlJ/NVk=
+github.com/ionut-t/goeditor/core v0.1.8/go.mod h1:sFe2iuAcaU8xyaYiiPEZBoY+0N+rljwdGH75msGiyBU=
 github.com/ionut-t/gotable v0.1.0 h1:1dZ7KBRQ9uJQOWIOWsLji3dBWp6QVdWmAw0mEAk4bxA=
 github.com/ionut-t/gotable v0.1.0/go.mod h1:YY4s6KP/yUrNMJkvMLDfhy7qflhiAxOqK2VnD4deWmI=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=
