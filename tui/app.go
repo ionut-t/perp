@@ -109,7 +109,6 @@ type model struct {
 
 	// commands
 	expandedDisplay bool
-	timingEnabled   bool
 
 	// history management
 	historyLogs           []history.Entry
@@ -486,7 +485,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		message := fmt.Sprintf("Query executed successfully. Affected rows: %d", msg.AffectedRows)
 
-		if m.timingEnabled {
+		if m.server.TimingEnabled {
 			message += fmt.Sprintf(". Execution time: %s", utils.Duration(msg.ExecutionTime))
 		}
 
@@ -516,7 +515,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.SetContent("")
 
 		var timingCmd tea.Cmd
-		if m.timingEnabled {
+		if m.server.TimingEnabled {
 			timingCmd = m.successNotification(fmt.Sprintf("Execution time: %s", utils.Duration(msg.result.ExecutionTime)))
 		}
 
@@ -551,9 +550,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case toggleTimingMsg:
 		m.loading = false
-		m.timingEnabled = !m.timingEnabled
+		enabled := !m.server.TimingEnabled
+		if err := m.server.ToggleTiming(m.config.Storage()); err != nil {
+			m.server.TimingEnabled = enabled
+		}
 		status := "OFF"
-		if m.timingEnabled {
+		if m.server.TimingEnabled {
 			status = "ON"
 		}
 

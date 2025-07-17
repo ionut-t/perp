@@ -23,6 +23,7 @@ type Server struct {
 	CreatedAt              time.Time `json:"createdAt"`
 	UpdatedAt              time.Time `json:"updatedAt"`
 	ShareDatabaseSchemaLLM bool      `json:"shareDatabaseSchemaLLM"`
+	TimingEnabled          bool      `json:"timingEnabled"`
 }
 
 type CreateServer struct {
@@ -156,6 +157,17 @@ func (s *Server) EnableDatabaseSchemaLLM(enabled bool, storage string) error {
 	}
 
 	s.ShareDatabaseSchemaLLM = enabled
+	s.UpdatedAt = time.Now().In(time.UTC)
+
+	if err := save(s, storage); err != nil {
+		return fmt.Errorf("failed to update server: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Server) ToggleTiming(storage string) error {
+	s.TimingEnabled = !s.TimingEnabled
 	s.UpdatedAt = time.Now().In(time.UTC)
 
 	if err := save(s, storage); err != nil {
