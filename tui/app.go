@@ -925,8 +925,6 @@ func (m model) sendQueryCmd() tea.Cmd {
 		schema, err := m.addTablesSchemaToLLM()
 
 		if err != nil {
-			m.editor.SetContent("")
-
 			return utils.Dispatch(notificationErrorMsg{err: err})
 		}
 

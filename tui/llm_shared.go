@@ -10,6 +10,10 @@ import (
 
 // addTablesSchemaToLLM processes the `/add` command to include table schemas in the LLM context.
 func (m *model) addTablesSchemaToLLM() (string, error) {
+	if m.llm == nil {
+		return "", fmt.Errorf("LLM instance is not initialized")
+	}
+
 	if !m.server.ShareDatabaseSchemaLLM {
 		return "", fmt.Errorf("cannot add tables to LLM schema when this feature is disabled")
 	}
@@ -43,6 +47,7 @@ func (m *model) addTablesSchemaToLLM() (string, error) {
 	}
 
 	m.llmSharedTablesSchema = finalTableList
+
 	m.llm.ResetInstructions()
 
 	m.llm.AppendInstructions("Database Schema:\n\n" + schema)
@@ -51,6 +56,10 @@ func (m *model) addTablesSchemaToLLM() (string, error) {
 }
 
 func (m *model) removeTablesSchemaToLLM() (string, error) {
+	if m.llm == nil {
+		return "", fmt.Errorf("LLM instance is not initialized")
+	}
+
 	value := m.editor.GetCurrentContent()
 	value = strings.TrimPrefix(value, "/remove")
 	value = strings.TrimSpace(value)
