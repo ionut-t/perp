@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/config"
-	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/export"
@@ -103,7 +102,6 @@ type model struct {
 	llmSharedTablesSchema []string
 
 	// styles
-	sqlKeywords  map[string]lipgloss.Style
 	llmKeywords  map[string]lipgloss.Style
 	psqlCommands map[string]lipgloss.Style
 
@@ -122,14 +120,6 @@ func New(config config.Config) model {
 	editor := editor.New(80, 10)
 	editor.ShowMessages(false)
 	editor.SetCursorBlinkMode(true)
-
-	sqlKeywordsMap := make(map[string]lipgloss.Style, len(constants.SQL_KEYWORDS)*2)
-
-	for _, keyword := range constants.SQL_KEYWORDS {
-		highlighted := styles.Primary.Bold(true)
-		sqlKeywordsMap[strings.ToUpper(keyword)] = highlighted
-		sqlKeywordsMap[strings.ToLower(keyword)] = highlighted
-	}
 
 	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
 	for _, keyword := range llm.LLMKeywords {
@@ -164,7 +154,6 @@ func New(config config.Config) model {
 		config:          config,
 		llm:             llm,
 		editor:          editor,
-		sqlKeywords:     sqlKeywordsMap,
 		llmKeywords:     llmKeywordsMap,
 		psqlCommands:    psqlCommands,
 		command:         command.New(),
