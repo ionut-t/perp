@@ -83,7 +83,6 @@ func New(store export.Store, server server.Server, width, height int) Model {
 	delegate.Styles = styles.ListItemStyles()
 
 	editorModel := editor.New(80, 20)
-	editorModel.SetCursorBlinkMode(true)
 	editorModel.WithTheme(styles.EditorTheme())
 	editorModel.SetLanguage("json", styles.HighlighterTheme())
 
@@ -128,7 +127,7 @@ func New(store export.Store, server server.Server, width, height int) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.editor.CursorBlink()
+	return nil
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -171,7 +170,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.Focus()
 				_ = m.editor.SetCursorPosition(0, 0)
 				m.editor.SetInsertMode()
-				return m, m.editor.CursorBlink()
+				return m, nil
 			}
 
 		case key.Matches(msg, changeFocused):
@@ -224,7 +223,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case editor.SaveMsg:
 		record := m.store.GetCurrentRecord()
-		record.Content = string(msg)
+		record.Content = string(msg.Content)
 		err := m.store.Update(record)
 		if err != nil {
 			m.error = fmt.Errorf("failed to save record: %w", err)

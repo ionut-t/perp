@@ -118,8 +118,6 @@ type model struct {
 
 func New(config config.Config) model {
 	editor := editor.New(80, 10)
-	editor.ShowMessages(false)
-	editor.SetCursorBlinkMode(true)
 
 	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
 	for _, keyword := range llm.LLMKeywords {

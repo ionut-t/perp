@@ -290,7 +290,7 @@ func TestModel_Update_EditorSaveMsg(t *testing.T) {
 	}
 	m := New(store, server, 100, 40)
 
-	msg := editor.SaveMsg("new content")
+	msg := editor.SaveMsg{Content: "new content"}
 	updatedModel, _ := m.Update(msg)
 	updated := updatedModel.(Model)
 
