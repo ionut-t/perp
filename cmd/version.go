@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/internal/version"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 func versionTemplate() string {

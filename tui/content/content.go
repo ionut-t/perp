@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/coffee/styles"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/internal/version"
@@ -21,7 +22,6 @@ import (
 	"github.com/ionut-t/perp/ui/help"
 	"github.com/ionut-t/perp/ui/list"
 	"github.com/ionut-t/perp/ui/markdown"
-	"github.com/ionut-t/perp/ui/styles"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 

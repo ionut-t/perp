@@ -10,12 +10,12 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/utils"
 	"github.com/ionut-t/perp/ui/markdown"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 type SelectedMsg struct {

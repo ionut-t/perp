@@ -11,12 +11,12 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/coffee/styles"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/store/export"
 	"github.com/ionut-t/perp/ui/help"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 var (
@@ -84,7 +84,7 @@ func New(store export.Store, server server.Server, width, height int) Model {
 
 	editorModel := editor.New(80, 20)
 	editorModel.WithTheme(styles.EditorTheme())
-	editorModel.SetLanguage("json", styles.HighlighterTheme())
+	editorModel.SetLanguage("json", styles.EditorLanguageTheme())
 
 	if len(records) > 0 {
 		editorModel.SetContent(records[0].Content)
@@ -331,7 +331,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			lang = "csv"
 		}
 
-		m.editor.SetLanguage(lang, styles.HighlighterTheme())
+		m.editor.SetLanguage(lang, styles.EditorLanguageTheme())
 		cmds = append(cmds, cmd)
 		_, cmd = m.editor.Update(nil)
 		cmds = append(cmds, cmd)

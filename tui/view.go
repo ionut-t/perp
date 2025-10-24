@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/ionut-t/perp/ui/styles"
+	"github.com/ionut-t/coffee/styles"
 )
 
 func (m *model) renderDBError(width, height int) string {

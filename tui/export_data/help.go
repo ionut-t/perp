@@ -3,9 +3,9 @@ package export_data
 import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/ui/help"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 var changeFocused = key.NewBinding(

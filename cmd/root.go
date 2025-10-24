@@ -8,10 +8,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/fang"
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/tui"
-	"github.com/ionut-t/perp/ui/styles"
 	"github.com/spf13/cobra"
 )
 

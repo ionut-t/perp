@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/coffee/styles"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/keymap"
@@ -29,7 +30,6 @@ import (
 	historyView "github.com/ionut-t/perp/tui/history"
 	"github.com/ionut-t/perp/tui/servers"
 	"github.com/ionut-t/perp/ui/help"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 type schemaFetchedMsg string
@@ -135,7 +135,7 @@ func New(config config.Config) model {
 	editor.Focus()
 	editor.DisableCommandMode(true)
 	editor.WithTheme(styles.EditorTheme())
-	editor.SetLanguage("postgres", styles.HighlighterTheme())
+	editor.SetLanguage("postgres", styles.EditorLanguageTheme())
 
 	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
@@ -734,7 +734,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			lang = "markdown"
 		}
 
-		m.editor.SetLanguage(lang, styles.HighlighterTheme())
+		m.editor.SetLanguage(lang, styles.EditorLanguageTheme())
 
 		editorModel, cmd := m.editor.Update(msg)
 		m.editor = editorModel.(editor.Model)

@@ -10,10 +10,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/pkg/server"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 const (
@@ -300,7 +300,7 @@ func (m *Model) initialiseCreateForm() {
 			shareDatabaseSchemaLLM,
 		),
 	)
-	m.serverForm.WithTheme(styles.ThemeCatppuccin())
+	m.serverForm.WithTheme(styles.HuhThemeCatppuccin())
 	m.serverForm.WithKeyMap(m.getKeymap())
 }
 
@@ -358,13 +358,13 @@ func (m *Model) initialiseUpdateForm() {
 		),
 	)
 
-	m.serverForm.WithTheme(styles.ThemeCatppuccin())
+	m.serverForm.WithTheme(styles.HuhThemeCatppuccin())
 	m.serverForm.WithKeyMap(m.getKeymap())
 }
 
 func (m *Model) initialiseSelectForm() {
 	selectServer := huh.NewSelect[server.Server]()
-	selectServer.WithTheme(styles.ThemeCatppuccin())
+	selectServer.WithTheme(styles.HuhThemeCatppuccin())
 	selectServer.Title("Select a server")
 	selectServer.Key("select")
 	options := make([]huh.Option[server.Server], len(m.servers))

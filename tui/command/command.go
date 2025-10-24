@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/pkg/utils"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 type ExportMsg struct {
@@ -44,7 +44,7 @@ type Model struct {
 
 func New() Model {
 	cmdInput := huh.NewInput().Prompt(": ")
-	cmdInput.WithTheme(styles.ThemeCatppuccin())
+	cmdInput.WithTheme(styles.HuhThemeCatppuccin())
 
 	return Model{
 		input: cmdInput,

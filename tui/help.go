@@ -3,11 +3,11 @@ package tui
 import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ionut-t/coffee/styles"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/ui/help"
-	"github.com/ionut-t/perp/ui/styles"
 )
 
 var yankCell = key.NewBinding(
