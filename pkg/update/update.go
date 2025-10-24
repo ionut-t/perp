@@ -170,6 +170,8 @@ func (c *Checker) getLatestRelease() (*release, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch release info: %w", err)
 	}
+
+	//nolint:errcheck
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
