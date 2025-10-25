@@ -19,21 +19,12 @@ func TestNew(t *testing.T) {
 		setupServers  []server.Server
 		expectedView  view
 		expectedCount int
-		validateModel func(t *testing.T, m Model)
 	}{
 		{
 			name:          "new with no servers shows form",
 			setupServers:  nil,
 			expectedView:  viewForm,
 			expectedCount: 0,
-			validateModel: func(t *testing.T, m Model) {
-				if m.serverForm == nil {
-					t.Error("Expected serverForm to be initialized")
-				}
-				if m.selectForm != nil {
-					t.Error("Expected selectForm to be nil")
-				}
-			},
 		},
 		{
 			name: "new with servers shows select",
@@ -52,14 +43,6 @@ func TestNew(t *testing.T) {
 			},
 			expectedView:  viewSelect,
 			expectedCount: 1,
-			validateModel: func(t *testing.T, m Model) {
-				if m.selectForm == nil {
-					t.Error("Expected selectForm to be initialized")
-				}
-				if m.serverForm != nil {
-					t.Error("Expected serverForm to be nil")
-				}
-			},
 		},
 		{
 			name: "new with multiple servers",
@@ -91,10 +74,6 @@ func TestNew(t *testing.T) {
 			if len(m.servers) != tt.expectedCount {
 				t.Errorf("Expected %d servers, got %d", tt.expectedCount, len(m.servers))
 			}
-
-			if tt.validateModel != nil {
-				tt.validateModel(t, m)
-			}
 		})
 	}
 }
@@ -122,14 +101,14 @@ func TestUpdate(t *testing.T) {
 			},
 		},
 
-		// Key navigation tests - Select view
+		// Message handling tests
 		{
-			name: "press 'n' in select view switches to form",
+			name: "newServerMsg switches to form",
 			setupServers: []server.Server{
 				{ID: uuid.New(), Name: "Server 1", CreatedAt: time.Now()},
 			},
 			initialView:  viewSelect,
-			msg:          tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}},
+			msg:          newServerMsg{},
 			expectedView: viewForm,
 			expectedCmd:  true,
 		},
@@ -148,17 +127,18 @@ func TestUpdate(t *testing.T) {
 			},
 		},
 		{
-			name: "press 'e' in select view switches to edit form",
+			name: "edit server message switches to form",
 			setupServers: []server.Server{
 				{ID: uuid.New(), Name: "Server 1", CreatedAt: time.Now()},
 			},
 			initialView:  viewSelect,
-			msg:          tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}},
+			msg:          editServerMsg{Server: server.Server{ID: uuid.New(), Name: "Server 1", CreatedAt: time.Now()}},
 			expectedView: viewForm,
 			expectedCmd:  true,
 			validateModel: func(t *testing.T, m Model, cmd tea.Cmd) {
-				if m.editedServer == nil {
-					t.Error("Expected editedServer to be set")
+				// editedServer is now handled internally by serverForm
+				if m.view != viewForm {
+					t.Error("Expected to be in form view for editing")
 				}
 			},
 		},
@@ -201,40 +181,6 @@ func TestUpdate(t *testing.T) {
 			expectedCmd: true,
 		},
 
-		// Delete server tests
-		{
-			name: "ctrl+d deletes selected server",
-			setupServers: []server.Server{
-				{ID: uuid.New(), Name: "Server 1", CreatedAt: time.Now()},
-				{ID: uuid.New(), Name: "Server 2", CreatedAt: time.Now()},
-			},
-			initialView:  viewSelect,
-			msg:          tea.KeyMsg{Type: tea.KeyCtrlD},
-			expectedView: viewSelect,
-			validateModel: func(t *testing.T, m Model, cmd tea.Cmd) {
-				// After deletion, should have 1 server
-				if len(m.servers) != 1 {
-					t.Errorf("Expected 1 server after deletion, got %d", len(m.servers))
-				}
-			},
-		},
-		{
-			name: "ctrl+d on last server switches to form",
-			setupServers: []server.Server{
-				{ID: uuid.New(), Name: "Only Server", CreatedAt: time.Now()},
-			},
-			initialView:  viewSelect,
-			msg:          tea.KeyMsg{Type: tea.KeyCtrlD},
-			expectedView: viewForm,
-			validateModel: func(t *testing.T, m Model, cmd tea.Cmd) {
-				if len(m.servers) != 0 {
-					t.Errorf("Expected 0 servers after deletion, got %d", len(m.servers))
-				}
-				if m.selectForm != nil {
-					t.Error("Expected selectForm to be nil")
-				}
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -249,8 +195,8 @@ func TestUpdate(t *testing.T) {
 			m := New(tempDir)
 			if tt.initialView != 0 {
 				m.view = tt.initialView
-				if tt.initialView == viewForm && m.serverForm == nil {
-					m.initialiseCreateForm()
+				if tt.initialView == viewForm {
+					m.serverForm = newServerFormModel(m.servers)
 				}
 			}
 
@@ -284,7 +230,7 @@ func TestView(t *testing.T) {
 			name: "view renders form when in form view",
 			setupModel: func() Model {
 				m := Model{view: viewForm}
-				m.initialiseCreateForm()
+				m.serverForm = newServerFormModel([]server.Server{})
 				return m
 			},
 			validateView: func(t *testing.T, view string) {
@@ -358,7 +304,7 @@ func TestCreateServer(t *testing.T) {
 			existingCount: 0,
 			expectCmd:     true,
 			setupForm: func(m *Model) {
-				m.serverForm.State = 0 // Reset to allow value setting
+				// serverForm is initialized, no need to reset state
 			},
 		},
 		{
@@ -366,7 +312,7 @@ func TestCreateServer(t *testing.T) {
 			existingCount: 1,
 			expectCmd:     false,
 			setupForm: func(m *Model) {
-				m.serverForm.State = 0
+				// serverForm is initialized, no need to reset state
 			},
 		},
 	}
@@ -376,26 +322,40 @@ func TestCreateServer(t *testing.T) {
 			tempDir := setupTempDir(t)
 			defer removeTempDir(t, tempDir)
 
-			m := Model{storage: tempDir}
-
 			// Add existing servers if needed
 			for i := 0; i < tt.existingCount; i++ {
-				m.servers = append(m.servers, server.Server{
-					ID:   uuid.New(),
-					Name: fmt.Sprintf("Existing%d", i),
-				})
+				_, _ = server.New(server.CreateServer{
+					Name:     fmt.Sprintf("Existing%d", i),
+					Address:  "localhost",
+					Port:     "5432",
+					Username: "user",
+					Password: "pass",
+					Database: "db",
+				}, tempDir)
 			}
 
+			// Initialize model with New() to ensure proper initialization
+			m := New(tempDir)
+
 			// Create form
-			m.initialiseCreateForm()
+			m.serverForm = newServerFormModel(m.servers)
 
 			if tt.setupForm != nil {
 				tt.setupForm(&m)
 			}
 
-			cmd := m.createServer()
+			// Create a test server
+			testServer := server.CreateServer{
+				Name:     "Test Server",
+				Address:  "localhost",
+				Port:     "5432",
+				Username: "user",
+				Password: "pass",
+				Database: "testdb",
+			}
+			cmd := m.createServer(testServer)
 
-			if tt.expectCmd && cmd == nil && m.serverForm == nil {
+			if tt.expectCmd && cmd == nil {
 				t.Error("Expected command but got nil")
 			}
 			if !tt.expectCmd && cmd != nil {
@@ -424,19 +384,21 @@ func TestEditServerFlow(t *testing.T) {
 
 		m := New(tempDir)
 
-		// Simulate selecting edit mode
-		model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+		// Set proper dimensions for the model
+		m.SetSize(100, 50)
+
+		// Verify we start in select view
+		if m.view != viewSelect {
+			t.Error("Expected select view initially")
+		}
+
+		// Manually trigger editServerMsg since key press 'e' goes through the list
+		model, _ := m.Update(editServerMsg{Server: *createdServer})
 		m = model.(Model)
 
-		// Verify we're in form view with editedServer set
+		// Verify we're in form view
 		if m.view != viewForm {
-			t.Error("Expected form view after pressing 'e'")
-		}
-		if m.editedServer == nil {
-			t.Error("Expected editedServer to be set")
-		}
-		if m.editedServer != nil && m.editedServer.ID != createdServer.ID {
-			t.Error("Wrong server selected for editing")
+			t.Error("Expected form view after edit message")
 		}
 
 		// Simulate escape to cancel edit
@@ -446,9 +408,6 @@ func TestEditServerFlow(t *testing.T) {
 		// Should be back in select view
 		if m.view != viewSelect {
 			t.Error("Expected select view after escape")
-		}
-		if m.serverForm != nil {
-			t.Error("Expected serverForm to be nil after canceling")
 		}
 	})
 }
@@ -545,6 +504,397 @@ func findSubstring(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// Integration tests - test full key press flows
+
+func TestKeyPressIntegration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("press 'n' key creates newServerMsg", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		// Create a server so we start in select view
+		_, _ = server.New(server.CreateServer{
+			Name:     "Test Server",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+
+		// Send 'n' key to the model
+		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+		m = model.(Model)
+
+		// Should return a command that generates newServerMsg
+		if cmd == nil {
+			t.Fatal("Expected command from 'n' key press")
+		}
+
+		// Execute the command to get the message
+		msg := cmd()
+		if _, ok := msg.(newServerMsg); !ok {
+			t.Errorf("Expected newServerMsg, got %T", msg)
+		}
+
+		// Process the message
+		model, _ = m.Update(msg)
+		m = model.(Model)
+
+		// Should now be in form view
+		if m.view != viewForm {
+			t.Errorf("Expected form view after processing newServerMsg, got %v", m.view)
+		}
+	})
+
+	t.Run("press 'e' key creates editServerMsg", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		createdServer, _ := server.New(server.CreateServer{
+			Name:     "Test Server",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+
+		// Send 'e' key
+		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+		m = model.(Model)
+
+		if cmd == nil {
+			t.Fatal("Expected command from 'e' key press")
+		}
+
+		// Execute command
+		msg := cmd()
+		editMsg, ok := msg.(editServerMsg)
+		if !ok {
+			t.Fatalf("Expected editServerMsg, got %T", msg)
+		}
+
+		// Verify it's editing the correct server
+		if editMsg.Server.ID != createdServer.ID {
+			t.Error("editServerMsg contains wrong server ID")
+		}
+
+		// Process message
+		model, _ = m.Update(msg)
+		m = model.(Model)
+
+		if m.view != viewForm {
+			t.Error("Expected form view after processing editServerMsg")
+		}
+	})
+
+	t.Run("press ctrl+d deletes server", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		// Create two servers
+		_, _ = server.New(server.CreateServer{
+			Name:     "Server 1",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		_, _ = server.New(server.CreateServer{
+			Name:     "Server 2",
+			Address:  "localhost",
+			Port:     "5433",
+			Username: "user",
+			Password: "pass",
+			Database: "db2",
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+
+		if len(m.servers) != 2 {
+			t.Fatalf("Expected 2 servers, got %d", len(m.servers))
+		}
+
+		// Get the currently selected server (first in list)
+		firstServerID := m.servers[0].ID
+
+		// Send ctrl+d
+		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+		m = model.(Model)
+
+		if cmd == nil {
+			t.Fatal("Expected command from ctrl+d")
+		}
+
+		// Execute command
+		msg := cmd()
+		deleteMsg, ok := msg.(deleteServerMsg)
+		if !ok {
+			t.Fatalf("Expected deleteServerMsg, got %T", msg)
+		}
+
+		// Verify the message contains the first server (which is selected by default)
+		if deleteMsg.Server.ID != firstServerID {
+			t.Errorf("deleteServerMsg contains wrong server ID. Expected %s, got %s",
+				firstServerID, deleteMsg.Server.ID)
+		}
+
+		// Process message
+		model, _ = m.Update(msg)
+		m = model.(Model)
+
+		// Should have 1 server left
+		if len(m.servers) != 1 {
+			t.Errorf("Expected 1 server after deletion, got %d", len(m.servers))
+		}
+
+		// Verify the deleted server is not in the list
+		for _, srv := range m.servers {
+			if srv.ID == firstServerID {
+				t.Error("Deleted server still in list")
+			}
+		}
+	})
+
+	t.Run("deleting last server switches to form view", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		// Create only one server
+		_, _ = server.New(server.CreateServer{
+			Name:     "Only Server",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+
+		if len(m.servers) != 1 {
+			t.Fatalf("Expected 1 server, got %d", len(m.servers))
+		}
+
+		// Verify we start in select view
+		if m.view != viewSelect {
+			t.Fatal("Expected select view initially")
+		}
+
+		// Get the only server's ID
+		serverID := m.servers[0].ID
+
+		// Send ctrl+d to delete
+		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+		m = model.(Model)
+
+		if cmd == nil {
+			t.Fatal("Expected command from ctrl+d")
+		}
+
+		// Execute command
+		msg := cmd()
+		deleteMsg, ok := msg.(deleteServerMsg)
+		if !ok {
+			t.Fatalf("Expected deleteServerMsg, got %T", msg)
+		}
+
+		// Verify correct server
+		if deleteMsg.Server.ID != serverID {
+			t.Error("deleteServerMsg contains wrong server ID")
+		}
+
+		// Process deletion message
+		model, _ = m.Update(msg)
+		m = model.(Model)
+
+		// Should now have 0 servers
+		if len(m.servers) != 0 {
+			t.Errorf("Expected 0 servers after deletion, got %d", len(m.servers))
+		}
+
+		// Should have switched to form view
+		if m.view != viewForm {
+			t.Errorf("Expected form view after deleting last server, got %v", m.view)
+		}
+	})
+}
+
+func TestUILayout(t *testing.T) {
+	t.Parallel()
+
+	t.Run("view contains help text", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		_, _ = server.New(server.CreateServer{
+			Name:     "Test Server",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+		view := m.View()
+
+		expectedHelpText := []string{
+			"Press n to create a new server",
+			"Press e to edit the selected server",
+			"Press ctrl+d to delete the selected server",
+		}
+
+		for _, text := range expectedHelpText {
+			if !contains(view, text) {
+				t.Errorf("View missing help text: %s", text)
+			}
+		}
+	})
+
+	t.Run("view shows server info panel", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		_, _ = server.New(server.CreateServer{
+			Name:                   "Test Server",
+			Address:                "testhost",
+			Port:                   "5432",
+			Username:               "testuser",
+			Password:               "pass",
+			Database:               "testdb",
+			ShareDatabaseSchemaLLM: true,
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+		view := m.View()
+
+		expectedInfo := []string{
+			"Name: Test Server",
+			"Address: testhost",
+			"Port: 5432",
+			"Username: testuser",
+			"Database: testdb",
+			"Share Database Schema with LLM: Yes",
+		}
+
+		for _, info := range expectedInfo {
+			if !contains(view, info) {
+				t.Errorf("View missing server info: %s", info)
+			}
+		}
+	})
+
+	t.Run("view shows Select a server title", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		_, _ = server.New(server.CreateServer{
+			Name:     "Test",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+		view := m.View()
+
+		if !contains(view, "Select a server") {
+			t.Error("View missing 'Select a server' title")
+		}
+	})
+
+	t.Run("empty state shows appropriate message", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		// Create and immediately delete to get empty state
+		srv, _ := server.New(server.CreateServer{
+			Name:     "Temp",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		_, _ = server.Delete(srv.ID, tempDir)
+
+		// Now create model with no servers, but force select view
+		m := Model{
+			storage:     tempDir,
+			servers:     []server.Server{},
+			serversList: newServersListModel([]server.Server{}),
+			view:        viewSelect,
+			width:       100,
+			height:      50,
+		}
+		m.serversList.setSize(100, 50)
+
+		view := m.View()
+
+		if !contains(view, "No servers available") {
+			t.Error("Empty state should show 'No servers available'")
+		}
+	})
+}
+
+func TestServerListNavigation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("enter key on selected server returns SelectedServerMsg", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		srv, _ := server.New(server.CreateServer{
+			Name:     "Test Server",
+			Address:  "localhost",
+			Port:     "5432",
+			Username: "user",
+			Password: "pass",
+			Database: "db",
+		}, tempDir)
+
+		m := New(tempDir)
+		m.SetSize(100, 50)
+
+		// Press enter
+		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		m = model.(Model)
+
+		if cmd == nil {
+			t.Fatal("Expected command from enter key")
+		}
+
+		msg := cmd()
+		selectedMsg, ok := msg.(SelectedServerMsg)
+		if !ok {
+			t.Fatalf("Expected SelectedServerMsg, got %T", msg)
+		}
+
+		if selectedMsg.Server.ID != srv.ID {
+			t.Error("SelectedServerMsg contains wrong server")
+		}
+	})
 }
 
 // Benchmark tests
