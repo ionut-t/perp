@@ -74,6 +74,7 @@ type Model struct {
 	logs              []chatLog
 	markdown          markdown.Model
 	latestReleaseInfo *update.LatestReleaseInfo
+	expandedDisplay   bool
 }
 
 type chatLog struct {
@@ -192,6 +193,10 @@ func (m *Model) ShowLLMLogs() {
 func (m *Model) ShowPsqlHelp() {
 	m.view = viewPSQLHelp
 	m.viewport.SetContent(help.RenderCmdHelp(m.width-1, psql.CommandDescriptions))
+}
+
+func (m *Model) SetExpandedDisplay(expanded bool) {
+	m.expandedDisplay = expanded
 }
 
 func (m *Model) IsViewChangeRequired() bool {
@@ -432,6 +437,10 @@ func (m *Model) renderError(width, height int) string {
 }
 
 func (m *Model) buildQueryResultsTable(headers []string, results []map[string]db.RowResult) ([][]string, []string) {
+	if m.expandedDisplay {
+		return m.buildExpandedQueryResultsTable(headers, results)
+	}
+
 	rows := [][]string{}
 
 	headers = append([]string{"#"}, headers...)
@@ -462,7 +471,44 @@ func (m *Model) buildQueryResultsTable(headers []string, results []map[string]db
 	return rows, headers
 }
 
+// buildExpandedTable is a generic helper for creating expanded display tables
+// valueExtractor is a function that extracts the value for a given row index and header
+func (m *Model) buildExpandedTable(headers []string, rowCount int, valueExtractor func(rowIndex int, header string) string) ([][]string, []string) {
+	rows := [][]string{}
+	expandedHeaders := []string{"Field", "Value"}
+
+	for i := range rowCount {
+		// Add record separator
+		rows = append(rows, []string{fmt.Sprintf("-[ RECORD %d ]-", i+1), ""})
+
+		// Add each field as a row
+		for _, header := range headers {
+			value := valueExtractor(i, header)
+			rows = append(rows, []string{header, strings.ReplaceAll(value, "\n", " ")})
+		}
+	}
+
+	return rows, expandedHeaders
+}
+
+func (m *Model) buildExpandedQueryResultsTable(headers []string, results []map[string]db.RowResult) ([][]string, []string) {
+	return m.buildExpandedTable(headers, len(results), func(rowIndex int, header string) string {
+		row := results[rowIndex]
+		if val, ok := row[header]; ok {
+			if val.Value == nil {
+				return "NULL"
+			}
+			return fmt.Sprintf("%v", db.FormatValue(val.Value, val.Type))
+		}
+		return "NULL"
+	})
+}
+
 func (m *Model) buildPsqlCommandTable(headers []string, results []map[string]any) ([][]string, []string) {
+	if m.expandedDisplay {
+		return m.buildExpandedPsqlCommandTable(headers, results)
+	}
+
 	rows := [][]string{}
 
 	headers = append([]string{"#"}, headers...)
@@ -491,6 +537,19 @@ func (m *Model) buildPsqlCommandTable(headers []string, results []map[string]any
 		rows = append(rows, rowData)
 	}
 	return rows, headers
+}
+
+func (m *Model) buildExpandedPsqlCommandTable(headers []string, results []map[string]any) ([][]string, []string) {
+	return m.buildExpandedTable(headers, len(results), func(rowIndex int, header string) string {
+		row := results[rowIndex]
+		if val, ok := row[header]; ok {
+			if val == nil {
+				return "NULL"
+			}
+			return fmt.Sprintf("%v", val)
+		}
+		return "NULL"
+	})
 }
 
 func (m *Model) dispatchClearYankMsg() tea.Cmd {

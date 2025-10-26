@@ -524,13 +524,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case toggleExpandedMsg:
 		m.loading = false
 		m.expandedDisplay = !m.expandedDisplay
-		// TODO: Implement expanded display in content
-		// m.content.SetExpandedDisplay(m.expandedDisplay)
+		m.content.SetExpandedDisplay(m.expandedDisplay)
 		status := "OFF"
 		if m.expandedDisplay {
 			status = "ON"
 		}
-		return m, m.successNotification(fmt.Sprintf("Expanded display is %s", status))
+
+		m.editor.SetContent("")
+
+		ed, cmd := m.editor.Update(nil)
+		m.editor = ed.(editor.Model)
+
+		return m, tea.Batch(
+			cmd,
+			m.successNotification(fmt.Sprintf("Expanded display is %s", status)),
+		)
 
 	case toggleTimingMsg:
 		m.loading = false
@@ -545,7 +553,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.editor.SetContent("")
 
-		return m, m.successNotification(fmt.Sprintf("Timing is %s", status))
+		m.editor.SetContent("")
+
+		ed, cmd := m.editor.Update(nil)
+		m.editor = ed.(editor.Model)
+
+		return m, tea.Batch(
+			cmd,
+			m.successNotification(fmt.Sprintf("Timing is %s", status)),
+		)
 
 	case showPsqlHelpMsg:
 		m.content.ShowPsqlHelp()

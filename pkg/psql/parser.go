@@ -25,6 +25,10 @@ const (
 	CmdListUsers
 	CmdListSequences
 	CmdListForeignTables
+	CmdConnInfo
+	CmdListExtensions
+	CmdListPrivileges
+	CmdListMaterializedViews
 	CmdQuit
 )
 
@@ -37,56 +41,69 @@ type Command struct {
 
 // PostgreSQL command string constants
 const (
-	PSQL_Describe              = "\\d"
-	PSQL_ListTables            = "\\dt"
-	PSQL_ListTablesPlus        = "\\dt+"
-	PSQL_ListViews             = "\\dv"
-	PSQL_ListViewsPlus         = "\\dv+"
-	PSQL_ListIndexes           = "\\di"
-	PSQL_ListIndexesPlus       = "\\di+"
-	PSQL_ListFunctions         = "\\df"
-	PSQL_ListFunctionsPlus     = "\\df+"
-	PSQL_ListSchemas           = "\\dn"
-	PSQL_ListSchemasPlus       = "\\dn+"
-	PSQL_ListSequences         = "\\ds"
-	PSQL_ListSequencesPlus     = "\\ds+"
-	PSQL_ListForeignTables     = "\\dE"
-	PSQL_ListForeignTablesPlus = "\\dE+"
-	PSQL_ListUsers             = "\\du"
-	PSQL_ListUsersPlus         = "\\du+"
-	PSQL_ListDatabases         = "\\l"
-	PSQL_ListDatabasesPlus     = "\\l+"
-	PSQL_ListDatabasesAlt      = "\\list"
-	PSQL_Connect               = "\\c"
-	PSQL_ConnectAlt            = "\\connect"
-	PSQL_ToggleExpanded        = "\\x"
-	PSQL_ToggleTiming          = "\\timing"
-	PSQL_Help                  = "\\h"
-	PSQL_HelpAlt               = "\\help"
-	PSQL_HelpPsql              = "\\?"
-	PSQL_ExecuteFile           = "\\i"
-	PSQL_Quit                  = "\\q"
+	PSQL_Describe                  = "\\d"
+	PSQL_ListTables                = "\\dt"
+	PSQL_ListTablesPlus            = "\\dt+"
+	PSQL_ListViews                 = "\\dv"
+	PSQL_ListViewsPlus             = "\\dv+"
+	PSQL_ListIndexes               = "\\di"
+	PSQL_ListIndexesPlus           = "\\di+"
+	PSQL_ListFunctions             = "\\df"
+	PSQL_ListFunctionsPlus         = "\\df+"
+	PSQL_ListSchemas               = "\\dn"
+	PSQL_ListSchemasPlus           = "\\dn+"
+	PSQL_ListSequences             = "\\ds"
+	PSQL_ListSequencesPlus         = "\\ds+"
+	PSQL_ListForeignTables         = "\\dE"
+	PSQL_ListForeignTablesPlus     = "\\dE+"
+	PSQL_ListUsers                 = "\\du"
+	PSQL_ListUsersPlus             = "\\du+"
+	PSQL_ListMaterializedViews     = "\\dm"
+	PSQL_ListMaterializedViewsPlus = "\\dm+"
+	PSQL_ListExtensions            = "\\dx"
+	PSQL_ListExtensionsPlus        = "\\dx+"
+	PSQL_ListPrivileges            = "\\dp"
+	PSQL_ListPrivilegesAlt         = "\\z"
+	PSQL_ListDatabases             = "\\l"
+	PSQL_ListDatabasesPlus         = "\\l+"
+	PSQL_ListDatabasesAlt          = "\\list"
+	PSQL_Connect                   = "\\c"
+	PSQL_ConnectAlt                = "\\connect"
+	PSQL_ConnInfo                  = "\\conninfo"
+	PSQL_ToggleExpanded            = "\\x"
+	PSQL_ToggleTiming              = "\\timing"
+	PSQL_Help                      = "\\h"
+	PSQL_HelpAlt                   = "\\help"
+	PSQL_HelpPsql                  = "\\?"
+	PSQL_ExecuteFile               = "\\i"
+	PSQL_Quit                      = "\\q"
 )
 
 // PostgreSQL command mappings
 var PSQL_COMMANDS = map[string]CommandType{
-	PSQL_Describe:              CmdDescribe,
-	PSQL_ListTables:            CmdListTables,
-	PSQL_ListTablesPlus:        CmdListTables,
-	PSQL_ListViews:             CmdListViews,
-	PSQL_ListViewsPlus:         CmdListViews,
-	PSQL_ListIndexes:           CmdListIndexes,
-	PSQL_ListIndexesPlus:       CmdListIndexes,
-	PSQL_ListFunctions:         CmdListFunctions,
-	PSQL_ListFunctionsPlus:     CmdListFunctions,
-	PSQL_ListSchemas:           CmdListSchemas,
-	PSQL_ListSchemasPlus:       CmdListSchemas,
-	PSQL_ListSequences:         CmdListSequences,
-	PSQL_ListSequencesPlus:     CmdListSequences,
-	PSQL_ListForeignTables:     CmdListForeignTables,
-	PSQL_ListForeignTablesPlus: CmdListForeignTables,
-	PSQL_ListUsers:             CmdListUsers,
-	PSQL_ListUsersPlus:         CmdListUsers,
+	PSQL_Describe:                  CmdDescribe,
+	PSQL_ListTables:                CmdListTables,
+	PSQL_ListTablesPlus:            CmdListTables,
+	PSQL_ListViews:                 CmdListViews,
+	PSQL_ListViewsPlus:             CmdListViews,
+	PSQL_ListIndexes:               CmdListIndexes,
+	PSQL_ListIndexesPlus:           CmdListIndexes,
+	PSQL_ListFunctions:             CmdListFunctions,
+	PSQL_ListFunctionsPlus:         CmdListFunctions,
+	PSQL_ListSchemas:               CmdListSchemas,
+	PSQL_ListSchemasPlus:           CmdListSchemas,
+	PSQL_ListSequences:             CmdListSequences,
+	PSQL_ListSequencesPlus:         CmdListSequences,
+	PSQL_ListForeignTables:         CmdListForeignTables,
+	PSQL_ListForeignTablesPlus:     CmdListForeignTables,
+	PSQL_ListUsers:                 CmdListUsers,
+	PSQL_ListUsersPlus:             CmdListUsers,
+	PSQL_ListMaterializedViews:     CmdListMaterializedViews,
+	PSQL_ListMaterializedViewsPlus: CmdListMaterializedViews,
+	PSQL_ListExtensions:            CmdListExtensions,
+	PSQL_ListExtensionsPlus:        CmdListExtensions,
+	PSQL_ListPrivileges:            CmdListPrivileges,
+	PSQL_ListPrivilegesAlt:         CmdListPrivileges,
 
 	// Database listing
 	PSQL_ListDatabases:     CmdListDatabases,
@@ -96,10 +113,11 @@ var PSQL_COMMANDS = map[string]CommandType{
 	// Connection
 	PSQL_Connect:    CmdConnect,
 	PSQL_ConnectAlt: CmdConnect,
+	PSQL_ConnInfo:   CmdConnInfo,
 
 	// Toggle commands
-	// PSQL_ToggleExpanded: CmdToggleExpanded,
-	PSQL_ToggleTiming: CmdToggleTiming,
+	PSQL_ToggleExpanded: CmdToggleExpanded,
+	PSQL_ToggleTiming:   CmdToggleTiming,
 
 	// Help commands
 	PSQL_Help:     CmdHelp,
@@ -125,6 +143,8 @@ var CommandDescriptions = []struct {
 	{PSQL_ListTablesPlus, "List tables with additional information"},
 	{PSQL_ListViews, "List views"},
 	{PSQL_ListViewsPlus, "List views with additional information"},
+	{PSQL_ListMaterializedViews, "List materialized views"},
+	{PSQL_ListMaterializedViewsPlus, "List materialized views with additional information"},
 	{PSQL_ListIndexes, "List indexes"},
 	{PSQL_ListIndexesPlus, "List indexes with additional information"},
 	{PSQL_ListFunctions, "List functions"},
@@ -135,6 +155,10 @@ var CommandDescriptions = []struct {
 	{PSQL_ListSequencesPlus, "List sequences with additional information"},
 	{PSQL_ListForeignTables, "List foreign tables"},
 	{PSQL_ListForeignTablesPlus, "List foreign tables with additional information"},
+	{PSQL_ListExtensions, "List installed extensions"},
+	{PSQL_ListExtensionsPlus, "List installed extensions with additional information"},
+	{PSQL_ListPrivileges, "List access privileges for tables, views, and sequences"},
+	{PSQL_ListPrivilegesAlt, "List access privileges (alternative syntax)"},
 	{PSQL_ListUsers, "List users and roles"},
 	{PSQL_ListUsersPlus, "List users and roles with additional information"},
 	{PSQL_ListDatabases, "List databases"},
@@ -144,9 +168,10 @@ var CommandDescriptions = []struct {
 	// Connection commands
 	{PSQL_Connect, "Connect to database"},
 	{PSQL_ConnectAlt, "Connect to a database (alternative syntax)"},
+	{PSQL_ConnInfo, "Display current connection information"},
 
 	// Toggle commands
-	// {PSQL_ToggleExpanded, "Toggle expanded output"},
+	{PSQL_ToggleExpanded, "Toggle expanded output"},
 	{PSQL_ToggleTiming, "Toggle timing of commands"},
 
 	// Help commands
@@ -182,6 +207,8 @@ func (c CommandType) String() string {
 		return "list-databases"
 	case CmdConnect:
 		return "connect"
+	case CmdConnInfo:
+		return "connection-info"
 	case CmdToggleExpanded:
 		return "toggle-expanded"
 	case CmdToggleTiming:
@@ -194,6 +221,12 @@ func (c CommandType) String() string {
 		return "list-sequences"
 	case CmdListForeignTables:
 		return "list-foreign-tables"
+	case CmdListMaterializedViews:
+		return "list-materialized-views"
+	case CmdListExtensions:
+		return "list-extensions"
+	case CmdListPrivileges:
+		return "list-privileges"
 	case CmdQuit:
 		return "quit"
 	default:

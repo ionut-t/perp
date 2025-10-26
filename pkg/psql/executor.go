@@ -25,6 +25,22 @@ func New(database db.Database) Executor {
 	return &executor{db: database}
 }
 
+// execAndExtract is a helper to execute a query and extract results.
+// It takes an error message context for wrapping failures.
+func (e *executor) execAndExtract(ctx context.Context, query string, errCtxMsg string) (*Result, error) {
+	result, err := e.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to %s: %w", errCtxMsg, err)
+	}
+
+	rows, columns, err := db.ExtractPsqlResults(result.Rows())
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract results for %s: %w", errCtxMsg, err)
+	}
+
+	return &Result{Columns: columns, Rows: rows}, nil
+}
+
 // Result represents the output of a psql command
 type Result struct {
 	Columns       []string
@@ -139,6 +155,22 @@ func (e *executor) execute(ctx context.Context, cmd *Command) (*Result, error) {
 		} else {
 			result, err = e.listForeignTables(ctx)
 		}
+	case CmdListMaterializedViews:
+		if cmd.IsExtended() {
+			result, err = e.listMaterializedViewsExtended(ctx)
+		} else {
+			result, err = e.listMaterializedViews(ctx)
+		}
+	case CmdListExtensions:
+		if cmd.IsExtended() {
+			result, err = e.listExtensionsExtended(ctx)
+		} else {
+			result, err = e.listExtensions(ctx)
+		}
+	case CmdListPrivileges:
+		result, err = e.listPrivileges(ctx)
+	case CmdConnInfo:
+		result, err = e.connectionInfo(ctx)
 	default:
 		return nil, fmt.Errorf("command not implemented: %s", cmd.Raw)
 	}
@@ -1136,12 +1168,172 @@ func (e *executor) listForeignTablesExtended(ctx context.Context) (*Result, erro
 	}, nil
 }
 
+// listMaterializedViews implements \dm command
+func (e *executor) listMaterializedViews(ctx context.Context) (*Result, error) {
+	query := `
+		SELECT
+			n.nspname as "Schema",
+			c.relname as "Name",
+			'materialized view' as "Type",
+			pg_catalog.pg_get_userbyid(c.relowner) as "Owner"
+		FROM pg_catalog.pg_class c
+		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind = 'm'
+		AND n.nspname <> 'pg_catalog'
+		AND n.nspname <> 'information_schema'
+		AND pg_catalog.pg_table_is_visible(c.oid)
+		ORDER BY 1,2;`
+
+	return e.execAndExtract(ctx, query, "list materialized views")
+}
+
+// listMaterializedViewsExtended implements \dm+ command
+func (e *executor) listMaterializedViewsExtended(ctx context.Context) (*Result, error) {
+	query := `
+		SELECT
+			n.nspname as "Schema",
+			c.relname as "Name",
+			'materialized view' as "Type",
+			pg_catalog.pg_get_userbyid(c.relowner) as "Owner",
+			CASE c.relpersistence
+				WHEN 'p' THEN 'permanent'
+				WHEN 't' THEN 'temporary'
+				WHEN 'u' THEN 'unlogged'
+			END as "Persistence",
+			pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) as "Size",
+			obj_description(c.oid, 'pg_class') as "Description"
+		FROM pg_catalog.pg_class c
+		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind = 'm'
+		AND n.nspname <> 'pg_catalog'
+		AND n.nspname <> 'information_schema'
+		AND pg_catalog.pg_table_is_visible(c.oid)
+		ORDER BY 1,2;`
+
+	return e.execAndExtract(ctx, query, "list materialized views (extended)")
+}
+
+// listExtensions implements \dx command
+func (e *executor) listExtensions(ctx context.Context) (*Result, error) {
+	query := `
+		SELECT
+			e.extname as "Name",
+			e.extversion as "Version",
+			n.nspname as "Schema",
+			c.description as "Description"
+		FROM pg_catalog.pg_extension e
+		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+		LEFT JOIN pg_catalog.pg_description c ON c.objoid = e.oid
+			AND c.classoid = 'pg_catalog.pg_extension'::pg_catalog.regclass
+		ORDER BY 1;`
+
+	return e.execAndExtract(ctx, query, "list extensions")
+}
+
+// listExtensionsExtended implements \dx+ command
+func (e *executor) listExtensionsExtended(ctx context.Context) (*Result, error) {
+	query := `
+		SELECT
+			e.extname as "Name",
+			e.extversion as "Version",
+			n.nspname as "Schema",
+			c.description as "Description",
+			pg_catalog.pg_get_userbyid(e.extowner) as "Owner",
+			CASE
+				WHEN e.extrelocatable THEN 'relocatable'
+				ELSE 'not relocatable'
+			END as "Relocatable"
+		FROM pg_catalog.pg_extension e
+		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace
+		LEFT JOIN pg_catalog.pg_description c ON c.objoid = e.oid
+			AND c.classoid = 'pg_catalog.pg_extension'::pg_catalog.regclass
+		ORDER BY 1;`
+
+	return e.execAndExtract(ctx, query, "list extensions (extended)")
+}
+
+// listPrivileges implements \dp and \z commands
+func (e *executor) listPrivileges(ctx context.Context) (*Result, error) {
+	query := `
+		SELECT
+			n.nspname as "Schema",
+			c.relname as "Name",
+			CASE c.relkind
+				WHEN 'r' THEN 'table'
+				WHEN 'v' THEN 'view'
+				WHEN 'm' THEN 'materialized view'
+				WHEN 'S' THEN 'sequence'
+				WHEN 'f' THEN 'foreign table'
+				WHEN 'p' THEN 'partitioned table'
+			END as "Type",
+			pg_catalog.array_to_string(c.relacl, E'\n') AS "Access privileges",
+			pg_catalog.array_to_string(ARRAY(
+				SELECT attname || ' (' ||
+					pg_catalog.array_to_string(attacl, E', ') || ')'
+				FROM pg_catalog.pg_attribute a
+				WHERE attrelid = c.oid AND NOT attisdropped AND attacl IS NOT NULL
+			), E'\n') AS "Column privileges"
+		FROM pg_catalog.pg_class c
+		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind IN ('r', 'v', 'm', 'S', 'f', 'p')
+		AND n.nspname <> 'pg_catalog'
+		AND n.nspname <> 'information_schema'
+		AND pg_catalog.pg_table_is_visible(c.oid)
+		ORDER BY 1, 2;`
+
+	return e.execAndExtract(ctx, query, "list privileges")
+}
+
+// connectionInfo implements \conninfo command
+func (e *executor) connectionInfo(ctx context.Context) (*Result, error) {
+	query := `
+		SELECT
+			current_database() as "Database",
+			current_user as "User",
+			COALESCE(inet_server_addr()::text, 'localhost') as "Host",
+			COALESCE(inet_server_port()::text, 'socket') as "Port",
+			version() as "Server Version"`
+
+	return e.execAndExtract(ctx, query, "get connection info")
+}
+
+// validatePattern checks if a pattern contains only safe characters
+// Returns an error if the pattern contains potentially dangerous characters
+func validatePattern(pattern string) error {
+	// Empty pattern is valid (means no filter)
+	if pattern == "" {
+		return nil
+	}
+
+	// Allow alphanumeric, underscore, dot (for schema.table), wildcards (*, ?),
+	// hyphen, and dollar sign (valid in PostgreSQL identifiers)
+	validPattern := regexp.MustCompile(`^[a-zA-Z0-9_.*?$-]+$`)
+
+	if !validPattern.MatchString(pattern) {
+		return fmt.Errorf("invalid pattern: contains disallowed characters")
+	}
+
+	return nil
+}
+
 // patternToLike converts a psql pattern to a SQL LIKE pattern
+// and escapes special characters to prevent SQL injection
 func patternToLike(pattern string) string {
+	// First, escape SQL LIKE special characters that should be treated literally
+	result := pattern
+	result = strings.ReplaceAll(result, "\\", "\\\\") // Escape backslashes first
+	result = strings.ReplaceAll(result, "%", "\\%")   // Escape existing %
+	result = strings.ReplaceAll(result, "_", "\\_")   // Escape existing _
+
+	// Then escape single quotes to prevent SQL injection (defense in depth)
+	result = strings.ReplaceAll(result, "'", "''")
+
+	// Now convert psql wildcards to SQL LIKE wildcards
 	// In psql, * means any sequence of characters (like % in SQL)
 	// and ? means any single character (like _ in SQL)
-	result := strings.ReplaceAll(pattern, "*", "%")
+	result = strings.ReplaceAll(result, "*", "%")
 	result = strings.ReplaceAll(result, "?", "_")
+
 	return result
 }
 
@@ -1155,6 +1347,7 @@ func parseSchemaAndTable(pattern string) (schema, table string) {
 }
 
 // buildPatternCondition builds SQL conditions for pattern matching
+// Returns the condition string and any error if the pattern is invalid
 func buildPatternCondition(pattern string, schemaCol, nameCol string) string {
 	if pattern == "" {
 		return ""
@@ -1165,12 +1358,14 @@ func buildPatternCondition(pattern string, schemaCol, nameCol string) string {
 
 	if schema != "" {
 		schemaPattern := patternToLike(schema)
-		conditions = append(conditions, fmt.Sprintf("%s LIKE '%s'", schemaCol, schemaPattern))
+		// Use ESCAPE '\' to specify our escape character for LIKE
+		conditions = append(conditions, fmt.Sprintf("%s LIKE '%s' ESCAPE '\\'", schemaCol, schemaPattern))
 	}
 
 	if name != "" {
 		namePattern := patternToLike(name)
-		conditions = append(conditions, fmt.Sprintf("%s LIKE '%s'", nameCol, namePattern))
+		// Use ESCAPE '\' to specify our escape character for LIKE
+		conditions = append(conditions, fmt.Sprintf("%s LIKE '%s' ESCAPE '\\'", nameCol, namePattern))
 	}
 
 	if len(conditions) > 0 {
@@ -1181,6 +1376,11 @@ func buildPatternCondition(pattern string, schemaCol, nameCol string) string {
 
 // listTablesWithPattern lists tables matching the given pattern
 func (e *executor) listTablesWithPattern(ctx context.Context, pattern string) (*Result, error) {
+	// Validate pattern to prevent SQL injection
+	if err := validatePattern(pattern); err != nil {
+		return nil, err
+	}
+
 	patternCondition := buildPatternCondition(pattern, "n.nspname", "c.relname")
 
 	query := fmt.Sprintf(`
