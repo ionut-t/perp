@@ -420,7 +420,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focused = focusedEditor
 		m.loading = true
 		m.server = msg.Server
-		m.db, m.error = db.New(m.server.ConnectionString())
+		m.db, m.error = db.New(m.server.String())
 		if m.error == nil {
 			m.content.SetConnectionInfo(m.server)
 

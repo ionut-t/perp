@@ -897,6 +897,182 @@ func TestServerListNavigation(t *testing.T) {
 	})
 }
 
+func TestURIBasedServerCreation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("create server via URI message", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		// Start with no servers (should be in form view)
+		m := New(tempDir)
+		m.SetSize(100, 50)
+
+		if m.view != viewForm {
+			t.Fatal("Expected form view initially with no servers")
+		}
+
+		// Create a server using URI-style data
+		createMsg := createServerMsg{
+			server: server.CreateServer{
+				Name:                   "URI Test Server",
+				Address:                "urihost",
+				Port:                   "5433",
+				Username:               "uriuser",
+				Password:               "uripass",
+				Database:               "uridb",
+				ShareDatabaseSchemaLLM: true,
+			},
+		}
+
+		// Process create message
+		model, cmd := m.Update(createMsg)
+		m = model.(Model)
+
+		// Should return a command to select the new server
+		if cmd == nil {
+			t.Fatal("Expected command after server creation")
+		}
+
+		// Execute the command
+		msg := cmd()
+		selectedMsg, ok := msg.(SelectedServerMsg)
+		if !ok {
+			t.Fatalf("Expected SelectedServerMsg, got %T", msg)
+		}
+
+		// Verify server was created with correct details
+		if selectedMsg.Server.Name != "URI Test Server" {
+			t.Errorf("Name: expected 'URI Test Server', got %s", selectedMsg.Server.Name)
+		}
+		if selectedMsg.Server.Address != "urihost" {
+			t.Errorf("Address: expected 'urihost', got %s", selectedMsg.Server.Address)
+		}
+		if selectedMsg.Server.Port != 5433 {
+			t.Errorf("Port: expected 5433, got %d", selectedMsg.Server.Port)
+		}
+		if selectedMsg.Server.Username != "uriuser" {
+			t.Errorf("Username: expected 'uriuser', got %s", selectedMsg.Server.Username)
+		}
+		if selectedMsg.Server.Password != "uripass" {
+			t.Errorf("Password: expected 'uripass', got %s", selectedMsg.Server.Password)
+		}
+		if selectedMsg.Server.Database != "uridb" {
+			t.Errorf("Database: expected 'uridb', got %s", selectedMsg.Server.Database)
+		}
+		if !selectedMsg.Server.ShareDatabaseSchemaLLM {
+			t.Error("ShareDatabaseSchemaLLM: expected true, got false")
+		}
+
+		// Verify server was saved to storage
+		servers, err := server.Load(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to load servers: %v", err)
+		}
+
+		if len(servers) != 1 {
+			t.Fatalf("Expected 1 server in storage, got %d", len(servers))
+		}
+
+		if servers[0].Name != "URI Test Server" {
+			t.Error("Server not properly saved to storage")
+		}
+	})
+
+	t.Run("URI validation in form", func(t *testing.T) {
+		// Test URI parsing directly
+		validURIs := []string{
+			"postgresql://user:pass@localhost:5432/mydb",
+			"postgres://admin:secret@dbhost/production",
+			"postgres://user:pass@127.0.0.1:5432/app",
+			"postgres://user@dbhost:5432/mydb", // without password
+		}
+
+		for _, uri := range validURIs {
+			parsed, err := server.ParseConnectionURI(uri)
+			if err != nil {
+				t.Errorf("Valid URI '%s' failed to parse: %v", uri, err)
+			}
+			if parsed == nil {
+				t.Errorf("Parsed URI is nil for '%s'", uri)
+			}
+		}
+
+		invalidURIs := []string{
+			"",                          // empty
+			"not a uri",                 // malformed
+			"postgresql://localhost/db", // missing username
+			"postgresql://user@/db",     // missing host
+			"postgresql://user@host",    // missing database
+		}
+
+		for _, uri := range invalidURIs {
+			_, err := server.ParseConnectionURI(uri)
+			if err == nil {
+				t.Errorf("Invalid URI '%s' should have failed to parse", uri)
+			}
+		}
+	})
+
+	t.Run("create multiple servers with different connection methods", func(t *testing.T) {
+		tempDir := setupTempDir(t)
+		defer removeTempDir(t, tempDir)
+
+		// Create first server via traditional form fields
+		_, err := server.New(server.CreateServer{
+			Name:     "Form Server",
+			Address:  "formhost",
+			Port:     "5432",
+			Username: "formuser",
+			Password: "formpass",
+			Database: "formdb",
+		}, tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create form server: %v", err)
+		}
+
+		// Create second server via URI (using parsed components)
+		uriParsed, _ := server.ParseConnectionURI("postgresql://uriuser:uripass@urihost:5433/uridb")
+		_, err = server.New(uriParsed.ToCreateServer("URI Server", false), tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create URI server: %v", err)
+		}
+
+		// Load and verify both servers
+		servers, err := server.Load(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to load servers: %v", err)
+		}
+
+		if len(servers) != 2 {
+			t.Fatalf("Expected 2 servers, got %d", len(servers))
+		}
+
+		// Verify both servers have correct data
+		foundFormServer := false
+		foundURIServer := false
+
+		for _, srv := range servers {
+			if srv.Name == "Form Server" {
+				foundFormServer = true
+				if srv.Address != "formhost" || srv.Port != 5432 {
+					t.Error("Form server has incorrect details")
+				}
+			}
+			if srv.Name == "URI Server" {
+				foundURIServer = true
+				if srv.Address != "urihost" || srv.Port != 5433 {
+					t.Error("URI server has incorrect details")
+				}
+			}
+		}
+
+		if !foundFormServer || !foundURIServer {
+			t.Error("Not all servers were found in storage")
+		}
+	})
+}
+
 // Benchmark tests
 
 func BenchmarkNew(b *testing.B) {

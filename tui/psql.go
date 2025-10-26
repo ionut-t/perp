@@ -84,7 +84,7 @@ func (m model) connectToDatabase(database string) tea.Msg {
 
 	m.closeDbConnection()
 
-	newDb, err := db.New(m.server.ConnectionString())
+	newDb, err := db.New(m.server.String())
 	if err != nil {
 		m.server.Database = oldDatabase
 		return psqlErrorMsg{err: fmt.Errorf("failed to connect to database '%s': %w", database, err)}

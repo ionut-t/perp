@@ -59,6 +59,7 @@ type deleteServerMsg struct {
 type serversListModel struct {
 	width, height int
 	list          list.Model
+	showPassword  bool
 }
 
 func newServersListModel(servers []server.Server) serversListModel {
@@ -137,6 +138,10 @@ func (m serversListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg {
 				return deleteServerMsg{Server: selected.server}
 			}
+
+		case "p":
+			m.showPassword = !m.showPassword
+			return m, nil
 		}
 	}
 
@@ -207,6 +212,7 @@ func (m *serversListModel) renderHelpText() string {
 	sb.WriteString(styles.Subtext0.Render("Press n to create a new server") + "\n")
 	sb.WriteString(styles.Subtext0.Render("Press e to edit the selected server") + "\n")
 	sb.WriteString(styles.Subtext0.Render("Press ctrl+d to delete the selected server") + "\n")
+	sb.WriteString(styles.Subtext0.Render("Press p to toggle password visibility") + "\n")
 
 	return sb.String()
 }
@@ -237,22 +243,37 @@ func (m *serversListModel) renderServerInfo() string {
 		return noSelectionMessage
 	}
 
-	server := selected.server
+	srv := selected.server
 
-	createdAt := server.CreatedAt.Local().Format("02/01/2006 15:04:05")
-	updatedAt := server.UpdatedAt.Local().Format("02/01/2006 15:04:05")
+	createdAt := srv.CreatedAt.Local().Format("02/01/2006 15:04:05")
+	updatedAt := srv.UpdatedAt.Local().Format("02/01/2006 15:04:05")
 
 	schemaShared := "No"
-	if server.ShareDatabaseSchemaLLM {
+	if srv.ShareDatabaseSchemaLLM {
 		schemaShared = "Yes"
 	}
 
 	var sb strings.Builder
-	sb.WriteString("Name: " + server.Name + "\n")
-	sb.WriteString("Address: " + server.Address + "\n")
-	sb.WriteString("Port: " + strconv.Itoa(server.Port) + "\n")
-	sb.WriteString("Username: " + server.Username + "\n")
-	sb.WriteString("Database: " + server.Database + "\n")
+	sb.WriteString("Name: " + srv.Name + "\n")
+	sb.WriteString("Address: " + srv.Address + "\n")
+	sb.WriteString("Port: " + strconv.Itoa(srv.Port) + "\n")
+	sb.WriteString("Username: " + srv.Username + "\n")
+
+	password := server.MaskedPassword
+	connectionString := srv.MaskedString()
+	if m.showPassword {
+		password = srv.Password
+		connectionString = srv.String()
+
+		if password == "" {
+			password = "N/A"
+		}
+	}
+
+	sb.WriteString("Password: " + password + "\n")
+	sb.WriteString("Database: " + srv.Database + "\n")
+
+	sb.WriteString("Connection URI: " + connectionString + "\n")
 	sb.WriteString("Share Database Schema with LLM: " + schemaShared + "\n")
 	sb.WriteString("Created At: " + createdAt + "\n")
 	sb.WriteString("Updated At: " + updatedAt + "\n")

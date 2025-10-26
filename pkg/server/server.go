@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const MaskedPassword = "****"
+
 type Server struct {
 	ID                     uuid.UUID `json:"id"`
 	Name                   string    `json:"name"`
@@ -209,8 +211,14 @@ func Delete(id uuid.UUID, storage string) ([]Server, error) {
 	return servers, nil
 }
 
-// ConnectionString returns the PostgreSQL connection string for the server.
-func (s *Server) ConnectionString() string {
+// String returns the PostgreSQL connection string for the server.
+func (s *Server) String() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
 		s.Username, s.Password, s.Address, s.Port, s.Database)
+}
+
+// MaskedString returns the PostgreSQL connection string with the password masked.
+func (s *Server) MaskedString() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
+		s.Username, MaskedPassword, s.Address, s.Port, s.Database)
 }

@@ -346,7 +346,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "enter":
 			if m.view == viewLLMLogs {
-				log := m.logs[m.llmLogsList.GetIndex()]
+				index := m.llmLogsList.GetIndex()
+				if index < 0 || index >= len(m.logs) {
+					return m, nil
+				}
+
+				log := m.logs[index]
 
 				if log.Error != nil {
 					return m, nil
