@@ -601,12 +601,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case llmSharedSchemaMsg:
 		m.loading = false
-		m.editor.SetContent("")
 		m.content.SetLLMSharedSchema(msg.schema)
 		m.llmSharedTablesSchema = msg.tables
 		m.content.SetLLMSharedTables(m.llmSharedTablesSchema)
 
-		return m, m.successNotification(msg.message)
+		m.editor.SetContent("")
+		ed, cmd := m.editor.Update(nil)
+		m.editor = ed.(editor.Model)
+
+		return m, tea.Batch(
+			cmd,
+			m.successNotification(msg.message),
+		)
 
 	case notificationErrorMsg:
 		m.loading = false

@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/utils"
 )
 
@@ -37,7 +40,7 @@ func (m *model) addTablesSchemaToLLM() (string, error) {
 
 	finalTableList := append(m.llmSharedTablesSchema, newTables...)
 
-	schema, err := m.db.GenerateSchemaForTables(finalTableList)
+	schema, err := m.generateSchemaForTables(finalTableList)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate schema: %w", err)
 	}
@@ -101,7 +104,7 @@ func (m *model) removeTablesSchemaToLLM() (string, error) {
 		return "", nil
 	}
 
-	schema, err := m.db.GenerateSchemaForTables(m.llmSharedTablesSchema)
+	schema, err := m.generateSchemaForTables(m.llmSharedTablesSchema)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate schema for tables: %w", err)
 	}
@@ -110,4 +113,75 @@ func (m *model) removeTablesSchemaToLLM() (string, error) {
 	m.llm.AppendInstructions(schema)
 
 	return schema, nil
+}
+
+// generateSchemaForTables uses the psql executor to describe tables.
+// It returns schema information for the LLM context.
+func (m *model) generateSchemaForTables(tables []string) (string, error) {
+	// No tables specified means no schema to generate, which is not an error here.
+	if len(tables) == 0 {
+		return "", nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	executor := psql.New(m.db)
+	var sb strings.Builder
+
+	for i, tableName := range tables {
+		if i > 0 {
+			sb.WriteString("\n\n")
+		}
+
+		// Validate table name to prevent SQL injection
+		// Uses the canonical validator from pkg/psql
+		if _, err := psql.SanitiseIdentifier(tableName); err != nil {
+			return "", fmt.Errorf("tui: invalid table name %q: %w", tableName, err)
+		}
+
+		// Parse the \d command for this table
+		cmd, err := psql.Parse(fmt.Sprintf("\\d %s", tableName))
+		if err != nil {
+			return "", fmt.Errorf("tui: failed to parse describe command for table %q: %w", tableName, err)
+		}
+
+		// Execute the command
+		result, err := executor.Execute(ctx, cmd)
+		if err != nil {
+			return "", fmt.Errorf("tui: failed to execute describe command for table %q: %w", tableName, err)
+		}
+
+		// Format the result as text
+		sb.WriteString(fmt.Sprintf("Table: %s\n", tableName))
+
+		if len(result.Rows) == 0 {
+			sb.WriteString("  (no columns found)\n")
+			continue
+		}
+
+		// Write columns section
+		sb.WriteString("Columns:\n")
+		for _, row := range result.Rows {
+			// Check type assertions with ok boolean for robustness
+			column, ok := row["Column"].(string)
+			if !ok {
+				return "", fmt.Errorf("tui: failed to get 'Column' (string) from psql result for table %q", tableName)
+			}
+			colType, ok := row["Type"].(string)
+			if !ok {
+				return "", fmt.Errorf("tui: failed to get 'Type' (string) from psql result for table %q", tableName)
+			}
+			// Modifiers might legitimately be empty
+			modifiers, _ := row["Modifiers"].(string)
+
+			sb.WriteString(fmt.Sprintf("  %s %s", column, colType))
+			if modifiers != "" {
+				sb.WriteString(fmt.Sprintf(" %s", modifiers))
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String(), nil
 }

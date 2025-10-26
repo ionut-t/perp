@@ -182,13 +182,15 @@ func (e *executor) execute(ctx context.Context, cmd *Command) (*Result, error) {
 	return result, err
 }
 
-// sanitizeIdentifier validates and sanitizes a PostgreSQL identifier (table/schema name)
-func sanitizeIdentifier(identifier string) (string, error) {
-	// Allow alphanumeric, underscore, dot (for schema.table), and dollar sign
-	validIdentifier := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_$]*(\.[a-zA-Z_][a-zA-Z0-9_$]*)?$`)
+// postgresIdentifierRegexp is pre-compiled for performance
+var postgresIdentifierRegexp = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_$]*(\.[a-zA-Z_][a-zA-Z0-9_$]*)?$`)
 
-	if !validIdentifier.MatchString(identifier) {
-		return "", fmt.Errorf("invalid identifier: %s", identifier)
+// SanitiseIdentifier validates a PostgreSQL identifier (table/column name).
+// It is exported so other packages can perform the same validation.
+func SanitiseIdentifier(identifier string) (string, error) {
+	// Allow alphanumeric, underscore, dot (for schema.table), and dollar sign
+	if !postgresIdentifierRegexp.MatchString(identifier) {
+		return "", fmt.Errorf("invalid identifier: %q", identifier)
 	}
 
 	return identifier, nil
@@ -243,7 +245,7 @@ func (e *executor) listRelations(ctx context.Context) (*Result, error) {
 // describeTable implements \d table_name command
 func (e *executor) describeTable(ctx context.Context, tableName string) (*Result, error) {
 	// Sanitize the table name to prevent SQL injection
-	safeName, err := sanitizeIdentifier(tableName)
+	safeName, err := SanitiseIdentifier(tableName)
 	if err != nil {
 		return nil, err
 	}
