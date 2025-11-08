@@ -25,9 +25,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-var (
-	padding = lipgloss.NewStyle().Padding(0, 1)
-)
+var padding = lipgloss.NewStyle().Padding(0, 1)
 
 type ParsedQueryResult struct {
 	Query         string
@@ -42,6 +40,8 @@ type ParsedQueryResult struct {
 type LLMResponseSelectedMsg struct {
 	Response string
 }
+
+type ResizeMsg struct{}
 
 type clearYankMsg struct{}
 
@@ -75,6 +75,8 @@ type Model struct {
 	markdown          markdown.Model
 	latestReleaseInfo *update.LatestReleaseInfo
 	expandedDisplay   bool
+	tableRows         [][]string
+	tableHeaders      []string
 }
 
 type chatLog struct {
@@ -111,7 +113,7 @@ func (m *Model) SetSize(width, height int) {
 	m.viewport.Width = width
 	m.viewport.Height = height
 
-	m.table.SetSize(width-1, height)
+	m.table.SetSize(width, height)
 
 	m.llmLogsList.SetSize(width, height-1)
 
@@ -267,10 +269,10 @@ func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 		return nil
 	}
 
-	rows, headers := m.buildQueryResultsTable(result.Columns, result.Rows)
+	m.tableRows, m.tableHeaders = m.buildQueryResultsTable(result.Columns, result.Rows)
 
-	m.table.SetHeaders(headers)
-	m.table.SetRows(rows)
+	m.table.SetHeaders(m.tableHeaders)
+	m.table.SetRows(m.tableRows)
 	m.table.SetSelectedCell(0, 0)
 	m.view = viewTable
 
@@ -346,6 +348,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case clearYankMsg:
 		m.table.SetTheme(styles.TableTheme())
+
+	case ResizeMsg:
+		if m.view == viewTable {
+			m.table.SetTheme(styles.TableTheme())
+			m.table.SetSize(m.width, m.height)
+			m.table.SetHeaders(m.tableHeaders)
+			m.table.SetRows(m.tableRows)
+		}
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -622,7 +632,6 @@ func (m Model) yankSelectedRow() (tea.Model, tea.Cmd) {
 	var err error
 
 	jsonData, err = json.MarshalIndent(data, "", "  ")
-
 	if err != nil {
 		return m, func() tea.Msg {
 			return clearYankMsg{}

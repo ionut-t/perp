@@ -112,6 +112,7 @@ func (m model) renderUsefulHelp() string {
 		keymap.Quit,
 		keymap.ForceQuit,
 		changeFocused,
+		keymap.FullScreen,
 		keymap.Help,
 		keymap.Insert,
 		accessExportedData,

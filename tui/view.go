@@ -63,9 +63,27 @@ func (m *model) renderMain(width, height int) string {
 		commandLine,
 	)
 
-	contentHeight := height - lipgloss.Height(m.editor.View()) - lipgloss.Height(m.command.View()) - styles.ViewPadding.GetVerticalBorderSize()*2 - 2
-
 	padding := lipgloss.NewStyle().Padding(1, 1, 0)
+	commandLineHeight := lipgloss.Height(commandLine)
+
+	if m.fullScreen {
+		if m.focused == focusedEditor {
+			return padding.Render(primaryView)
+		}
+
+		fullScreenContentHeight := height - commandLineHeight - styles.ViewPadding.GetVerticalBorderSize()*2
+
+		fullScreenContentView := lipgloss.JoinVertical(
+			lipgloss.Left,
+			contentBorder.Width(width).
+				Height(fullScreenContentHeight).
+				Render(m.content.View()),
+			commandLine,
+		)
+		return padding.Render(fullScreenContentView)
+	}
+
+	contentHeight := height - lipgloss.Height(m.editor.View()) - lipgloss.Height(m.command.View()) - styles.ViewPadding.GetVerticalBorderSize()*2 - 2
 
 	if m.loading {
 		return padding.Render(lipgloss.JoinVertical(

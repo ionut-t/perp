@@ -33,16 +33,19 @@ import (
 )
 
 type schemaFetchedMsg string
+
 type schemaFailureMsg struct {
 	err error
 }
 
 type llmResponseMsg llm.Response
+
 type llmFailureMsg struct {
 	err error
 }
 
 type executeQueryMsg content.ParsedQueryResult
+
 type queryFailureMsg struct {
 	err error
 }
@@ -77,6 +80,11 @@ const (
 	focusedHistory
 )
 
+const (
+	editorMinHeight        = 10
+	editorHalfScreenOffset = 4 // Offset for editor in split view (accounts for borders/padding)
+)
+
 type model struct {
 	config          config.Config
 	width, height   int
@@ -89,6 +97,8 @@ type model struct {
 	llm             llm.LLM
 	llmError        error
 	editor          editor.Model
+
+	fullScreen bool
 
 	loading bool
 	spinner spinner.Model
@@ -173,6 +183,31 @@ func (m model) Init() tea.Cmd {
 	)
 }
 
+func (m *model) updateSize() {
+	width, height := m.getAvailableSizes()
+
+	commandLineHeight := lipgloss.Height(m.command.View())
+
+	if m.fullScreen {
+		fullScreenHeight := height - commandLineHeight
+
+		if m.editor.IsFocused() {
+			m.editor.SetSize(width, fullScreenHeight)
+			return
+		}
+
+		m.content.SetSize(width, fullScreenHeight)
+		return
+	}
+
+	editorHeight := max(height/2-editorHalfScreenOffset, editorMinHeight)
+	m.editor.SetSize(width, editorHeight)
+
+	contentHeight := height - editorHeight - commandLineHeight
+
+	m.content.SetSize(width, contentHeight)
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -180,12 +215,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		width, height := m.getAvailableSizes()
+		m.updateSize()
 
-		m.editor.SetSize(width, max(height/2-4, 10))
-
-		contentHeight := height - lipgloss.Height(m.editor.View()) - lipgloss.Height(m.command.View())
-
-		m.content.SetSize(width, contentHeight)
 		m.help.SetSize(msg.Width, msg.Height)
 		m.help.SetContent(m.renderHelp())
 
@@ -221,6 +252,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch {
 		case key.Matches(msg, keymap.Quit):
+
 			if m.error != nil {
 				m.serverSelection = servers.New(m.config.Storage())
 				_, cmd := m.serverSelection.Update(nil)
@@ -230,8 +262,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 
-			if m.focused == focusedContent && m.content.IsViewChangeRequired() {
-				break
+			if m.focused == focusedContent && m.content.IsViewChangeRequired() ||
+				m.editor.IsNormalMode() && m.fullScreen {
+				m.fullScreen = false
+
+				m.updateSize()
+				contentModel, cmd := m.content.Update(content.ResizeMsg{})
+				m.content = contentModel.(content.Model)
+
+				return m, cmd
 			}
 
 			if m.view == viewHelp {
@@ -246,6 +285,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
+		case key.Matches(msg, keymap.FullScreen):
+			if m.editor.IsNormalMode() || m.focused == focusedContent {
+				m.fullScreen = !m.fullScreen
+				m.updateSize()
+				contentModel, cmd := m.content.Update(content.ResizeMsg{})
+				m.content = contentModel.(content.Model)
+
+				return m, cmd
+			}
+
 		case key.Matches(msg, changeFocused):
 			if m.view == viewMain && !m.editor.IsInsertMode() {
 				switch m.focused {
@@ -256,11 +305,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focused = focusedEditor
 					m.editor.Focus()
 				}
+
+				if m.fullScreen {
+					m.updateSize()
+				}
+
 				_, cmd := m.content.Update(nil)
 
 				return m, tea.Batch(
 					cmd,
 					m.editor.CursorBlink(),
+					utils.Dispatch(content.ResizeMsg{}),
 				)
 			}
 
@@ -332,6 +387,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.loading = true
 					m.resetHistory()
 					m.addToHistory()
+					m.fullScreen = false
+					m.updateSize()
+
 					return m, m.sendQueryCmd()
 				}
 			}
@@ -341,6 +399,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loading = true
 				m.resetHistory()
 				m.addToHistory()
+				m.fullScreen = false
+				m.updateSize()
 
 				return m, m.sendQueryCmd()
 			}
@@ -455,7 +515,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.SetContent("")
 
 		err := m.content.SetQueryResults(content.ParsedQueryResult(msg))
-
 		if err != nil {
 			return m, nil
 		}
@@ -850,7 +909,6 @@ func (m model) executeQuery(query string) tea.Cmd {
 		var queryResult content.ParsedQueryResult
 
 		rows, columns, err := db.ExtractResults(result.Rows())
-
 		if err != nil {
 			return queryFailureMsg{err: err}
 		}
@@ -929,7 +987,6 @@ func (m model) sendQueryCmd() tea.Cmd {
 
 	if strings.HasPrefix(prompt, "/add") {
 		schema, err := m.addTablesSchemaToLLM()
-
 		if err != nil {
 			return utils.Dispatch(notificationErrorMsg{err: err})
 		}
@@ -948,7 +1005,6 @@ func (m model) sendQueryCmd() tea.Cmd {
 
 	if strings.HasPrefix(prompt, "/remove") {
 		schema, err := m.removeTablesSchemaToLLM()
-
 		if err != nil {
 			return utils.Dispatch(notificationErrorMsg{err: err})
 		}

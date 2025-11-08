@@ -41,3 +41,8 @@ var Submit = key.NewBinding(
 	key.WithKeys("enter"),
 	key.WithHelp("enter", "submit"),
 )
+
+var FullScreen = key.NewBinding(
+	key.WithKeys("ctrl+f"),
+	key.WithHelp("ctrl+f", "toggle full screen mode"),
+)
