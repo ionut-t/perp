@@ -113,7 +113,7 @@ func (m *Model) SetSize(width, height int) {
 	m.viewport.Width = width
 	m.viewport.Height = height
 
-	m.table.SetSize(width, height)
+	m.table.SetSize(width-1, height)
 
 	m.llmLogsList.SetSize(width, height-1)
 
@@ -126,7 +126,7 @@ func (m *Model) SetSize(width, height int) {
 		m.viewport.Height = height
 		m.viewport.Width = width - lipgloss.Width(m.renderLogo())
 	case viewTable:
-		m.table.SetSize(width, height)
+		m.table.SetSize(width-1, height)
 	}
 }
 
@@ -352,7 +352,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ResizeMsg:
 		if m.view == viewTable {
 			m.table.SetTheme(styles.TableTheme())
-			m.table.SetSize(m.width, m.height)
+			m.table.SetSize(m.width-1, m.height)
 			m.table.SetHeaders(m.tableHeaders)
 			m.table.SetRows(m.tableRows)
 		}
