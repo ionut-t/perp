@@ -1,0 +1,22 @@
+# This is the configuration file for perp
+
+#Auto-update feature can be enabled or disabled
+auto_update = {{ .AutoUpdate }}
+
+# The editor will be used to edit the config file, LLM instructions and exported data
+editor = "{{ .Editor }}"
+
+# The maximum number of history entries to keep
+max_history_length = {{ .MaxHistoryLength }}
+
+# The maximum number of days to keep history entries
+max_history_days = {{ .MaxHistoryDays }}
+
+# It can be set to "Gemini" or "VertexAI" (case insensitive)
+llm_provider = "{{ .LLMProvider }}"
+
+# The LLM model is required for both Gemini and VertexAI. Ex: "gemini-2.5-pro"
+llm_model = "{{ .LLMModel }}"
+
+# The leader key used in the TUI. Default is space (" ")
+leader_key = "{{ .LeaderKey }}"

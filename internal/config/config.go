@@ -1,26 +1,30 @@
 package config
 
 import (
+	"bytes"
 	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"text/template"
 
 	"github.com/spf13/viper"
 )
+
+//go:embed config.toml
+var defaultConfig string
 
 //go:embed llm_instructions.md
 var defaultLLMInstructions string
 
 const (
-	EditorKey           = "EDITOR"
-	MaxHistoryLengthKey = "MAX_HISTORY_LENGTH"
-	MaxHistoryDaysKey   = "MAX_HISTORY_AGE_IN_DAYS"
-	LLMProviderKey      = "LLM_PROVIDER"
-	LLMModelKey         = "LLM_MODEL"
-	AutoUpdateKey       = "AUTO_UPDATE_ENABLED"
-	LeaderKey           = "LEADER_KEY"
+	EditorKey           = "editor"
+	MaxHistoryLengthKey = "max_history_length"
+	MaxHistoryDaysKey   = "max_history_days"
+	LLMProviderKey      = "llm_provider"
+	LLMModelKey         = "llm_model"
+	AutoUpdateKey       = "auto_update"
+	LeaderKey           = "leader_key"
 
 	rootDir                 = ".perp"
 	configFileName          = ".config.toml"
@@ -43,8 +47,31 @@ type Config interface {
 	SetLeaderKey(key string) error
 }
 
+type configData struct {
+	Editor           string
+	MaxHistoryLength int
+	MaxHistoryDays   int
+	LLMProvider      string
+	LLMModel         string
+	AutoUpdate       bool
+	LeaderKey        string
+}
+
 type config struct {
 	storage string
+	data    configData
+}
+
+func getConfigData() configData {
+	return configData{
+		Editor:           GetEditor(),
+		MaxHistoryLength: viper.GetInt(MaxHistoryLengthKey),
+		MaxHistoryDays:   viper.GetInt(MaxHistoryDaysKey),
+		LLMProvider:      viper.GetString(LLMProviderKey),
+		LLMModel:         viper.GetString(LLMModelKey),
+		AutoUpdate:       viper.GetBool(AutoUpdateKey),
+		LeaderKey:        viper.GetString(LeaderKey),
+	}
 }
 
 func New() (Config, error) {
@@ -55,6 +82,7 @@ func New() (Config, error) {
 
 	return &config{
 		storage: storage,
+		data:    getConfigData(),
 	}, nil
 }
 
@@ -71,12 +99,13 @@ func (c *config) SetLeaderKey(key string) error {
 		return nil
 	}
 
-	viper.Set(LeaderKey, key)
-	return viper.WriteConfig()
+	c.data.LeaderKey = key
+
+	return c.updateValueInConfig(LeaderKey, key)
 }
 
 func (c *config) Editor() string {
-	return GetEditor()
+	return c.data.Editor
 }
 
 func (c *config) Storage() string {
@@ -88,9 +117,9 @@ func (m *config) SetEditor(editor string) error {
 		return nil
 	}
 
-	viper.Set("editor", editor)
+	m.data.Editor = editor
 
-	return viper.WriteConfig()
+	return m.updateValueInConfig(EditorKey, editor)
 }
 
 func (c *config) GetMaxHistoryLength() int {
@@ -116,9 +145,9 @@ func (c *config) SetLLMProvider(provider string) error {
 		return fmt.Errorf("%s cannot be empty", LLMProviderKey)
 	}
 
-	viper.Set(LLMProviderKey, provider)
+	c.data.LLMProvider = provider
 
-	return viper.WriteConfig()
+	return c.updateValueInConfig(LLMProviderKey, provider)
 }
 
 func (c *config) GetLLMModel() (string, error) {
@@ -136,9 +165,9 @@ func (c *config) SetLLMModel(model string) error {
 		return fmt.Errorf("%s cannot be empty", LLMModelKey)
 	}
 
-	viper.Set(LLMModelKey, model)
+	c.data.LLMModel = model
 
-	return viper.WriteConfig()
+	return c.updateValueInConfig(LLMModelKey, model)
 }
 
 func (c *config) GetLLMInstructions() string {
@@ -155,6 +184,33 @@ func (c *config) GetLLMInstructions() string {
 	}
 
 	return string(content)
+}
+
+func (c *config) updateValueInConfig(key, value string) error {
+	if _, err := os.Stat(GetConfigFilePath()); os.IsNotExist(err) {
+		return writeConfig(c.data)
+	}
+
+	content, err := os.ReadFile(GetConfigFilePath())
+	if err != nil {
+		return err
+	}
+
+	lines := bytes.Split(content, []byte("\n"))
+	var foundKey bool
+	for i, line := range lines {
+		if bytes.HasPrefix(bytes.ToLower(line), []byte(key)) {
+			lines[i] = fmt.Appendf(nil, "%s = \"%s\"", key, value)
+			foundKey = true
+			break
+		}
+	}
+
+	if !foundKey {
+		lines = append(lines, fmt.Appendf(nil, "%s = \"%s\"", key, value))
+	}
+
+	return os.WriteFile(GetConfigFilePath(), bytes.Join(lines, []byte("\n")), 0o644)
 }
 
 func getDefaultEditor() string {
@@ -202,10 +258,10 @@ func InitialiseConfigFile() (string, error) {
 			viper.SetDefault(MaxHistoryLengthKey, 1000)
 			viper.SetDefault(MaxHistoryDaysKey, 90)
 			viper.SetDefault(LLMProviderKey, "")
-			viper.SetDefault(LLMModelKey, "")
+			viper.SetDefault(LLMModelKey, "gemini-2.0-flash")
 			viper.SetDefault(LeaderKey, " ")
 
-			if err := writeDefaultConfig(); err != nil {
+			if err := writeConfig(getConfigData()); err != nil {
 				return "", err
 			}
 
@@ -264,43 +320,17 @@ func GetLLMInstructionsFilePath() string {
 	return filepath.Join(home, rootDir, llmInstructionsFileName)
 }
 
-func writeDefaultConfig() error {
-	var sb strings.Builder
+func writeConfig(config configData) error {
+	tmpl, err := template.New("config").Parse(defaultConfig)
+	if err != nil {
+		return err
+	}
 
-	sb.WriteString("# This is the configuration file for perp\n")
-	sb.WriteString("\n")
+	var buf bytes.Buffer
 
-	sb.WriteString("# The keys are case insensitive\n")
-	sb.WriteString("\n")
+	if err := tmpl.Execute(&buf, config); err != nil {
+		return err
+	}
 
-	sb.WriteString("# Auto-update feature can be enabled or disabled\n")
-	sb.WriteString(fmt.Sprintf("%s = %t\n", AutoUpdateKey, viper.GetBool(AutoUpdateKey)))
-	sb.WriteString("\n")
-
-	sb.WriteString("# The editor will be used to edit the config file, LLM instructions and exported data\n")
-	sb.WriteString(fmt.Sprintf("%s = '%s'\n", EditorKey, GetEditor()))
-	sb.WriteString("\n")
-
-	sb.WriteString("# The maximum number of history entries to keep\n")
-	sb.WriteString(fmt.Sprintf("%s = %d\n", MaxHistoryLengthKey, viper.GetInt(MaxHistoryLengthKey)))
-	sb.WriteString("\n")
-
-	sb.WriteString("# The maximum number of days to keep history entries\n")
-	sb.WriteString(fmt.Sprintf("%s = %d\n", MaxHistoryDaysKey, viper.GetInt(MaxHistoryDaysKey)))
-	sb.WriteString("\n")
-
-	sb.WriteString("# It can be set to 'Gemini' or 'VertexAI' (case insensitive)\n")
-	sb.WriteString("# If unset, Gemini will be used\n")
-	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMProviderKey, viper.GetString(LLMProviderKey)))
-	sb.WriteString("\n")
-
-	sb.WriteString("# The LLM model is required for both Gemini and VertexAI. Ex: 'gemini-2.5-pro'\n")
-	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMModelKey, viper.GetString(LLMModelKey)))
-	sb.WriteString("\n")
-
-	sb.WriteString("# The leader key used in the TUI. Default is space (' ')\n")
-	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LeaderKey, viper.GetString(LeaderKey)))
-	sb.WriteString("\n")
-
-	return os.WriteFile(GetConfigFilePath(), []byte(sb.String()), 0o644)
+	return os.WriteFile(GetConfigFilePath(), buf.Bytes(), 0o644)
 }
