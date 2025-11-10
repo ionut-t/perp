@@ -20,12 +20,11 @@ const (
 	LLMProviderKey      = "LLM_PROVIDER"
 	LLMModelKey         = "LLM_MODEL"
 	AutoUpdateKey       = "AUTO_UPDATE_ENABLED"
+	LeaderKey           = "LEADER_KEY"
 
 	rootDir                 = ".perp"
 	configFileName          = ".config.toml"
 	llmInstructionsFileName = "llm_instructions.md"
-	llmInstructions         = "LLM_INSTRUCTIONS"
-	llmDefaultInstructions  = "LLM_DEFAULT_INSTRUCTIONS"
 )
 
 type Config interface {
@@ -40,6 +39,8 @@ type Config interface {
 	SetLLMModel(model string) error
 	GetLLMInstructions() string
 	AutoUpdateEnabled() bool
+	GetLeaderKey() string
+	SetLeaderKey(key string) error
 }
 
 type config struct {
@@ -48,7 +49,6 @@ type config struct {
 
 func New() (Config, error) {
 	storage, err := GetStorage()
-
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +60,19 @@ func New() (Config, error) {
 
 func (c *config) AutoUpdateEnabled() bool {
 	return viper.GetBool(AutoUpdateKey)
+}
+
+func (c *config) GetLeaderKey() string {
+	return viper.GetString(LeaderKey)
+}
+
+func (c *config) SetLeaderKey(key string) error {
+	if key == c.GetLeaderKey() {
+		return nil
+	}
+
+	viper.Set(LeaderKey, key)
+	return viper.WriteConfig()
 }
 
 func (c *config) Editor() string {
@@ -176,7 +189,7 @@ func InitialiseConfigFile() (string, error) {
 		}
 
 		dir := filepath.Join(home, rootDir)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return "", err
 		}
 
@@ -190,6 +203,7 @@ func InitialiseConfigFile() (string, error) {
 			viper.SetDefault(MaxHistoryDaysKey, 90)
 			viper.SetDefault(LLMProviderKey, "")
 			viper.SetDefault(LLMModelKey, "")
+			viper.SetDefault(LeaderKey, " ")
 
 			if err := writeDefaultConfig(); err != nil {
 				return "", err
@@ -209,7 +223,7 @@ func InitializeLLMInstructions() error {
 	llmInstructionsPath := GetLLMInstructionsFilePath()
 
 	if _, err := os.Stat(llmInstructionsPath); os.IsNotExist(err) {
-		if err := os.WriteFile(llmInstructionsPath, []byte(defaultLLMInstructions), 0644); err != nil {
+		if err := os.WriteFile(llmInstructionsPath, []byte(defaultLLMInstructions), 0o644); err != nil {
 			return fmt.Errorf("failed to write LLM instructions: %w", err)
 		}
 	}
@@ -234,7 +248,7 @@ func GetStorage() (string, error) {
 	}
 
 	dir := filepath.Join(home, rootDir)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 
@@ -284,5 +298,9 @@ func writeDefaultConfig() error {
 	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LLMModelKey, viper.GetString(LLMModelKey)))
 	sb.WriteString("\n")
 
-	return os.WriteFile(GetConfigFilePath(), []byte(sb.String()), 0644)
+	sb.WriteString("# The leader key used in the TUI. Default is space (' ')\n")
+	sb.WriteString(fmt.Sprintf("%s = '%s'\n", LeaderKey, viper.GetString(LeaderKey)))
+	sb.WriteString("\n")
+
+	return os.WriteFile(GetConfigFilePath(), []byte(sb.String()), 0o644)
 }

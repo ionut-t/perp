@@ -429,8 +429,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 		} else {
 			switch {
-			case key.Matches(msg, m.keys.Quit):
-				return m, tea.Quit
 			case key.Matches(msg, m.keys.Up):
 				if m.cursor > 0 {
 					m.cursor--

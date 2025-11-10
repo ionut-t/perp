@@ -25,13 +25,11 @@ func (m Model) renderHelp() string {
 func (m Model) renderUsefulHelp() string {
 	bindings := []key.Binding{
 		key.NewBinding(
-			key.WithKeys("q"),
-			key.WithHelp("q", "go back to the main view (available when the editor is not focused)"),
+			key.WithKeys("<leader>c"),
+			key.WithHelp("leader>c", "go back to the main view"),
 		),
 		keymap.ForceQuit,
 		changeFocused,
-		keymap.Help,
-		keymap.Insert,
 		keymap.Editor,
 	}
 

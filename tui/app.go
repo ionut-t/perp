@@ -15,6 +15,8 @@ import (
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/keymap"
+	"github.com/ionut-t/perp/internal/leader"
+	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/export"
 	"github.com/ionut-t/perp/pkg/history"
@@ -28,6 +30,8 @@ import (
 	"github.com/ionut-t/perp/tui/content"
 	exportData "github.com/ionut-t/perp/tui/export_data"
 	historyView "github.com/ionut-t/perp/tui/history"
+	"github.com/ionut-t/perp/tui/menu"
+	"github.com/ionut-t/perp/tui/prompt"
 	"github.com/ionut-t/perp/tui/servers"
 	"github.com/ionut-t/perp/ui/help"
 )
@@ -103,7 +107,6 @@ type model struct {
 	loading bool
 	spinner spinner.Model
 
-	queryResults          []map[string]any
 	exportData            exportData.Model
 	command               command.Model
 	notification          string
@@ -124,6 +127,15 @@ type model struct {
 	historyNavigating     bool
 	originalEditorContent string
 	history               historyView.Model
+
+	// navigation components
+	leaderMgr    *leader.Manager
+	whichKeyMenu menu.Model
+	menuRegistry *whichkey.Registry
+	showingMenu  bool
+
+	prompt         prompt.Model
+	isPromptActive bool
 }
 
 func New(config config.Config) model {
@@ -158,6 +170,9 @@ func New(config config.Config) model {
 	sp.Spinner = spinner.Dot
 	sp.Style = styles.Primary
 
+	// Initialize navigation components
+	menuRegistry := whichkey.NewRegistry()
+
 	return model{
 		config:          config,
 		llm:             llm,
@@ -171,6 +186,11 @@ func New(config config.Config) model {
 		help:            help.New(),
 		llmError:        err,
 		spinner:         sp,
+		leaderMgr:       leader.NewManager(500*time.Millisecond, config.GetLeaderKey()),
+		whichKeyMenu:    menu.New(menuRegistry.GetRootMenu(), 0, 0),
+		menuRegistry:    menuRegistry,
+		showingMenu:     false,
+		prompt:          prompt.New(),
 	}
 }
 
@@ -224,12 +244,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.history.SetSize(width, height)
 		}
 
+		m.prompt.SetSize(width, height)
+
+		// Update which-key menu size
+		var cmd tea.Cmd
+		m.whichKeyMenu, cmd = m.whichKeyMenu.Update(msg)
+		if cmd != nil {
+			return m, cmd
+		}
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
 	case tea.KeyMsg:
+		// Priority 1: Which-key menu is showing - let it handle all keys
+		if m.showingMenu {
+			return m.handleWhichKeyPress(msg)
+		}
+
+		// Priority 2: Leader key handling
+		if m.canTriggerLeaderKey() {
+			if m.leaderMgr.IsActive() {
+				return m.handleLeaderSequence(msg)
+			}
+
+			if m.leaderMgr.IsLeaderKey(msg.String()) {
+				return m.handleLeaderKeyPress(msg)
+			}
+		}
+
 		if m.historyNavigating && m.editor.IsFocused() && m.focused == focusedEditor {
 			// Check if it's a character input (not a special key)
 			if len(msg.String()) == 1 || msg.Type == tea.KeySpace {
@@ -252,7 +297,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch {
 		case key.Matches(msg, keymap.Quit):
-
 			if m.error != nil {
 				m.serverSelection = servers.New(m.config.Storage())
 				_, cmd := m.serverSelection.Update(nil)
@@ -278,21 +322,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focused = focusedEditor
 				m.editor.Focus()
 				break
-			}
-
-			if m.editor.IsNormalMode() {
-				m.closeDbConnection()
-				return m, tea.Quit
-			}
-
-		case key.Matches(msg, keymap.FullScreen):
-			if m.editor.IsNormalMode() || m.focused == focusedContent {
-				m.fullScreen = !m.fullScreen
-				m.updateSize()
-				contentModel, cmd := m.content.Update(content.ResizeMsg{})
-				m.content = contentModel.(content.Model)
-
-				return m, cmd
 			}
 
 		case key.Matches(msg, changeFocused):
@@ -331,34 +360,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.command.Focus(),
 					cmd,
 				)
-			}
-
-		case key.Matches(msg, accessDBSchema):
-			if m.editor.IsNormalMode() {
-				m.focused = focusedContent
-				m.editor.Blur()
-				m.content.ShowDBSchema()
-				c, cmd := m.content.Update(nil)
-				m.content = c.(content.Model)
-				return m, cmd
-			}
-
-		case key.Matches(msg, accessLLMSharedSchema):
-			if m.editor.IsNormalMode() {
-				m.focused = focusedContent
-				m.editor.Blur()
-				m.content.ShowLLMSharedSchema()
-				c, cmd := m.content.Update(nil)
-				m.content = c.(content.Model)
-				return m, cmd
-			}
-
-		case key.Matches(msg, accessServers):
-			if m.editor.IsNormalMode() {
-				m.serverSelection = servers.New(m.config.Storage())
-				m.serverSelection.SetSize(m.width, m.height)
-				m.view = viewServers
-				m.error = nil
 			}
 
 		case key.Matches(msg, keymap.Insert):
@@ -427,19 +428,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.nextHistory()
 			}
 
-		case key.Matches(msg, accessExportedData):
-			if m.focused == focusedContent {
-				m.view = viewExportData
-				storage := filepath.Join(m.config.Storage(), m.server.Name)
-				exportStore := exportStore.New(storage, m.config.Editor())
-				m.exportData = exportData.New(exportStore, m.server, m.width, m.height)
-			}
-
-		case key.Matches(msg, viewLLMLogs):
-			if m.focused == focusedContent {
-				m.content.ShowLLMLogs()
-			}
-
 		case key.Matches(msg, viewHistoryEntries):
 			if entries, err := history.Get(m.config.Storage()); err != nil {
 				m.content.SetError(err)
@@ -457,21 +445,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, dismissUpdate):
 			return m.dismissUpdate()
-
-		case key.Matches(msg, keymap.Help):
-			if m.editor.IsInsertMode() {
-				break
-			}
-
-			switch m.view {
-			case viewMain:
-				m.view = viewHelp
-				m.editor.Blur()
-			case viewHelp:
-				m.view = viewMain
-				m.focused = focusedEditor
-				m.editor.Focus()
-			}
 		}
 
 	case servers.SelectedServerMsg:
@@ -691,22 +664,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.editor.CursorBlink(),
 		)
 
-	case exportData.ClosedMsg:
-		m.view = viewMain
-		m.editor.SetContent("")
-		m.editor.Focus()
-
-		if m.queryResults == nil {
-			m.content.SetConnectionInfo(m.server)
-		}
-
-	case historyView.ClosedMsg:
-		m.view = viewMain
-		m.focused = focusedEditor
-		m.editor.Focus()
-
-		return m, m.editor.CursorBlink()
-
 	case command.QuitMsg, psqlQuitMsg:
 		m.closeDbConnection()
 		return m, tea.Quit
@@ -786,6 +743,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor.Focus()
 		return m, m.successNotification("LLM model changed to " + msg.Model)
 
+	case command.LeaderKeyChangedMsg:
+		existingLeader := m.config.GetLeaderKey()
+		if existingLeader == msg.Key {
+			return m, nil
+		}
+
+		if err := m.config.SetLeaderKey(msg.Key); err != nil {
+			return m, m.errorNotification(err)
+		}
+
+		m.leaderMgr.SetLeaderKey(msg.Key)
+		return m, m.successNotification("Leader key changed")
+
 	case command.ErrorMsg:
 		return m, m.errorNotification(msg.Err)
 
@@ -801,6 +771,182 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd,
 			m.editor.CursorBlink(),
 		)
+
+	// Leader key and which-key messages
+	case leader.TimeoutMsg:
+		// Leader key timeout - show menu
+		if m.leaderMgr.IsActive() {
+			// Update context before showing menu
+			m.updateMenuContext()
+
+			// Always show the root menu initially after leader timeout.
+			// The root menu is context-aware and will return appropriate items.
+			menu := m.menuRegistry.GetRootMenu()
+			m.whichKeyMenu.SetMenu(menu)
+			m.whichKeyMenu.Show()
+			m.showingMenu = true
+		}
+		return m, nil
+
+	case whichkey.CloseMenuMsg:
+		m.showingMenu = false
+		m.leaderMgr.Reset()
+		return m, nil
+
+	case whichkey.ExecuteAndCloseMsg:
+		m.showingMenu = false
+		m.leaderMgr.Reset()
+		// Re-process the action message through Update
+		return m.Update(msg.ActionMsg)
+
+	case whichkey.ShowSubmenuMsg:
+		var cmd tea.Cmd
+		m.whichKeyMenu, cmd = m.whichKeyMenu.Update(msg)
+		return m, cmd
+
+	// Which-key menu action handlers
+	case whichkey.ShowServersViewMsg:
+		m.serverSelection = servers.New(m.config.Storage())
+		m.serverSelection.SetSize(m.width, m.height)
+		m.view = viewServers
+		m.error = nil
+		return m, nil
+
+	case whichkey.ListExportsMsg:
+		m.view = viewExportData
+		storage := filepath.Join(m.config.Storage(), m.server.Name)
+		exportStore := exportStore.New(storage, m.config.Editor())
+		m.exportData = exportData.New(exportStore, m.server, m.width, m.height)
+
+	case whichkey.ViewSchemaMsg:
+		if m.editor.IsNormalMode() || !m.editor.IsFocused() {
+			m.focused = focusedContent
+			m.editor.Blur()
+			m.content.ShowDBSchema()
+			c, cmd := m.content.Update(nil)
+			m.content = c.(content.Model)
+			return m, cmd
+		}
+		return m, nil
+
+	case whichkey.ViewLLMSchemaMsg:
+		if m.editor.IsNormalMode() || !m.editor.IsFocused() {
+			m.focused = focusedContent
+			m.editor.Blur()
+			m.content.ShowLLMSharedSchema()
+			c, cmd := m.content.Update(nil)
+			m.content = c.(content.Model)
+			return m, cmd
+		}
+		return m, nil
+
+	case whichkey.ViewLLMLogsMsg:
+		if m.focused == focusedContent || m.view == viewMain {
+			m.content.ShowLLMLogs()
+		}
+		return m, nil
+
+	case whichkey.ListHistoryMsg:
+		if entries, err := history.Get(m.config.Storage()); err != nil {
+			m.content.SetError(err)
+		} else {
+			m.view = viewHistory
+			m.focused = focusedHistory
+			m.editor.Blur()
+			m.historyLogs = entries
+
+			m.history = historyView.New(entries, m.width, m.height)
+		}
+
+	case whichkey.ToggleFullscreenMsg:
+		if m.editor.IsNormalMode() || m.focused == focusedContent {
+			m.fullScreen = !m.fullScreen
+			m.updateSize()
+			contentModel, cmd := m.content.Update(content.ResizeMsg{})
+			m.content = contentModel.(content.Model)
+			return m, cmd
+		}
+		return m, nil
+
+	case whichkey.ToggleHelpMsg:
+		m.handleHelpToggle()
+
+	case whichkey.ExportJSONMsg:
+		m.isPromptActive = true
+		m.prompt.SetAction((prompt.ExportAllAsJSONAction))
+
+	case whichkey.ExportCSVMsg:
+		m.isPromptActive = true
+		m.prompt.SetAction((prompt.ExportAllAsCSVAction))
+
+	case whichkey.CloseExportMsg:
+		m.view = viewMain
+		m.focused = focusedEditor
+		m.editor.Focus()
+		return m, nil
+
+	case whichkey.CloseHistoryMsg:
+		m.view = viewMain
+		m.focused = focusedEditor
+		m.editor.Focus()
+		return m, nil
+
+	// Database schema actions
+	case whichkey.ListTablesMsg:
+		return m, m.executePsqlCommand("\\dt")
+
+	case whichkey.ViewIndexesMsg:
+		return m, m.executePsqlCommand("\\di")
+
+	case whichkey.ViewConstraintsMsg:
+		return m, m.executeQuery("SELECT * FROM information_schema.table_constraints;")
+
+	// History actions
+	case whichkey.ClearHistoryMsg:
+		// TODO: Create a state machine for handling cleaning history only for current session
+		// without updating the history store until the application exits.
+		m.historyLogs = []history.Entry{}
+		return m, m.successNotification("History cleared for this session")
+
+	case whichkey.EnableDBSchemaMsg:
+		return m, utils.Dispatch(command.LLMUseDatabaseSchemaMsg{
+			Enabled: true,
+		})
+
+	case whichkey.DisableDBSchemaMsg:
+		return m, utils.Dispatch(command.LLMUseDatabaseSchemaMsg{
+			Enabled: false,
+		})
+
+	// Config actions
+	case whichkey.ChangeLLMModelMsg:
+		m.isPromptActive = true
+		m.prompt.SetAction((prompt.LLMModelAction))
+		model, _ := m.config.GetLLMModel()
+		m.prompt.SetInitialValue(model)
+
+	case whichkey.SetEditorMsg:
+		m.isPromptActive = true
+		m.prompt.SetAction((prompt.EditorAction))
+		m.prompt.SetInitialValue(m.config.Editor())
+
+	case whichkey.ChangeLeaderMsg:
+		m.isPromptActive = true
+		m.prompt.SetAction(prompt.ChangeLeaderKeyAction)
+
+	// Application control
+	case whichkey.QuitMsg:
+		m.closeDbConnection()
+		return m, tea.Quit
+
+	case prompt.CancelMsg:
+		m.isPromptActive = false
+	}
+
+	if m.isPromptActive {
+		promptModel, cmd := m.prompt.Update(msg)
+		m.prompt = promptModel.(prompt.Model)
+		return m, cmd
 	}
 
 	var cmds []tea.Cmd
@@ -858,11 +1004,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+func (m *model) handleHelpToggle() {
+	switch m.view {
+	case viewMain:
+		m.view = viewHelp
+		m.editor.Blur()
+	case viewHelp:
+		m.view = viewMain
+		m.focused = focusedEditor
+		m.editor.Focus()
+	case viewExportData:
+		m.exportData.HandleHelpToggle()
+	}
+}
+
 func (m model) View() string {
 	width, height := m.getAvailableSizes()
 
 	if m.error != nil {
 		return m.renderDBError(width, height)
+	}
+
+	if m.isPromptActive {
+		return m.prompt.View()
+	}
+
+	if m.showingMenu {
+		return m.whichKeyMenu.View()
 	}
 
 	switch m.view {
@@ -880,9 +1048,10 @@ func (m model) View() string {
 
 	case viewHistory:
 		return m.history.View()
-	}
 
-	return ""
+	default:
+		return ""
+	}
 }
 
 func (m model) generateSchema() tea.Cmd {

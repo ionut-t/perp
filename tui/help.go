@@ -40,26 +40,6 @@ var executeQuery = key.NewBinding(
 	key.WithHelp("alt+enter/ctrl+s", "execute query (no matter the editor mode)"),
 )
 
-var accessExportedData = key.NewBinding(
-	key.WithKeys("g"),
-	key.WithHelp("g", "manage exported data (available when the editor is not focused)"),
-)
-
-var accessDBSchema = key.NewBinding(
-	key.WithKeys("S"),
-	key.WithHelp("S", "view database schema (available when the editor is not focused)"),
-)
-
-var accessLLMSharedSchema = key.NewBinding(
-	key.WithKeys("s"),
-	key.WithHelp("s", "view LLM shared schema (available when the editor is not focused)"),
-)
-
-var accessServers = key.NewBinding(
-	key.WithKeys("|"),
-	key.WithHelp("|", "view servers (available when the editor is not focused)"),
-)
-
 var previousHistory = key.NewBinding(
 	key.WithKeys("shift+up"),
 	key.WithHelp("shift+↑", "previous history log"),
@@ -73,11 +53,6 @@ var nextHistory = key.NewBinding(
 var enterCommand = key.NewBinding(
 	key.WithKeys(":"),
 	key.WithHelp(":", "enter command mode (available when the editor is not focused)"),
-)
-
-var viewLLMLogs = key.NewBinding(
-	key.WithKeys("}"),
-	key.WithHelp("}", "view LLM logs (available when the editor is not focused)"),
 )
 
 var viewHistoryEntries = key.NewBinding(
@@ -109,18 +84,9 @@ func (m model) renderHelp() string {
 
 func (m model) renderUsefulHelp() string {
 	bindings := []key.Binding{
-		keymap.Quit,
 		keymap.ForceQuit,
 		changeFocused,
-		keymap.FullScreen,
-		keymap.Help,
-		keymap.Insert,
-		accessExportedData,
-		accessDBSchema,
-		accessLLMSharedSchema,
-		accessServers,
 		enterCommand,
-		viewLLMLogs,
 		viewHistoryEntries,
 	}
 

@@ -12,19 +12,9 @@ var ForceQuit = key.NewBinding(
 	key.WithHelp("ctrl+c", "force quit"),
 )
 
-var Help = key.NewBinding(
-	key.WithKeys("?"),
-	key.WithHelp("?", "toggle help view"),
-)
-
 var Editor = key.NewBinding(
 	key.WithKeys("ctrl+e"),
 	key.WithHelp("ctrl+e", "open in external editor"),
-)
-
-var Copy = key.NewBinding(
-	key.WithKeys("c"),
-	key.WithHelp("c", "copy note to clipboard"),
 )
 
 var Insert = key.NewBinding(
@@ -40,9 +30,4 @@ var Cancel = key.NewBinding(
 var Submit = key.NewBinding(
 	key.WithKeys("enter"),
 	key.WithHelp("enter", "submit"),
-)
-
-var FullScreen = key.NewBinding(
-	key.WithKeys("ctrl+f"),
-	key.WithHelp("ctrl+f", "toggle full screen mode"),
 )

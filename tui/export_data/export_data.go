@@ -14,7 +14,9 @@ import (
 	"github.com/ionut-t/coffee/styles"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/keymap"
+	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/server"
+	"github.com/ionut-t/perp/pkg/utils"
 	"github.com/ionut-t/perp/store/export"
 	"github.com/ionut-t/perp/ui/help"
 )
@@ -25,9 +27,9 @@ var (
 	minListWidth            = 50
 )
 
-type ClosedMsg struct{}
-
 type clearMsg struct{}
+
+type editorClosedMsg struct{}
 
 func clearMessages() tea.Cmd {
 	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
@@ -92,16 +94,17 @@ func New(store export.Store, server server.Server, width, height int) Model {
 
 	items := processRecords(records)
 
-	list := list.New(items, delegate, 80, 20)
+	l := list.New(items, delegate, 80, 20)
 
-	list.Styles = styles.ListStyles()
+	l.Styles = styles.ListStyles()
 
-	list.FilterInput.PromptStyle = styles.Accent
-	list.FilterInput.Cursor.Style = styles.Accent
+	l.FilterInput.PromptStyle = styles.Accent
+	l.FilterInput.Cursor.Style = styles.Accent
 
-	list.InfiniteScrolling = true
-	list.SetShowHelp(false)
-	list.SetShowTitle(false)
+	l.InfiniteScrolling = true
+	l.SetShowHelp(false)
+	l.SetShowTitle(false)
+	l.DisableQuitKeybindings()
 
 	view := viewSplit
 	if len(items) == 0 {
@@ -111,7 +114,7 @@ func New(store export.Store, server server.Server, width, height int) Model {
 	m := Model{
 		store:  store,
 		error:  err,
-		list:   list,
+		list:   l,
 		editor: editorModel,
 		help:   help.New(),
 		server: server,
@@ -141,25 +144,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch {
-		case key.Matches(msg, keymap.Quit) || key.Matches(msg, keymap.Cancel):
-			switch m.view {
-			case viewSplit:
-				if m.focusedView == focusedViewList {
-					return m, func() tea.Msg {
-						return ClosedMsg{}
-					}
-				}
-
-			case viewHelp:
-				m.view = viewSplit
-				return m, nil
-
-			case viewPlaceholder:
-				return m, func() tea.Msg {
-					return ClosedMsg{}
-				}
-			}
-
 		case key.Matches(msg, keymap.Insert):
 			if m.view == viewHelp || m.view == viewPlaceholder {
 				break
@@ -191,35 +175,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, keymap.Editor):
-			if m.editor.IsInsertMode() ||
-				m.editor.IsCommandMode() ||
-				m.view == viewHelp ||
-				m.view == viewPlaceholder {
+			if m.view == viewPlaceholder {
 				break
 			}
 
-			path := m.store.GetCurrentRecord().Path
-
-			execCmd := tea.ExecProcess(exec.Command(m.store.Editor(), path), func(error) tea.Msg {
-				return nil
-			})
-			return m, execCmd
-
-		case key.Matches(msg, keymap.Help):
-			if m.editor.IsInsertMode() ||
-				m.editor.IsCommandMode() ||
-				m.view == viewPlaceholder {
-				break
-			}
-
-			switch m.view {
-			case viewSplit:
-				m.view = viewHelp
-				m.editor.Blur()
-			case viewHelp:
-				m.view = viewSplit
-			}
+			return m.openInExternalEditor()
 		}
+
+	case whichkey.ExternalEditorMsg:
+		if m.view == viewPlaceholder {
+			break
+		}
+
+		return m.openInExternalEditor()
+
+	case editorClosedMsg:
+		return m.handleEditorClose()
 
 	case editor.SaveMsg:
 		record := m.store.GetCurrentRecord()
@@ -239,12 +210,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case editor.QuitMsg:
-		return m, func() tea.Msg {
-			return ClosedMsg{}
-		}
+		return m, utils.Dispatch(whichkey.CloseExportCmd())
 
 	case editor.DeleteFileMsg:
 		current := m.store.GetCurrentRecord()
+
+		var cmd tea.Cmd
 
 		if err := m.store.Delete(current); err == nil {
 			m.error = nil
@@ -268,11 +239,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.view = viewPlaceholder
 			}
 
+			var texteditor tea.Model
+			texteditor, cmd = m.editor.Update(nil)
+			m.editor = texteditor.(editor.Model)
+			m.editor.SetLanguage(getLanguageForEditor(current.Path), styles.EditorLanguageTheme())
+
 		} else {
 			m.error = fmt.Errorf("failed to delete record: %w", err)
 		}
 
-		return m, clearMessages()
+		return m, tea.Batch(
+			cmd,
+			clearMessages(),
+		)
 
 	case editor.RenameMsg:
 		current := m.store.GetCurrentRecord()
@@ -324,14 +303,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		current := m.store.GetCurrentRecord()
 		m.editor.SetContent(current.Content)
 
-		lang := "json"
-		if filepath.Ext(current.Path) == ".json" {
-			lang = "json"
-		} else if filepath.Ext(current.Path) == ".csv" {
-			lang = "csv"
-		}
-
-		m.editor.SetLanguage(lang, styles.EditorLanguageTheme())
+		m.editor.SetLanguage(getLanguageForEditor(current.Path), styles.EditorLanguageTheme())
 		cmds = append(cmds, cmd)
 		_, cmd = m.editor.Update(nil)
 		cmds = append(cmds, cmd)
@@ -368,7 +340,7 @@ func (m Model) View() string {
 				lipgloss.Left,
 				styles.Primary.Render("No data exported."),
 				"\n",
-				styles.Subtext0.Render("Press 'q' to go back."),
+				styles.Subtext0.Render("Press '<leader>c' to go back."),
 			),
 		)
 
@@ -507,7 +479,7 @@ func (m *Model) renderStatusBar() string {
 
 	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
 
-	helpText := styles.Info.Background(bg).PaddingRight(1).Render("? Help")
+	helpText := styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
 
 	displayedInfoWidth := m.width -
 		lipgloss.Width(leftInfo) -
@@ -524,4 +496,63 @@ func (m *Model) renderStatusBar() string {
 			helpText,
 		),
 	)
+}
+
+func (m Model) CanTriggerLeaderKey() bool {
+	return m.editor.IsNormalMode() && m.list.FilterState() != list.Filtering
+}
+
+func (m *Model) HandleHelpToggle() {
+	if m.editor.IsInsertMode() ||
+		m.editor.IsCommandMode() ||
+		m.view == viewPlaceholder {
+		return
+	}
+
+	switch m.view {
+	case viewSplit:
+		m.view = viewHelp
+		m.editor.Blur()
+	case viewHelp:
+		m.view = viewSplit
+	}
+}
+
+func (m Model) openInExternalEditor() (tea.Model, tea.Cmd) {
+	path := m.store.GetCurrentRecord().Path
+
+	execCmd := tea.ExecProcess(exec.Command(m.store.Editor(), path), func(error) tea.Msg {
+		return editorClosedMsg{}
+	})
+	return m, execCmd
+}
+
+func (m Model) handleEditorClose() (Model, tea.Cmd) {
+	records, err := m.store.Load()
+	if err != nil {
+		m.error = err
+		return m, nil
+	}
+
+	m.list.SetItems(processRecords(records))
+
+	current := m.store.GetCurrentRecord()
+	m.editor.SetContent(current.Content)
+
+	m.list.ResetFilter()
+
+	textEditor, cmd := m.editor.Update(nil)
+	m.editor = textEditor.(editor.Model)
+
+	return m, cmd
+}
+
+func getLanguageForEditor(path string) string {
+	lang := "json"
+	if filepath.Ext(path) == ".json" {
+		lang = "json"
+	} else if filepath.Ext(path) == ".csv" {
+		lang = "csv"
+	}
+	return lang
 }

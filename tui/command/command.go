@@ -30,6 +30,10 @@ type LLMModelChangedMsg struct {
 	Model string
 }
 
+type LeaderKeyChangedMsg struct {
+	Key string
+}
+
 type CancelMsg struct{}
 
 type QuitMsg struct{}
@@ -121,6 +125,10 @@ func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return c.handleLLMMModelChanged(cmdValue)
 		}
 
+		if strings.HasPrefix(cmdValue, "set-leader-key") {
+			return c.handleLeaderKeyChanged(cmdValue)
+		}
+
 		return c, utils.Dispatch(ErrorMsg{Err: fmt.Errorf("unknown command: %s", cmdValue)})
 	}
 
@@ -134,7 +142,6 @@ func (c Model) handleExport() (Model, tea.Cmd) {
 	value := c.input.GetValue().(string)
 
 	rows, all, fileName, err := parseExportCommand(value)
-
 	if err != nil {
 		return c, utils.Dispatch(ErrorMsg{Err: err})
 	}
@@ -198,6 +205,19 @@ func (c Model) handleLLMMModelChanged(cmdValue string) (Model, tea.Cmd) {
 	c.input.Value(&empty)
 
 	return c, utils.Dispatch(LLMModelChangedMsg{Model: model})
+}
+
+func (c Model) handleLeaderKeyChanged(cmdValue string) (Model, tea.Cmd) {
+	leaderKey := strings.TrimLeft(strings.TrimPrefix(cmdValue, "set-leader-key"), " ")
+
+	if leaderKey == "" {
+		return c, utils.Dispatch(ErrorMsg{Err: errors.New("no leader key specified")})
+	}
+
+	empty := ""
+	c.input.Value(&empty)
+
+	return c, utils.Dispatch(LeaderKeyChangedMsg{Key: leaderKey})
 }
 
 func parseExportCommand(value string) ([]int, bool, string, error) {

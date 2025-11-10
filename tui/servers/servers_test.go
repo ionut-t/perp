@@ -113,20 +113,6 @@ func TestUpdate(t *testing.T) {
 			expectedCmd:  true,
 		},
 		{
-			name: "press 'q' in select view quits",
-			setupServers: []server.Server{
-				{ID: uuid.New(), Name: "Server 1", CreatedAt: time.Now()},
-			},
-			initialView: viewSelect,
-			msg:         tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}},
-			expectedCmd: true,
-			validateModel: func(t *testing.T, m Model, cmd tea.Cmd) {
-				if cmd == nil {
-					t.Error("Expected quit command")
-				}
-			},
-		},
-		{
 			name: "edit server message switches to form",
 			setupServers: []server.Server{
 				{ID: uuid.New(), Name: "Server 1", CreatedAt: time.Now()},
@@ -180,7 +166,6 @@ func TestUpdate(t *testing.T) {
 			msg:         tea.KeyMsg{Type: tea.KeyCtrlC},
 			expectedCmd: true,
 		},
-
 	}
 
 	for _, tt := range tests {

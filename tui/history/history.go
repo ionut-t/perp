@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/keymap"
+	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/utils"
@@ -21,8 +22,6 @@ import (
 type SelectedMsg struct {
 	Query string
 }
-
-type ClosedMsg struct{}
 
 type focused int
 
@@ -147,7 +146,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 
-			return m, utils.Dispatch(ClosedMsg{})
+			return m, utils.Dispatch(whichkey.CloseHistoryCmd())
 		}
 
 		switch msg.String() {
@@ -240,4 +239,8 @@ func (m *Model) getAvailableSizes() (int, int) {
 	availableWidth := m.width - h
 
 	return availableWidth, availableHeight
+}
+
+func (m *Model) CanTriggerLeaderKey() bool {
+	return m.list.FilterState() != list.Filtering
 }

@@ -295,10 +295,10 @@ func (m *Model) SetPsqlResult(result *psql.Result) {
 		return
 	}
 
-	rows, headers := m.buildPsqlCommandTable(result.Columns, result.Rows)
+	m.tableRows, m.tableHeaders = m.buildPsqlCommandTable(result.Columns, result.Rows)
 
-	m.table.SetHeaders(headers)
-	m.table.SetRows(rows)
+	m.table.SetHeaders(m.tableHeaders)
+	m.table.SetRows(m.tableRows)
 	m.table.SetSelectedCell(0, 0)
 	m.view = viewTable
 }

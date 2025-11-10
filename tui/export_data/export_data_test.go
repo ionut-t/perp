@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/store/export"
 )
@@ -33,9 +34,11 @@ type mockStore struct {
 func (m *mockStore) Load() ([]export.Record, error) {
 	return m.records, m.loadErr
 }
+
 func (m *mockStore) GetCurrentRecord() export.Record {
 	return m.currentRecord
 }
+
 func (m *mockStore) SetCurrentRecordName(name string) {
 	m.setCurrentCalls = append(m.setCurrentCalls, name)
 	// Update current record if it exists in records
@@ -46,10 +49,12 @@ func (m *mockStore) SetCurrentRecordName(name string) {
 		}
 	}
 }
+
 func (m *mockStore) Update(r export.Record) error {
 	m.updateCalls = append(m.updateCalls, r)
 	return m.updateErr
 }
+
 func (m *mockStore) Delete(r export.Record) error {
 	m.deleteCalls = append(m.deleteCalls, r)
 	// Remove from records if no error
@@ -70,6 +75,7 @@ func (m *mockStore) Delete(r export.Record) error {
 	}
 	return m.deleteErr
 }
+
 func (m *mockStore) Rename(r *export.Record, newName string) error {
 	m.renameCalls = append(m.renameCalls, struct {
 		record  *export.Record
@@ -80,6 +86,7 @@ func (m *mockStore) Rename(r *export.Record, newName string) error {
 	}
 	return m.renameErr
 }
+
 func (m *mockStore) Editor() string {
 	if m.editorName != "" {
 		return m.editorName
@@ -205,7 +212,7 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 	m.view = viewSplit
 	m.focusedView = focusedViewList
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	msg := editor.QuitMsg{}
 	_, cmd := m.Update(msg)
 
 	if cmd == nil {
@@ -214,8 +221,8 @@ func TestModel_Update_KeyMsg_Quit(t *testing.T) {
 
 	// Execute the command to check it returns ClosedMsg
 	result := cmd()
-	if _, ok := result.(ClosedMsg); !ok {
-		t.Errorf("expected ClosedMsg, got %T", result)
+	if _, ok := result.(whichkey.CloseExportMsg); !ok {
+		t.Errorf("expected whichkey.CloseExportMsg, got %T", result)
 	}
 }
 

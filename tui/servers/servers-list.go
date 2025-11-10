@@ -78,6 +78,7 @@ func newServersListModel(servers []server.Server) serversListModel {
 	l.SetShowPagination(false)
 	l.Title = "Select a server"
 	l.Styles = styles.ListStyles()
+	l.DisableQuitKeybindings()
 
 	return serversListModel{
 		list: l,

@@ -121,7 +121,7 @@ func (m *model) renderStatusBar() string {
 
 	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
 
-	helpText := styles.Info.Background(bg).PaddingRight(1).Render("? Help")
+	helpText := styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
 
 	displayedInfoWidth := m.width -
 		lipgloss.Width(leftInfo) -

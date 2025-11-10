@@ -30,7 +30,6 @@ type Model struct {
 
 func New(storage string) Model {
 	servers, err := server.Load(storage)
-
 	if err != nil {
 		servers = []server.Server{}
 	}
@@ -103,15 +102,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			return m, tea.Quit
-
 		case "ctrl+c":
 			return m, tea.Quit
-
-		case "q":
-			if m.view == viewSelect {
-				return m, tea.Quit
-			}
 		}
 	}
 
@@ -185,4 +177,8 @@ func (m *Model) editServer(server server.Server, updatedServer server.CreateServ
 		m.view = viewSelect
 		m.serversList.setServers(m.servers)
 	}
+}
+
+func (m Model) CanTriggerLeaderKey() bool {
+	return m.view == viewSelect
 }
