@@ -87,11 +87,11 @@ func New() (Config, error) {
 }
 
 func (c *config) AutoUpdateEnabled() bool {
-	return viper.GetBool(AutoUpdateKey)
+	return c.data.AutoUpdate
 }
 
 func (c *config) GetLeaderKey() string {
-	return viper.GetString(LeaderKey)
+	return c.data.LeaderKey
 }
 
 func (c *config) SetLeaderKey(key string) error {
@@ -131,7 +131,7 @@ func (c *config) GetMaxHistoryDays() int {
 }
 
 func (c *config) GetLLMProvider() (string, error) {
-	provider := viper.GetString(LLMProviderKey)
+	provider := c.data.LLMProvider
 
 	if provider == "" {
 		return "", fmt.Errorf("%s not set", LLMProviderKey)
@@ -151,7 +151,7 @@ func (c *config) SetLLMProvider(provider string) error {
 }
 
 func (c *config) GetLLMModel() (string, error) {
-	model := viper.GetString(LLMModelKey)
+	model := c.data.LLMModel
 
 	if model == "" {
 		return "", fmt.Errorf("%s not set", LLMModelKey)

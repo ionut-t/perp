@@ -37,7 +37,6 @@ func (g *GenAI) Ask(prompt string, cmd llm.Command, providerName string) (*llm.R
 		genai.Text(instructions),
 		nil,
 	)
-
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("request timed out after %v for %s", timeout, providerName)
@@ -84,6 +83,36 @@ func (g *GenAI) getInstructions() string {
 	return strings.TrimSpace(g.Instructions + "\n" + g.DBSchemaInstructions)
 }
 
-func (g *GenAI) SetModel(model string) {
+func (g *GenAI) SetModel(model, providerName string) error {
+	timeout := 30 * time.Second
+
+	if model == "" {
+		return fmt.Errorf("no %s model specified", providerName)
+	}
+
+	ctx, cancel := context.WithTimeout(g.Ctx, timeout)
+	defer cancel()
+
+	_, err := g.Client.Models.GenerateContent(
+		ctx,
+		model,
+		genai.Text("Test, say nothing."),
+		nil,
+	)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("request timed out after %v for %s", timeout, providerName)
+		}
+
+		if errors.As(err, &genai.APIError{}) {
+			apiErr := err.(genai.APIError)
+			return errors.New(apiErr.Message)
+		}
+
+		return err
+	}
+
 	g.Model = model
+
+	return nil
 }

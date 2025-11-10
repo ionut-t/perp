@@ -164,7 +164,7 @@ func New(config config.Config) model {
 		historyLogs = []history.Entry{}
 	}
 
-	llm, err := llmFactory.New(config, config.GetLLMInstructions())
+	llm, err := llmFactory.New(context.Background(), config, config.GetLLMInstructions())
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -729,10 +729,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.successNotification("LLM model is already set to " + msg.Model)
 		}
 
-		m.llm.SetModel(msg.Model)
-		if _, err := m.llm.Ask("Test LLM model", llm.Ask); err != nil {
-			m.llm.SetModel(existingModel)
-			return m, m.errorNotification(fmt.Errorf("invalid LLM model: %v", msg.Model))
+		if err := m.llm.SetModel(msg.Model); err != nil {
+			return m, m.errorNotification(fmt.Errorf("invalid LLM model: %w", err))
 		}
 
 		if err := m.config.SetLLMModel(msg.Model); err != nil {

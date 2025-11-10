@@ -31,7 +31,7 @@ type LLM interface {
 	Ask(prompt string, cmd Command) (*Response, error)
 	AppendInstructions(instructions string)
 	ResetInstructions()
-	SetModel(model string)
+	SetModel(model string) error
 }
 
 func SanitiseResponse(text string) string {
