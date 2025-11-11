@@ -24,6 +24,7 @@ const (
 	LLMProviderKey      = "llm_provider"
 	LLMModelKey         = "llm_model"
 	AutoUpdateKey       = "auto_update"
+	UpdateCheckInterval = "update_check_interval"
 	LeaderKey           = "leader_key"
 
 	rootDir                 = ".perp"
@@ -43,18 +44,20 @@ type Config interface {
 	SetLLMModel(model string) error
 	GetLLMInstructions() string
 	AutoUpdateEnabled() bool
+	UpdateCheckIntervalHours() float64
 	GetLeaderKey() string
 	SetLeaderKey(key string) error
 }
 
 type configData struct {
-	Editor           string
-	MaxHistoryLength int
-	MaxHistoryDays   int
-	LLMProvider      string
-	LLMModel         string
-	AutoUpdate       bool
-	LeaderKey        string
+	Editor              string
+	MaxHistoryLength    int
+	MaxHistoryDays      int
+	LLMProvider         string
+	LLMModel            string
+	AutoUpdate          bool
+	UpdateCheckInterval float64
+	LeaderKey           string
 }
 
 type config struct {
@@ -64,13 +67,14 @@ type config struct {
 
 func getConfigData() configData {
 	return configData{
-		Editor:           GetEditor(),
-		MaxHistoryLength: viper.GetInt(MaxHistoryLengthKey),
-		MaxHistoryDays:   viper.GetInt(MaxHistoryDaysKey),
-		LLMProvider:      viper.GetString(LLMProviderKey),
-		LLMModel:         viper.GetString(LLMModelKey),
-		AutoUpdate:       viper.GetBool(AutoUpdateKey),
-		LeaderKey:        viper.GetString(LeaderKey),
+		Editor:              GetEditor(),
+		MaxHistoryLength:    viper.GetInt(MaxHistoryLengthKey),
+		MaxHistoryDays:      viper.GetInt(MaxHistoryDaysKey),
+		LLMProvider:         viper.GetString(LLMProviderKey),
+		LLMModel:            viper.GetString(LLMModelKey),
+		AutoUpdate:          viper.GetBool(AutoUpdateKey),
+		UpdateCheckInterval: viper.GetFloat64(UpdateCheckInterval),
+		LeaderKey:           viper.GetString(LeaderKey),
 	}
 }
 
@@ -88,6 +92,10 @@ func New() (Config, error) {
 
 func (c *config) AutoUpdateEnabled() bool {
 	return c.data.AutoUpdate
+}
+
+func (c *config) UpdateCheckIntervalHours() float64 {
+	return c.data.UpdateCheckInterval
 }
 
 func (c *config) GetLeaderKey() string {
@@ -254,6 +262,7 @@ func InitialiseConfigFile() (string, error) {
 
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
 			viper.SetDefault(AutoUpdateKey, true)
+			viper.SetDefault(UpdateCheckInterval, 24)
 			viper.SetDefault(EditorKey, GetEditor())
 			viper.SetDefault(MaxHistoryLengthKey, 1000)
 			viper.SetDefault(MaxHistoryDaysKey, 90)

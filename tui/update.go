@@ -13,9 +13,8 @@ func (m model) checkForUpdates() tea.Cmd {
 			return nil
 		}
 
-		checker := update.New(version.Version(), m.config.Storage())
+		checker := update.New(version.Version(), m.config.Storage(), m.config.UpdateCheckIntervalHours())
 		release, err := checker.CheckForUpdate()
-
 		if err != nil {
 			return nil
 		}
@@ -43,7 +42,7 @@ func (m *model) dismissUpdate() (*model, tea.Cmd) {
 		return m, nil
 	}
 
-	checker := update.New("", m.config.Storage())
+	checker := update.New("", m.config.Storage(), 0)
 	_ = checker.DismissUpdate()
 	m.content.SetLatestReleaseInfo(nil)
 

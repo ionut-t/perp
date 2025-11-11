@@ -3,6 +3,9 @@
 #Auto-update feature can be enabled or disabled
 auto_update = {{ .AutoUpdate }}
 
+# Interval (in hours) to check for updates
+update_check_interval = {{ .UpdateCheckInterval }}
+
 # The editor will be used to edit the config file, LLM instructions and exported data
 editor = "{{ .Editor }}"
 

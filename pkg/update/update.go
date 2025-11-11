@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	githubAPIURL        = "https://api.github.com/repos/ionut-t/perp/releases/latest"
-	updateCheckFile     = ".update_check.json"
-	updateCheckInterval = 24 * time.Hour
+	githubAPIURL    = "https://api.github.com/repos/ionut-t/perp/releases/latest"
+	updateCheckFile = ".update_check.json"
 )
 
 // release represents a GitHub release
@@ -45,17 +44,19 @@ type LatestReleaseInfo struct {
 
 // Checker handles checking for updates
 type Checker struct {
-	currentVersion string
-	storageDir     string
-	httpClient     *http.Client
-	lastCheck      *updateCheck
+	currentVersion      string
+	storageDir          string
+	httpClient          *http.Client
+	lastCheck           *updateCheck
+	updateCheckInterval time.Duration
 }
 
 // New creates a new update checker
-func New(currentVersion, storageDir string) *Checker {
+func New(currentVersion, storageDir string, hours float64) *Checker {
 	c := &Checker{
-		currentVersion: currentVersion,
-		storageDir:     storageDir,
+		currentVersion:      currentVersion,
+		storageDir:          storageDir,
+		updateCheckInterval: time.Duration(hours) * time.Hour,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -107,12 +108,11 @@ func (c *Checker) DismissUpdate() error {
 
 	checkPath := filepath.Join(c.storageDir, updateCheckFile)
 	data, err := json.MarshalIndent(c.lastCheck, "", "  ")
-
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(checkPath, data, 0644); err != nil {
+	if err := os.WriteFile(checkPath, data, 0o644); err != nil {
 		return err
 	}
 
@@ -152,7 +152,7 @@ func (c *Checker) shouldCheckForUpdate() bool {
 		return true
 	}
 
-	return time.Since(c.lastCheck.LastChecked) > updateCheckInterval
+	return time.Since(c.lastCheck.LastChecked) > c.updateCheckInterval
 }
 
 // getLatestRelease fetches the latest release information from GitHub
@@ -204,11 +204,11 @@ func (c *Checker) saveUpdateCheck(release *release) error {
 		return err
 	}
 
-	if err := os.MkdirAll(c.storageDir, 0755); err != nil {
+	if err := os.MkdirAll(c.storageDir, 0o755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(checkPath, data, 0644)
+	return os.WriteFile(checkPath, data, 0o644)
 }
 
 // compareVersions compares the current version with the latest version
