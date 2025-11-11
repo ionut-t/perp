@@ -237,7 +237,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.view == viewExportData ||
 			m.view == viewHistory ||
 			m.isPromptActive ||
-			m.editor.IsInsertMode() && m.focused == focusedEditor {
+			!m.editor.IsNormalMode() && m.focused == focusedEditor {
 			break
 		}
 
