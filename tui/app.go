@@ -300,18 +300,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.resetEditor()
 
 	case llmResponseMsg:
-		return m.handleLLMResponse(msg)
+		m.handleLLMResponse(msg)
 
 	case llmFailureMsg:
 		m.loading = false
-		query := m.editor.GetCurrentContent()
-
-		for _, keyword := range llm.LLMKeywords {
-			query = strings.TrimPrefix(query, keyword)
-		}
-
-		query = strings.TrimSpace(query)
-		m.content.SetLLMLogsError(msg.err, query)
+		m.content.SetError(msg.err)
 
 	case llmSharedSchemaMsg:
 		return m.updateSharedSchema(msg)
@@ -413,12 +406,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			c, cmd := m.content.Update(nil)
 			m.content = c.(content.Model)
 			return m, cmd
-		}
-		return m, nil
-
-	case whichkey.ViewLLMLogsMsg:
-		if m.focused == focusedContent || m.view == viewMain {
-			m.content.ShowLLMLogs()
 		}
 		return m, nil
 
@@ -534,13 +521,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.editor.SetLanguage(lang, styles.EditorLanguageTheme())
 
-		editorModel, cmd := m.editor.Update(msg)
-		m.editor = editorModel.(editor.Model)
+		textEditor, cmd := m.editor.Update(msg)
+		m.editor = textEditor.(editor.Model)
 		cmds = append(cmds, cmd)
-	} else {
-		// Debug: why isn't editor getting updated?
-		// This helps identify if view/focus state is wrong
-		_ = fmt.Sprintf("Editor not updated: view=%v focused=%v", m.view, m.focused)
 	}
 
 	if m.view == viewServers {

@@ -117,12 +117,6 @@ func (r *Registry) buildLLMMenu() *Menu {
 				Action:      CommandAction{Cmd: ViewLLMSchemaCmd},
 			},
 			{
-				Key:         "l",
-				Label:       "LLM logs",
-				Description: "View LLM interaction logs",
-				Action:      CommandAction{Cmd: ViewLLMLogsCmd},
-			},
-			{
 				Key:         "m",
 				Label:       "Change model",
 				Description: "Switch LLM model",
@@ -429,14 +423,12 @@ func ExternalEditorCmd() tea.Msg { return ExternalEditorMsg{} }
 // LLM actions
 type (
 	ViewLLMSchemaMsg   struct{}
-	ViewLLMLogsMsg     struct{}
 	ChangeLLMModelMsg  struct{}
 	EnableDBSchemaMsg  struct{}
 	DisableDBSchemaMsg struct{}
 )
 
 func ViewLLMSchemaCmd() tea.Msg   { return ViewLLMSchemaMsg{} }
-func ViewLLMLogsCmd() tea.Msg     { return ViewLLMLogsMsg{} }
 func ChangeLLMModelCmd() tea.Msg  { return ChangeLLMModelMsg{} }
 func EnableDBSchemaCmd() tea.Msg  { return EnableDBSchemaMsg{} }
 func DisableDBSchemaCmd() tea.Msg { return DisableDBSchemaMsg{} }

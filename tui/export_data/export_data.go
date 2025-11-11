@@ -239,9 +239,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.view = viewPlaceholder
 			}
 
-			var texteditor tea.Model
-			texteditor, cmd = m.editor.Update(nil)
-			m.editor = texteditor.(editor.Model)
+			var textEditor tea.Model
+			textEditor, cmd = m.editor.Update(nil)
+			m.editor = textEditor.(editor.Model)
 			m.editor.SetLanguage(getLanguageForEditor(current.Path), styles.EditorLanguageTheme())
 
 		} else {

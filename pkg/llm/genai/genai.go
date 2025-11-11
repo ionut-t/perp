@@ -60,10 +60,6 @@ func (g *GenAI) Ask(prompt string, cmd llm.Command, providerName string) (*llm.R
 		cmd = llm.Info
 	}
 
-	if cmd == llm.Ask {
-		text = llm.SanitiseResponse(text)
-	}
-
 	return &llm.Response{
 		Response: text,
 		Time:     time.Now(),

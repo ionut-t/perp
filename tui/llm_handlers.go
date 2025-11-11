@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/tui/command"
 	"github.com/ionut-t/perp/tui/content"
@@ -28,22 +27,15 @@ func (m model) ask(prompt string, cmd llm.Command) tea.Cmd {
 }
 
 // handleLLMResponse processes LLM responses
-func (m model) handleLLMResponse(msg llmResponseMsg) (tea.Model, tea.Cmd) {
+func (m *model) handleLLMResponse(msg llmResponseMsg) {
 	m.loading = false
 	query := strings.TrimSpace(m.editor.GetCurrentContent())
-	m.content.SetLLMLogs(llm.Response(msg), query)
+	m.content.SetLLMResponse(llm.Response(msg), query)
 
-	if msg.Command == llm.Optimise || msg.Command == llm.Fix {
-		content := llm.ExtractQuery(string(msg.Response))
-		m.editor.SetContent(content)
-		m.editor.SetNormalMode()
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-		return m, cmd
-	}
+	content := llm.ExtractQuery(string(msg.Response))
+	m.editor.SetContent(content)
 
-	m.focusContent()
-	return m, m.resetEditor()
+	m.focused = focusedEditor
 }
 
 // updateSharedSchema updates the LLM shared schema state

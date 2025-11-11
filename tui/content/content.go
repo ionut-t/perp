@@ -20,7 +20,6 @@ import (
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/pkg/update"
 	"github.com/ionut-t/perp/ui/help"
-	"github.com/ionut-t/perp/ui/list"
 	"github.com/ionut-t/perp/ui/markdown"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -52,7 +51,6 @@ const (
 	viewDBSchema
 	viewTable
 	viewInfo
-	viewLLMLogs
 	viewLLMExplanation
 	viewLLMSharedSchema
 	viewError
@@ -70,20 +68,11 @@ type Model struct {
 	table             table.Model
 	server            server.Server
 	llmSharedTables   []string
-	llmLogsList       list.Model
-	logs              []chatLog
 	markdown          markdown.Model
 	latestReleaseInfo *update.LatestReleaseInfo
 	expandedDisplay   bool
 	tableRows         [][]string
 	tableHeaders      []string
-}
-
-type chatLog struct {
-	Prompt   string
-	Response string
-	Error    error
-	Time     time.Time
 }
 
 func New(width, height int) Model {
@@ -92,15 +81,11 @@ func New(width, height int) Model {
 	t.SetSelectionMode(table.SelectionCell | table.SelectionRow)
 	t.SetTheme(styles.TableTheme())
 
-	ls := list.New([]list.Item{}, width, height)
-	ls.SetPlaceholder("No LLM logs found.")
-
 	return Model{
 		width:           width,
 		height:          height,
 		viewport:        viewport.New(width, height),
 		table:           t,
-		llmLogsList:     ls,
 		llmSharedSchema: "No schema shared with LLM.",
 		markdown:        markdown.New(),
 	}
@@ -114,8 +99,6 @@ func (m *Model) SetSize(width, height int) {
 	m.viewport.Height = height
 
 	m.table.SetSize(width-1, height)
-
-	m.llmLogsList.SetSize(width, height-1)
 
 	switch m.view {
 	case viewInfo, viewDBSchema, viewLLMSharedSchema:
@@ -186,10 +169,6 @@ func (m *Model) ShowDBSchema() {
 
 func (m *Model) ShowLLMSharedSchema() {
 	m.view = viewLLMSharedSchema
-}
-
-func (m *Model) ShowLLMLogs() {
-	m.view = viewLLMLogs
 }
 
 func (m *Model) ShowPsqlHelp() {
@@ -303,41 +282,22 @@ func (m *Model) SetPsqlResult(result *psql.Result) {
 	m.view = viewTable
 }
 
-func (m *Model) SetLLMLogs(response llm.Response, query string) {
-	if response.Command != llm.Ask {
-		if out, err := m.markdown.Render(response.Response); err != nil {
-			m.error = fmt.Errorf("failed to render LLM response: %w", err)
-			m.view = viewError
-		} else {
-			m.viewport.SetContent(out)
-			m.viewport.YOffset = 0
-			m.view = viewLLMExplanation
-		}
+func (m *Model) SetLLMResponse(response llm.Response, query string) {
+	content := response.Response
 
-		return
+	if response.Command == llm.Ask {
+		query = strings.TrimPrefix(query, "/ask")
+		content = fmt.Sprintf("> %s\n\n%s", query, content)
 	}
 
-	newLog := chatLog{
-		Prompt:   query,
-		Response: response.Response,
-		Time:     time.Now(),
+	if out, err := m.markdown.Render(content); err != nil {
+		m.error = fmt.Errorf("failed to render LLM response: %w", err)
+		m.view = viewError
+	} else {
+		m.viewport.SetContent(out)
+		m.viewport.YOffset = 0
+		m.view = viewLLMExplanation
 	}
-
-	m.logs = append([]chatLog{newLog}, m.logs...)
-	m.view = viewLLMLogs
-	m.llmLogsList.SetItems(processLogs(m.logs))
-}
-
-func (m *Model) SetLLMLogsError(err error, query string) {
-	newLog := chatLog{
-		Prompt: query,
-		Error:  err,
-		Time:   time.Now(),
-	}
-
-	m.logs = append([]chatLog{newLog}, m.logs...)
-	m.view = viewLLMLogs
-	m.llmLogsList.SetItems(processLogs(m.logs))
 }
 
 func (m Model) Init() tea.Cmd {
@@ -359,26 +319,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter":
-			if m.view == viewLLMLogs {
-				index := m.llmLogsList.GetIndex()
-				if index < 0 || index >= len(m.logs) {
-					return m, nil
-				}
-
-				log := m.logs[index]
-
-				if log.Error != nil {
-					return m, nil
-				}
-
-				return m, func() tea.Msg {
-					return LLMResponseSelectedMsg{
-						Response: strings.TrimSpace(log.Response),
-					}
-				}
-			}
-
 		case "y":
 			if m.view == viewTable {
 				return m.yankSelectedCell()
@@ -399,11 +339,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table = t
 		cmds = append(cmds, cmd)
 
-	case viewLLMLogs:
-		l, cmd := m.llmLogsList.Update(msg)
-		m.llmLogsList = l
-		cmds = append(cmds, cmd)
-
 	default:
 		m.setViewportContent()
 
@@ -419,9 +354,6 @@ func (m Model) View() string {
 	switch m.view {
 	case viewTable:
 		return lipgloss.NewStyle().Height(m.height).Render(m.table.View())
-
-	case viewLLMLogs:
-		return m.llmLogsList.View()
 
 	case viewError:
 		return m.renderError(m.width, m.height)
@@ -660,36 +592,6 @@ func (m Model) yankSelectedRow() (tea.Model, tea.Cmd) {
 	m.table.SetTheme(theme)
 
 	return m, m.dispatchClearYankMsg()
-}
-
-func processLogs(logs []chatLog) []list.Item {
-	items := make([]list.Item, len(logs))
-
-	for i, n := range logs {
-		prompt := strings.TrimPrefix(n.Prompt, "/ask")
-		prompt = strings.TrimSpace(prompt)
-
-		items[i] = list.Item{
-			Title:       "Prompt: " + prompt,
-			Subtitle:    n.Time.Format("02/01/2006, 15:04:05"),
-			Description: n.Response,
-		}
-
-		if n.Error != nil {
-			items[i].Description = n.Error.Error()
-			items[i].Styles = &list.ItemStyles{
-				Title:       styles.Text,
-				Subtitle:    styles.Subtext1,
-				Description: styles.Error,
-				SelectedBorder: lipgloss.NewStyle().
-					Border(lipgloss.RoundedBorder()).
-					BorderForeground(styles.Error.GetForeground()).
-					Padding(0, 1),
-			}
-		}
-	}
-
-	return items
 }
 
 func (m Model) renderSharedTablesList() string {

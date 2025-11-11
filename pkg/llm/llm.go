@@ -34,22 +34,6 @@ type LLM interface {
 	SetModel(model string) error
 }
 
-func SanitiseResponse(text string) string {
-	text = strings.TrimSpace(text)
-
-	sqlPrefixes := []string{"SQL: ", "sql: ", "Sql: ", "```sql", "```"}
-	for _, prefix := range sqlPrefixes {
-		text = strings.TrimPrefix(text, prefix)
-	}
-
-	sqlSuffixes := []string{"```", "```sql"}
-	for _, suffix := range sqlSuffixes {
-		text = strings.TrimSuffix(text, suffix)
-	}
-
-	return strings.TrimSpace(text)
-}
-
 func ExtractQuery(text string) string {
 	startIndex := strings.Index(strings.ToLower(text), "```sql")
 	if startIndex == -1 {
