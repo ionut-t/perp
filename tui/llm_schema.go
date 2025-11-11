@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/utils"
@@ -13,34 +12,69 @@ import (
 
 // addTablesSchemaToLLM processes the `/add` command to include table schemas in the LLM context.
 func (m *model) addTablesSchemaToLLM() (string, error) {
-	if m.llm == nil {
-		return "", fmt.Errorf("LLM instance is not initialized")
+	if err := m.validateLLMSchemaSharing(); err != nil {
+		return "", err
+	}
+
+	tables, err := m.parseAddTablesCommand()
+	if err != nil {
+		return "", err
+	}
+
+	newTables := m.filterNewTables(tables)
+	finalTableList := append(m.llmSharedTablesSchema, newTables...)
+
+	schema, err := m.updateLLMWithSchema(finalTableList)
+	if err != nil {
+		return "", err
+	}
+
+	m.llmSharedTablesSchema = finalTableList
+	return schema, nil
+}
+
+// validateLLMSchemaSharing checks if LLM is ready and schema sharing is enabled
+func (m *model) validateLLMSchemaSharing() error {
+	if err := m.requireLLM(); err != nil {
+		return err
 	}
 
 	if !m.server.ShareDatabaseSchemaLLM {
-		return "", fmt.Errorf("cannot add tables to LLM schema when this feature is disabled")
+		return fmt.Errorf("cannot add tables to LLM schema when this feature is disabled")
 	}
 
+	return nil
+}
+
+// parseAddTablesCommand extracts and validates table names from the /add command
+func (m *model) parseAddTablesCommand() ([]string, error) {
 	value := strings.TrimSpace(strings.TrimPrefix(m.editor.GetCurrentContent(), "/add"))
 	if value == "" {
-		return "", fmt.Errorf("no tables specified to add")
+		return nil, fmt.Errorf("no tables specified to add")
 	}
 
 	tables := utils.ParseTableNames(value)
 	if len(tables) == 0 {
-		return "", fmt.Errorf("no valid table names provided")
+		return nil, fmt.Errorf("no valid table names provided")
 	}
 
+	return tables, nil
+}
+
+// filterNewTables returns only tables not already in the shared schema
+func (m *model) filterNewTables(tables []string) []string {
 	var newTables []string
 	for _, tableName := range tables {
 		if !slices.Contains(m.llmSharedTablesSchema, tableName) {
 			newTables = append(newTables, tableName)
 		}
 	}
+	return newTables
+}
 
-	finalTableList := append(m.llmSharedTablesSchema, newTables...)
-
-	schema, err := m.generateSchemaForTables(finalTableList)
+// updateLLMWithSchema generates schema for tables and updates LLM instructions
+func (m *model) updateLLMWithSchema(tables []string) (string, error) {
+	schema, err := m.generateSchemaForTables(tables)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate schema: %w", err)
 	}
@@ -49,18 +83,15 @@ func (m *model) addTablesSchemaToLLM() (string, error) {
 		return "", fmt.Errorf("no schema found for the specified tables; please check they exist")
 	}
 
-	m.llmSharedTablesSchema = finalTableList
-
 	m.llm.ResetInstructions()
-
 	m.llm.AppendInstructions("Database Schema:\n\n" + schema)
 
 	return schema, nil
 }
 
 func (m *model) removeTablesSchemaToLLM() (string, error) {
-	if m.llm == nil {
-		return "", fmt.Errorf("LLM instance is not initialized")
+	if err := m.requireLLM(); err != nil {
+		return "", err
 	}
 
 	value := m.editor.GetCurrentContent()
@@ -85,10 +116,6 @@ func (m *model) removeTablesSchemaToLLM() (string, error) {
 	tables := utils.ParseTableNames(value)
 	if len(tables) == 0 {
 		return "", fmt.Errorf("no valid table names provided")
-	}
-
-	if len(tables) == 0 {
-		return "", fmt.Errorf("no valid tables specified to remove from LLM schema")
 	}
 
 	for _, tableName := range tables {
@@ -123,7 +150,7 @@ func (m *model) generateSchemaForTables(tables []string) (string, error) {
 		return "", nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), DatabaseQueryTimeout)
 	defer cancel()
 
 	executor := psql.New(m.db)

@@ -10,66 +10,6 @@ import (
 	"github.com/ionut-t/perp/ui/help"
 )
 
-var yankCell = key.NewBinding(
-	key.WithKeys("y"),
-	key.WithHelp("y", "yank selected cell"),
-)
-
-var yankRow = key.NewBinding(
-	key.WithKeys("Y"),
-	key.WithHelp("Y", "yank selected row (copies selected row as JSON to clipboard)"),
-)
-
-var previousCell = key.NewBinding(
-	key.WithKeys("left", "h"),
-	key.WithHelp("← / h", "previous cell"),
-)
-
-var nextCell = key.NewBinding(
-	key.WithKeys("right", "l"),
-	key.WithHelp("→ / l", "next cell"),
-)
-
-var changeFocused = key.NewBinding(
-	key.WithKeys("tab"),
-	key.WithHelp("tab", "change focus between editor and main content"),
-)
-
-var executeQuery = key.NewBinding(
-	key.WithKeys("alt+enter", "ctrl+s"),
-	key.WithHelp("alt+enter/ctrl+s", "execute query (no matter the editor mode)"),
-)
-
-var previousHistory = key.NewBinding(
-	key.WithKeys("shift+up"),
-	key.WithHelp("shift+↑", "previous history log"),
-)
-
-var nextHistory = key.NewBinding(
-	key.WithKeys("shift+down"),
-	key.WithHelp("shift+↓", "next history log"),
-)
-
-var enterCommand = key.NewBinding(
-	key.WithKeys(":"),
-	key.WithHelp(":", "enter command mode (available when the editor is not focused)"),
-)
-
-var viewHistoryEntries = key.NewBinding(
-	key.WithKeys("ctrl+r"),
-	key.WithHelp("ctrl+r", "view history logs"),
-)
-
-var openRelease = key.NewBinding(
-	key.WithKeys("ctrl+u"),
-	key.WithHelp("ctrl+u", "open release notes in browser"),
-)
-
-var dismissUpdate = key.NewBinding(
-	key.WithKeys("ctrl+x"),
-	key.WithHelp("ctrl+x", "dismiss release"),
-)
-
 func (m model) renderHelp() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

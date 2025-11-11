@@ -5,20 +5,16 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/coffee/styles"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/config"
-	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/internal/leader"
 	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/db"
-	"github.com/ionut-t/perp/pkg/export"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	llmFactory "github.com/ionut-t/perp/pkg/llm/llm_factory"
@@ -34,59 +30,6 @@ import (
 	"github.com/ionut-t/perp/tui/prompt"
 	"github.com/ionut-t/perp/tui/servers"
 	"github.com/ionut-t/perp/ui/help"
-)
-
-type schemaFetchedMsg string
-
-type schemaFailureMsg struct {
-	err error
-}
-
-type llmResponseMsg llm.Response
-
-type llmFailureMsg struct {
-	err error
-}
-
-type executeQueryMsg content.ParsedQueryResult
-
-type queryFailureMsg struct {
-	err error
-}
-
-type llmSharedSchemaMsg struct {
-	schema  string
-	message string
-	tables  []string
-}
-
-type notificationErrorMsg struct {
-	err error
-}
-
-type view int
-
-const (
-	viewServers view = iota
-	viewMain
-	viewExportData
-	viewHelp
-	viewHistory
-)
-
-type focused int
-
-const (
-	focusedNone focused = iota
-	focusedEditor
-	focusedContent
-	focusedCommand
-	focusedHistory
-)
-
-const (
-	editorMinHeight        = 10
-	editorHalfScreenOffset = 4 // Offset for editor in split view (accounts for borders/padding)
 )
 
 type model struct {
@@ -186,7 +129,7 @@ func New(config config.Config) model {
 		help:            help.New(),
 		llmError:        err,
 		spinner:         sp,
-		leaderMgr:       leader.NewManager(500*time.Millisecond, config.GetLeaderKey()),
+		leaderMgr:       leader.NewManager(LeaderKeyTimeout, config.GetLeaderKey()),
 		whichKeyMenu:    menu.New(menuRegistry.GetRootMenu(), 0, 0),
 		menuRegistry:    menuRegistry,
 		showingMenu:     false,
@@ -288,184 +231,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
+		// Don't handle keys if in special views or command mode
 		if m.focused == focusedCommand ||
 			m.view == viewServers ||
 			m.view == viewExportData ||
-			m.view == viewHistory {
+			m.view == viewHistory ||
+			m.isPromptActive ||
+			m.editor.IsInsertMode() && m.focused == focusedEditor {
 			break
 		}
 
-		switch {
-		case key.Matches(msg, keymap.Quit):
-			if m.error != nil {
-				m.serverSelection = servers.New(m.config.Storage())
-				_, cmd := m.serverSelection.Update(nil)
+		// Try to handle special key bindings
+		// If handled, return early; otherwise, break to let editor handle it
+		updatedModel, cmd, handled := m.tryHandleKeyPress(msg)
 
-				m.view = viewServers
-				m.error = nil
-				return m, cmd
-			}
-
-			if m.focused == focusedContent && m.content.IsViewChangeRequired() ||
-				m.editor.IsNormalMode() && m.fullScreen {
-				m.fullScreen = false
-
-				m.updateSize()
-				contentModel, cmd := m.content.Update(content.ResizeMsg{})
-				m.content = contentModel.(content.Model)
-
-				return m, cmd
-			}
-
-			if m.view == viewHelp {
-				m.view = viewMain
-				m.focused = focusedEditor
-				m.editor.Focus()
-				break
-			}
-
-		case key.Matches(msg, changeFocused):
-			if m.view == viewMain && !m.editor.IsInsertMode() {
-				switch m.focused {
-				case focusedEditor:
-					m.focused = focusedContent
-					m.editor.Blur()
-				case focusedContent:
-					m.focused = focusedEditor
-					m.editor.Focus()
-				}
-
-				if m.fullScreen {
-					m.updateSize()
-				}
-
-				_, cmd := m.content.Update(nil)
-
-				return m, tea.Batch(
-					cmd,
-					m.editor.CursorBlink(),
-					utils.Dispatch(content.ResizeMsg{}),
-				)
-			}
-
-		case key.Matches(msg, enterCommand):
-			if m.view == viewMain && m.editor.IsNormalMode() {
-				m.focused = focusedCommand
-				m.editor.Blur()
-
-				ed, cmd := m.editor.Update(nil)
-				m.editor = ed.(editor.Model)
-
-				return m, tea.Batch(
-					m.command.Focus(),
-					cmd,
-				)
-			}
-
-		case key.Matches(msg, keymap.Insert):
-			if m.view == viewMain && m.focused == focusedContent {
-				m.focused = focusedEditor
-				m.editor.Focus()
-				m.editor.SetInsertMode()
-
-				_, cmd := m.editor.Update(nil)
-
-				return m, tea.Batch(
-					cmd,
-					m.editor.CursorBlink(),
-				)
-			}
-
-		case key.Matches(msg, keymap.Submit):
-			if m.editor.IsNormalMode() {
-				content := m.editor.GetCurrentContent()
-
-				if content == "" {
-					break
-				}
-
-				if !m.loading {
-					m.loading = true
-					m.resetHistory()
-					m.addToHistory()
-					m.fullScreen = false
-					m.updateSize()
-
-					return m, m.sendQueryCmd()
-				}
-			}
-
-		case key.Matches(msg, executeQuery):
-			if !m.loading {
-				m.loading = true
-				m.resetHistory()
-				m.addToHistory()
-				m.fullScreen = false
-				m.updateSize()
-
-				return m, m.sendQueryCmd()
-			}
-
-		case key.Matches(msg, keymap.Cancel):
-			if m.view == viewMain && m.focused == focusedEditor {
-				m.resetHistory()
-
-				if m.editor.IsNormalMode() {
-					if m.editor.IsFocused() {
-						m.focused = focusedContent
-						m.editor.Blur()
-					}
-				}
-			}
-
-		case key.Matches(msg, previousHistory):
-			if m.editor.IsFocused() && len(m.historyLogs) > 0 {
-				m.previousHistory()
-			}
-
-		case key.Matches(msg, nextHistory):
-			if m.editor.IsFocused() && m.historyNavigating {
-				m.nextHistory()
-			}
-
-		case key.Matches(msg, viewHistoryEntries):
-			if entries, err := history.Get(m.config.Storage()); err != nil {
-				m.content.SetError(err)
-			} else {
-				m.view = viewHistory
-				m.focused = focusedHistory
-				m.editor.Blur()
-				m.historyLogs = entries
-
-				m.history = historyView.New(entries, m.width, m.height)
-			}
-
-		case key.Matches(msg, openRelease):
-			return m.openReleaseNotes()
-
-		case key.Matches(msg, dismissUpdate):
-			return m.dismissUpdate()
+		if handled {
+			return updatedModel, cmd
 		}
+		m = updatedModel.(model)
 
 	case servers.SelectedServerMsg:
-		m.closeDbConnection()
-		m.view = viewMain
-		m.focused = focusedEditor
-		m.loading = true
-		m.server = msg.Server
-		m.db, m.error = db.New(m.server.String())
-		if m.error == nil {
-			m.content.SetConnectionInfo(m.server)
-
-			if m.server.ShareDatabaseSchemaLLM {
-				m.editor.SetPlaceholder("Type your SQL query or /ask your question here...")
-			} else {
-				m.editor.SetPlaceholder("Type your SQL query")
-			}
-
-			return m, m.generateSchema()
-		}
-		m.loading = false
+		return m.handleServerConnection(msg)
 
 	case utils.ClearMsg:
 		m.notification = ""
@@ -484,39 +270,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content.SetError(msg.err)
 
 	case executeQueryMsg:
-		m.loading = false
-		m.editor.SetContent("")
-
-		err := m.content.SetQueryResults(content.ParsedQueryResult(msg))
-		if err != nil {
-			return m, nil
-		}
-
-		m.focused = focusedContent
-		m.editor.Blur()
-		m.editor.SetNormalMode()
-
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-
-		message := fmt.Sprintf("Query executed successfully. Affected rows: %d", msg.AffectedRows)
-
-		if m.server.TimingEnabled {
-			message += fmt.Sprintf(". Execution time: %s", utils.Duration(msg.ExecutionTime))
-		}
-
-		var schemaCmd tea.Cmd
-		if msg.Type == db.QueryCreate ||
-			msg.Type == db.QueryDrop ||
-			msg.Type == db.QueryAlter {
-			schemaCmd = m.generateSchema()
-		}
-
-		return m, tea.Batch(
-			cmd,
-			m.successNotification(message),
-			schemaCmd,
-		)
+		return m.handleQueryResult(msg)
 
 	case queryFailureMsg:
 		m.loading = false
@@ -527,98 +281,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.runPsqlCommand(msg.command)
 
 	case psqlResultMsg:
-		m.loading = false
-		m.editor.SetContent("")
-
-		var timingCmd tea.Cmd
-		if m.server.TimingEnabled {
-			timingCmd = m.successNotification(fmt.Sprintf("Execution time: %s", utils.Duration(msg.result.ExecutionTime)))
-		}
-
-		m.content.SetPsqlResult(msg.result)
-
-		m.focused = focusedContent
-		m.editor.Blur()
-		m.editor.SetNormalMode()
-
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-
-		return m, tea.Batch(
-			cmd,
-			timingCmd,
-		)
+		return m.handlePsqlResult(msg)
 
 	case psqlErrorMsg:
 		m.loading = false
 		m.content.SetError(msg.err)
 
 	case toggleExpandedMsg:
-		m.loading = false
-		m.expandedDisplay = !m.expandedDisplay
-		m.content.SetExpandedDisplay(m.expandedDisplay)
-		status := "OFF"
-		if m.expandedDisplay {
-			status = "ON"
-		}
-
-		m.editor.SetContent("")
-
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-
-		return m, tea.Batch(
-			cmd,
-			m.successNotification(fmt.Sprintf("Expanded display is %s", status)),
-		)
+		return m.toggleExpandedDisplay()
 
 	case toggleTimingMsg:
-		m.loading = false
-		enabled := !m.server.TimingEnabled
-		if err := m.server.ToggleTiming(m.config.Storage()); err != nil {
-			m.server.TimingEnabled = enabled
-		}
-		status := "OFF"
-		if m.server.TimingEnabled {
-			status = "ON"
-		}
-
-		m.editor.SetContent("")
-
-		m.editor.SetContent("")
-
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-
-		return m, tea.Batch(
-			cmd,
-			m.successNotification(fmt.Sprintf("Timing is %s", status)),
-		)
+		return m.toggleQueryTiming()
 
 	case showPsqlHelpMsg:
+		m.loading = false
 		m.content.ShowPsqlHelp()
-		m.editor.SetContent("")
-		return m, nil
+		m.focused = focusedContent
+		return m, m.resetEditor()
 
 	case llmResponseMsg:
-		m.loading = false
-		query := strings.TrimSpace(m.editor.GetCurrentContent())
-		m.content.SetLLMLogs(llm.Response(msg), query)
-
-		if msg.Command == llm.Optimise || msg.Command == llm.Fix {
-			content := llm.ExtractQuery(string(msg.Response))
-			m.editor.SetContent(content)
-		} else {
-			m.editor.SetContent("")
-			m.editor.Blur()
-			m.focused = focusedContent
-		}
-
-		m.editor.SetNormalMode()
-
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-		return m, cmd
+		return m.handleLLMResponse(msg)
 
 	case llmFailureMsg:
 		m.loading = false
@@ -632,48 +314,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.content.SetLLMLogsError(msg.err, query)
 
 	case llmSharedSchemaMsg:
-		m.loading = false
-		m.content.SetLLMSharedSchema(msg.schema)
-		m.llmSharedTablesSchema = msg.tables
-		m.content.SetLLMSharedTables(m.llmSharedTablesSchema)
-
-		m.editor.SetContent("")
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-
-		return m, tea.Batch(
-			cmd,
-			m.successNotification(msg.message),
-		)
+		return m.updateSharedSchema(msg)
 
 	case notificationErrorMsg:
 		m.loading = false
 		return m, m.errorNotification(msg.err)
 
 	case content.LLMResponseSelectedMsg:
-		m.editor.SetContent(msg.Response)
-		m.editor.Focus()
-		_ = m.editor.SetCursorPositionEnd()
-		m.view = viewMain
-		m.focused = focusedEditor
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-
-		return m, tea.Batch(
-			cmd,
-			m.editor.CursorBlink(),
-		)
+		return m.applyLLMResponse(msg)
 
 	case command.QuitMsg, psqlQuitMsg:
 		m.closeDbConnection()
 		return m, tea.Quit
 
 	case command.CancelMsg:
-		m.focused = focusedEditor
-		m.editor.Focus()
+		m.focusEditor()
 
 	case command.ExportMsg:
-		return m.handleDataExport(msg)
+		return m.exportQueryData(msg)
 
 	case command.EditorChangedMsg:
 		err := m.config.SetEditor(msg.Editor)
@@ -681,110 +339,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.errorNotification(err)
 		}
 
-		m.focused = focusedEditor
-		m.editor.Focus()
+		m.focusEditor()
 		return m, m.successNotification(
 			fmt.Sprintf("Editor changed to %s", msg.Editor),
 		)
 
 	case command.LLMUseDatabaseSchemaMsg:
-		if m.llmError != nil {
-			return m, m.errorNotification(fmt.Errorf("LLM is not configured: %w", m.llmError))
-		}
-
-		done := func() {
-			m.content.SetConnectionInfo(m.server)
-			m.focused = focusedEditor
-			m.editor.Focus()
-		}
-
-		if m.server.ShareDatabaseSchemaLLM == msg.Enabled {
-			done()
-			return m, m.successNotification("No change in LLM database schema usage")
-		}
-
-		if err := m.server.EnableDatabaseSchemaLLM(msg.Enabled, m.config.Storage()); err != nil {
-			return m, m.errorNotification(err)
-		}
-
-		if msg.Enabled {
-			done()
-			return m, m.successNotification("LLM will now use the database schema")
-		}
-
-		done()
-		m.llm.ResetInstructions()
-		m.llmSharedTablesSchema = []string{}
-		m.content.SetLLMSharedSchema("")
-		m.content.SetLLMSharedTables(m.llmSharedTablesSchema)
-		return m, m.successNotification("LLM will no longer use the database schema")
+		return m.toggleDBSchemaSharing(msg)
 
 	case command.LLMModelChangedMsg:
-		if m.llmError != nil {
-			return m, m.errorNotification(fmt.Errorf("LLM is not configured: %w", m.llmError))
-		}
-
-		existingModel, _ := m.config.GetLLMModel()
-		if existingModel == msg.Model {
-			return m, m.successNotification("LLM model is already set to " + msg.Model)
-		}
-
-		if err := m.llm.SetModel(msg.Model); err != nil {
-			return m, m.errorNotification(fmt.Errorf("invalid LLM model: %w", err))
-		}
-
-		if err := m.config.SetLLMModel(msg.Model); err != nil {
-			return m, m.errorNotification(err)
-		}
-
-		m.focused = focusedEditor
-		m.editor.Focus()
-		return m, m.successNotification("LLM model changed to " + msg.Model)
+		return m.updateLLMModel(msg)
 
 	case command.LeaderKeyChangedMsg:
-		existingLeader := m.config.GetLeaderKey()
-		if existingLeader == msg.Key {
-			return m, nil
-		}
-
-		if err := m.config.SetLeaderKey(msg.Key); err != nil {
-			return m, m.errorNotification(err)
-		}
-
-		m.leaderMgr.SetLeaderKey(msg.Key)
-		return m, m.successNotification("Leader key changed")
+		return m.updateLeaderKey(msg)
 
 	case command.ErrorMsg:
 		return m, m.errorNotification(msg.Err)
 
 	case historyView.SelectedMsg:
-		m.editor.SetContent(msg.Query)
-		m.editor.Focus()
-		_ = m.editor.SetCursorPositionEnd()
-		m.view = viewMain
-		m.focused = focusedEditor
-		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
-		return m, tea.Batch(
-			cmd,
-			m.editor.CursorBlink(),
-		)
+		return m.applyHistoryQuery(msg)
 
 	// Leader key and which-key messages
 	case leader.TimeoutMsg:
 		// Leader key timeout - show menu
-		if m.leaderMgr.IsActive() {
-			// Update context before showing menu
-			m.updateMenuContext()
-
-			// Always show the root menu initially after leader timeout.
-			// The root menu is context-aware and will return appropriate items.
-			menu := m.menuRegistry.GetRootMenu()
-			m.whichKeyMenu.SetMenu(menu)
-			m.whichKeyMenu.Show()
-			m.showingMenu = true
-		}
-		return m, nil
+		return m.showLeaderMenu()
 
 	case whichkey.CloseMenuMsg:
 		m.showingMenu = false
@@ -879,14 +457,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case whichkey.CloseExportMsg:
 		m.view = viewMain
-		m.focused = focusedEditor
-		m.editor.Focus()
+		m.focusEditor()
 		return m, nil
 
 	case whichkey.CloseHistoryMsg:
 		m.view = viewMain
-		m.focused = focusedEditor
-		m.editor.Focus()
+		m.focusEditor()
 		return m, nil
 
 	// Database schema actions
@@ -961,6 +537,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		editorModel, cmd := m.editor.Update(msg)
 		m.editor = editorModel.(editor.Model)
 		cmds = append(cmds, cmd)
+	} else {
+		// Debug: why isn't editor getting updated?
+		// This helps identify if view/focus state is wrong
+		_ = fmt.Sprintf("Editor not updated: view=%v focused=%v", m.view, m.focused)
 	}
 
 	if m.view == viewServers {
@@ -1052,230 +632,35 @@ func (m model) View() string {
 	}
 }
 
-func (m model) generateSchema() tea.Cmd {
-	return func() tea.Msg {
-		schema, err := m.db.GenerateSchema()
-		if err != nil {
-			return schemaFailureMsg{err: err}
-		}
+func (m model) showLeaderMenu() (tea.Model, tea.Cmd) {
+	if m.leaderMgr.IsActive() {
+		// Update context before showing menu
+		m.updateMenuContext()
 
-		return schemaFetchedMsg(schema)
+		// Always show the root menu initially after leader timeout.
+		// The root menu is context-aware and will return appropriate items.
+		menu := m.menuRegistry.GetRootMenu()
+		m.whichKeyMenu.SetMenu(menu)
+		m.whichKeyMenu.Show()
+		m.showingMenu = true
 	}
+	return m, nil
 }
 
-func (m model) executeQuery(query string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		result, err := m.db.Query(ctx, query)
-		if err != nil {
-			return queryFailureMsg{err: err}
-		}
-
-		var queryResult content.ParsedQueryResult
-
-		rows, columns, err := db.ExtractResults(result.Rows())
-		if err != nil {
-			return queryFailureMsg{err: err}
-		}
-
-		queryResult.Type = result.Type()
-		queryResult.Query = result.Query()
-		result.Rows().Close()
-		queryResult.AffectedRows = result.Rows().CommandTag().RowsAffected()
-		queryResult.Columns = columns
-		queryResult.Rows = rows
-		queryResult.ExecutionTime = result.ExecutionTime()
-
-		return executeQueryMsg(queryResult)
-	}
-}
-
-func (m model) ask(prompt string, cmd llm.Command) tea.Cmd {
-	return func() tea.Msg {
-		if m.llmError != nil {
-			return llmFailureMsg{err: fmt.Errorf("LLM is not configured: %w", m.llmError)}
-		}
-
-		response, err := m.llm.Ask(prompt, cmd)
-		if err != nil {
-			return llmFailureMsg{err: err}
-		}
-
-		return llmResponseMsg(*response)
-	}
-}
-
-func (m model) setHighlightedKeywords() map[string]lipgloss.Style {
-	if strings.HasPrefix(m.editor.GetCurrentContent(), "/") {
-		return m.llmKeywords
+func (m model) updateLeaderKey(msg command.LeaderKeyChangedMsg) (tea.Model, tea.Cmd) {
+	existingLeader := m.config.GetLeaderKey()
+	if existingLeader == msg.Key {
+		return m, nil
 	}
 
-	if strings.HasPrefix(m.editor.GetCurrentContent(), "\\") {
-		return m.psqlCommands
-	}
-
-	return nil
-}
-
-func (m model) sendQueryCmd() tea.Cmd {
-	prompt := m.editor.GetCurrentContent()
-
-	if prompt == "" {
-		return nil
-	}
-
-	prompt = strings.TrimSpace(prompt)
-
-	if llm.IsAskCommand(prompt) {
-		m.focused = focusedContent
-		return m.ask(prompt, llm.Ask)
-	}
-
-	if llm.IsExplainCommand(prompt) {
-		m.focused = focusedContent
-		return m.ask(prompt, llm.Explain)
-	}
-
-	if llm.IsOptimiseCommand(prompt) {
-		m.focused = focusedContent
-		return m.ask(prompt, llm.Optimise)
-	}
-
-	if llm.IsFixCommand(prompt) {
-		m.focused = focusedContent
-		error := m.content.GetError()
-		if error != nil {
-			prompt += "\nError: " + error.Error()
-		}
-		return m.ask(prompt, llm.Fix)
-	}
-
-	if strings.HasPrefix(prompt, "/add") {
-		schema, err := m.addTablesSchemaToLLM()
-		if err != nil {
-			return utils.Dispatch(notificationErrorMsg{err: err})
-		}
-
-		return func() tea.Msg {
-			var message string
-			if len(m.llmSharedTablesSchema) == 1 {
-				message = "Table added to LLM schema"
-			} else {
-				message = "Tables added to LLM schema"
-			}
-
-			return llmSharedSchemaMsg{schema: schema, message: message, tables: m.llmSharedTablesSchema}
-		}
-	}
-
-	if strings.HasPrefix(prompt, "/remove") {
-		schema, err := m.removeTablesSchemaToLLM()
-		if err != nil {
-			return utils.Dispatch(notificationErrorMsg{err: err})
-		}
-
-		return func() tea.Msg {
-			var message string
-			switch len(m.llmSharedTablesSchema) {
-			case 0:
-				message = "All tables removed from LLM instructions"
-			case 1:
-				message = "Table removed from LLM schema"
-			default:
-				message = "Tables removed from LLM schema"
-			}
-
-			return llmSharedSchemaMsg{schema: schema, message: message, tables: m.llmSharedTablesSchema}
-		}
-	}
-
-	if strings.HasPrefix(prompt, "\\") {
-		return m.executePsqlCommand(prompt)
-	}
-
-	return m.executeQuery(prompt)
-}
-
-func (m model) handleDataExport(msg command.ExportMsg) (tea.Model, tea.Cmd) {
-	if filepath.Ext(msg.Filename) != ".json" && filepath.Ext(msg.Filename) != ".csv" {
-		return m, m.errorNotification(
-			fmt.Errorf("invalid file extension: %s. Supported extensions are .json and .csv", msg.Filename),
-		)
-	}
-
-	if filepath.Ext(msg.Filename) == ".csv" {
-		return m.handleExportAsCsv(msg)
-	}
-
-	return m.handleExportAsJson(msg)
-}
-
-func (m model) handleExportAsJson(msg command.ExportMsg) (tea.Model, tea.Cmd) {
-	queryResults := m.content.GetQueryResults()
-
-	data, err := export.PrepareJSON(queryResults, msg.Rows, msg.All)
-	if err != nil {
-		m.focused = focusedEditor
-		m.editor.Focus()
+	if err := m.config.SetLeaderKey(msg.Key); err != nil {
 		return m, m.errorNotification(err)
 	}
 
-	storage := filepath.Join(m.config.Storage(), m.server.Name)
-	fileName, err := export.AsJson(storage, data, msg.Filename)
-	if err != nil {
-		return m, m.errorNotification(err)
-	}
-
-	m.focused = focusedEditor
-	m.editor.Focus()
-	m.command.Reset()
-
-	return m, m.successNotification(
-		fmt.Sprintf("Data exported successfully as JSON to %s", fileName),
-	)
+	m.leaderMgr.SetLeaderKey(msg.Key)
+	return m, m.successNotification("Leader key changed")
 }
 
-func (m model) handleExportAsCsv(msg command.ExportMsg) (tea.Model, tea.Cmd) {
-	queryResults := m.content.GetQueryResults()
-
-	data, err := export.PrepareCSV(queryResults, msg.Rows, msg.All)
-	if err != nil {
-		m.focused = focusedEditor
-		m.editor.Focus()
-		return m, m.errorNotification(err)
-	}
-
-	storage := filepath.Join(m.config.Storage(), m.server.Name)
-	fileName, err := export.AsCsv(storage, data, msg.Filename)
-	if err != nil {
-		return m, m.errorNotification(err)
-	}
-
-	m.focused = focusedEditor
-	m.editor.Focus()
-	m.command.Reset()
-
-	return m, m.successNotification(
-		fmt.Sprintf("Data exported successfully as CSV to %s", fileName),
-	)
-}
-
-func (m *model) successNotification(msg string) tea.Cmd {
-	m.notification = styles.Success.Render(msg)
-
-	return utils.ClearAfter(time.Second * 2)
-}
-
-func (m *model) errorNotification(err error) tea.Cmd {
-	m.notification = styles.Error.Render(err.Error())
-
-	return utils.ClearAfter(time.Second * 2)
-}
-
-func (m model) closeDbConnection() {
-	if m.db != nil {
-		m.db.Close()
-	}
+func (m model) applyHistoryQuery(msg historyView.SelectedMsg) (tea.Model, tea.Cmd) {
+	return m, m.applyQueryToEditor(msg.Query)
 }

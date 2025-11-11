@@ -3,30 +3,15 @@ package tui
 import (
 	"context"
 	"fmt"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/psql"
+	"github.com/ionut-t/perp/pkg/utils"
 	"github.com/ionut-t/perp/tui/servers"
 )
 
-type psqlCommandMsg struct {
-	command *psql.Command
-}
-
-type psqlResultMsg struct {
-	result *psql.Result
-}
-
-type psqlErrorMsg struct {
-	err error
-}
-
-type toggleExpandedMsg struct{}
-type toggleTimingMsg struct{}
-type showPsqlHelpMsg struct{}
-type psqlQuitMsg struct{}
+// Message types moved to messages.go
 
 // executePsqlCommand parses and initiates execution of a psql command
 func (m model) executePsqlCommand(input string) tea.Cmd {
@@ -59,7 +44,7 @@ func (m model) executePsqlCommand(input string) tea.Cmd {
 // runPsqlCommand executes a psql command against the database
 func (m model) runPsqlCommand(cmd *psql.Command) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), DatabaseQueryTimeout)
 		defer cancel()
 
 		executor := psql.New(m.db)
@@ -94,4 +79,52 @@ func (m model) connectToDatabase(database string) tea.Msg {
 	return servers.SelectedServerMsg{
 		Server: m.server,
 	}
+}
+
+func (m model) handlePsqlResult(msg psqlResultMsg) (tea.Model, tea.Cmd) {
+	resetCmd := m.resetEditor()
+	m.finishQueryExecution()
+
+	var timingCmd tea.Cmd
+	if m.server.TimingEnabled {
+		timingCmd = m.successNotification(fmt.Sprintf("Execution time: %s", utils.Duration(msg.result.ExecutionTime)))
+	}
+
+	m.content.SetPsqlResult(msg.result)
+
+	return m, tea.Batch(
+		resetCmd,
+		timingCmd,
+	)
+}
+
+func (m model) toggleExpandedDisplay() (tea.Model, tea.Cmd) {
+	m.loading = false
+	m.expandedDisplay = !m.expandedDisplay
+	m.content.SetExpandedDisplay(m.expandedDisplay)
+
+	resetCmd := m.resetEditor()
+
+	return m, tea.Batch(
+		resetCmd,
+		m.successNotification(fmt.Sprintf("Expanded display is %s", toggleStatus(m.expandedDisplay))),
+	)
+}
+
+func (m model) toggleQueryTiming() (tea.Model, tea.Cmd) {
+	m.loading = false
+	oldValue := m.server.TimingEnabled
+
+	if err := m.server.ToggleTiming(m.config.Storage()); err != nil {
+		// Restore old value on error
+		m.server.TimingEnabled = oldValue
+		return m, m.errorNotification(err)
+	}
+
+	resetCmd := m.resetEditor()
+
+	return m, tea.Batch(
+		resetCmd,
+		m.successNotification(fmt.Sprintf("Timing is %s", toggleStatus(m.server.TimingEnabled))),
+	)
 }

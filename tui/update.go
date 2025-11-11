@@ -7,10 +7,6 @@ import (
 	"github.com/ionut-t/perp/pkg/update"
 )
 
-type updateAvailableMsg struct {
-	release *update.LatestReleaseInfo
-}
-
 func (m model) checkForUpdates() tea.Cmd {
 	return func() tea.Msg {
 		if !m.config.AutoUpdateEnabled() {

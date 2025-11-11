@@ -98,7 +98,7 @@ func (m model) handleWhichKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) canTriggerLeaderKey() bool {
 	switch m.view {
 	case viewMain:
-		return (!m.editor.IsFocused() || m.editor.IsNormalMode()) && !m.isPromptActive
+		return (!m.editor.IsFocused() || m.editor.IsNormalMode()) && !m.isPromptActive && m.focused != focusedCommand
 	case viewServers:
 		return m.serverSelection.CanTriggerLeaderKey()
 	case viewExportData:
