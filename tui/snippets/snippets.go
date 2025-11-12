@@ -1,9 +1,9 @@
-package export_data
+package snippets
 
 import (
 	"fmt"
+	"io"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,7 +17,7 @@ import (
 	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/pkg/utils"
-	"github.com/ionut-t/perp/store/export"
+	"github.com/ionut-t/perp/store/snippets"
 	"github.com/ionut-t/perp/ui/help"
 )
 
@@ -42,7 +42,7 @@ type view int
 const (
 	viewSplit view = iota
 	viewList
-	viewRecord
+	viewSnippet
 	viewHelp
 	viewPlaceholder
 )
@@ -51,13 +51,23 @@ type focusedView int
 
 const (
 	focusedViewList focusedView = iota
-	focusedViewRecord
+	focusedViewSnippet
 )
 
+type SelectedMsg struct {
+	Snippet snippets.Snippet
+}
+
+type DeleteMsg struct {
+	Snippet snippets.Snippet
+}
+
 type Model struct {
-	store export.Store
+	store snippets.Store
 
 	width, height int
+
+	server server.Server
 
 	view           view
 	focusedView    focusedView
@@ -66,45 +76,101 @@ type Model struct {
 	editor         editor.Model
 	successMessage string
 	help           help.Model
-	server         server.Server
 }
 
 type item struct {
-	title, desc string
+	snippet snippets.Snippet
 }
 
-func (i item) Title() string       { return i.title }
-func (i item) Description() string { return i.desc }
-func (i item) FilterValue() string { return i.title }
-
-func New(store export.Store, server server.Server, width, height int) Model {
-	records, err := store.Load()
-
-	delegate := list.NewDefaultDelegate()
-
-	delegate.Styles = styles.ListItemStyles()
-
-	editorModel := editor.New(80, 20)
-	editorModel.WithTheme(styles.EditorTheme())
-	editorModel.SetLanguage("json", styles.EditorLanguageTheme())
-
-	if len(records) > 0 {
-		editorModel.SetContent(records[0].Content)
+func (i item) Title() string {
+	// Add scope indicator
+	prefix := "🌍 " // Global
+	if i.snippet.Scope == snippets.ScopeServer {
+		prefix = "🖥️  " // Server-specific
 	}
 
-	items := processRecords(records)
+	return prefix + strings.TrimSuffix(i.snippet.Name, ".sql")
+}
 
-	l := list.New(items, delegate, 80, 20)
+func (i item) Description() string {
+	if i.snippet.Description != "" {
+		return i.snippet.Description
+	}
+	// Show first line of query as description if no description exists
+	lines := strings.Split(i.snippet.Query, "\n")
+	if len(lines) > 0 {
+		desc := strings.TrimSpace(lines[0])
+		if len(desc) > 60 {
+			desc = desc[:57] + "..."
+		}
+		return desc
+	}
+	return ""
+}
 
-	l.Styles = styles.ListStyles()
+func (i item) FilterValue() string {
+	// Allow filtering by name, description, tags, and query
+	return i.snippet.Name + " " + i.snippet.Description + " " + strings.Join(i.snippet.Tags, " ") + " " + i.snippet.Query
+}
 
-	l.FilterInput.PromptStyle = styles.Accent
-	l.FilterInput.Cursor.Style = styles.Accent
+type itemDelegate struct {
+	styles list.DefaultItemStyles
+}
 
-	l.InfiniteScrolling = true
-	l.SetShowHelp(false)
-	l.SetShowTitle(false)
-	l.DisableQuitKeybindings()
+func (d itemDelegate) Height() int                             { return 2 }
+func (d itemDelegate) Spacing() int                            { return 1 }
+func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	i, ok := listItem.(item)
+	if !ok {
+		return
+	}
+
+	title := i.Title()
+	desc := i.Description()
+
+	fn := d.styles.NormalTitle.Render
+	descFn := d.styles.NormalDesc.Render
+	if index == m.Index() {
+		fn = func(s ...string) string {
+			return d.styles.SelectedTitle.Render(s...)
+		}
+		descFn = func(s ...string) string {
+			return d.styles.SelectedDesc.Render(s...)
+		}
+	}
+
+	_, _ = fmt.Fprintf(w, "%s\n%s", fn(title), descFn(desc))
+}
+
+func New(store snippets.Store, server server.Server, width, height int) Model {
+	snippetList, err := store.Load()
+
+	delegate := itemDelegate{
+		styles: styles.ListItemStyles(),
+	}
+
+	textEditor := editor.New(80, 20)
+	textEditor.WithTheme(styles.EditorTheme())
+	textEditor.SetLanguage("postgres", styles.EditorLanguageTheme())
+
+	if len(snippetList) > 0 {
+		textEditor.SetContent(snippetList[0].Content)
+	}
+
+	items := processSnippets(snippetList)
+
+	ls := list.New(items, delegate, 80, 20)
+
+	ls.Styles = styles.ListStyles()
+
+	ls.FilterInput.PromptStyle = styles.Accent
+	ls.FilterInput.Cursor.Style = styles.Accent
+
+	ls.InfiniteScrolling = true
+	ls.SetShowHelp(false)
+	ls.SetShowTitle(false)
+	ls.DisableQuitKeybindings()
 
 	view := viewSplit
 	if len(items) == 0 {
@@ -114,11 +180,11 @@ func New(store export.Store, server server.Server, width, height int) Model {
 	m := Model{
 		store:  store,
 		error:  err,
-		list:   l,
-		editor: editorModel,
+		list:   ls,
+		editor: textEditor,
 		help:   help.New(),
-		server: server,
 		view:   view,
+		server: server,
 	}
 
 	m.handleWindowSize(tea.WindowSizeMsg{
@@ -156,7 +222,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.focusedView == focusedViewList {
-				m.focusedView = focusedViewRecord
+				m.focusedView = focusedViewSnippet
 				m.editor.Focus()
 				_ = m.editor.SetCursorPosition(0, 0)
 				m.editor.SetInsertMode()
@@ -170,7 +236,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.view == viewSplit && !m.editor.IsInsertMode() {
 				if m.focusedView == focusedViewList {
-					m.focusedView = focusedViewRecord
+					m.focusedView = focusedViewSnippet
 					m.editor.Focus()
 					_ = m.editor.SetCursorPosition(0, 0)
 					m.editor.SetNormalMode()
@@ -181,10 +247,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, keymap.Editor):
-			return m, utils.Dispatch(whichkey.ExternalEditorCmd())
+			return m, utils.Dispatch(whichkey.SnippetEditorCmd())
+
+		case key.Matches(msg, keymap.Submit):
+			if m.view == viewHelp || m.view == viewPlaceholder {
+				break
+			}
+
+			if m.focusedView == focusedViewList {
+				selected := m.list.SelectedItem()
+				if selected != nil {
+					if item, ok := selected.(item); ok {
+						return m, utils.Dispatch(SelectedMsg{
+							Snippet: item.snippet,
+						})
+					}
+				}
+			}
 		}
 
-	case whichkey.ExternalEditorMsg:
+	case whichkey.SnippetEditorMsg:
 		if m.view == viewPlaceholder {
 			break
 		}
@@ -195,46 +277,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleEditorClose()
 
 	case editor.SaveMsg:
-		record := m.store.GetCurrentRecord()
-		record.Content = string(msg.Content)
-		err := m.store.Update(record)
+		current := m.store.GetCurrentSnippet()
+		current.Content = string(msg.Content)
+		err := m.store.Update(current)
 		if err != nil {
-			m.error = fmt.Errorf("failed to save record: %w", err)
+			m.error = fmt.Errorf("failed to save snippet: %w", err)
 		} else {
 			m.error = nil
-			records, err := m.store.Load()
+			snippetList, err := m.store.Load()
 			m.error = err
 
 			if err == nil {
-				records := processRecords(records)
-				m.list.SetItems(records)
+				items := processSnippets(snippetList)
+				m.list.SetItems(items)
 			}
 		}
 
 	case editor.QuitMsg:
-		return m, utils.Dispatch(whichkey.CloseExportCmd())
+		return m, utils.Dispatch(whichkey.CloseSnippetsCmd())
 
 	case editor.DeleteFileMsg:
-		current := m.store.GetCurrentRecord()
+		current := m.store.GetCurrentSnippet()
 
 		var cmd tea.Cmd
 
 		if err := m.store.Delete(current); err == nil {
 			m.error = nil
-			m.successMessage = "Record deleted successfully."
-			records, err := m.store.Load()
+			m.successMessage = "Snippet deleted successfully."
+			snippetList, err := m.store.Load()
 			m.error = err
 
 			if err == nil {
-				records := processRecords(records)
-				m.list.SetItems(records)
+				items := processSnippets(snippetList)
+				m.list.SetItems(items)
 				if selectedItem, ok := m.list.SelectedItem().(item); ok {
-					m.store.SetCurrentRecordName(selectedItem.Title())
+					m.store.SetCurrentSnippetName(selectedItem.snippet.Name)
 				}
 			}
 
-			if len(records) > 0 {
-				current = m.store.GetCurrentRecord()
+			if len(snippetList) > 0 {
+				current = m.store.GetCurrentSnippet()
 				m.editor.SetContent(current.Content)
 			} else {
 				m.editor.SetContent("")
@@ -244,10 +326,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var textEditor tea.Model
 			textEditor, cmd = m.editor.Update(nil)
 			m.editor = textEditor.(editor.Model)
-			m.editor.SetLanguage(getLanguageForEditor(current.Path), styles.EditorLanguageTheme())
+			m.editor.SetLanguage("postgres", styles.EditorLanguageTheme())
 
 		} else {
-			m.error = fmt.Errorf("failed to delete record: %w", err)
+			m.error = fmt.Errorf("failed to delete snippet: %w", err)
 		}
 
 		return m, tea.Batch(
@@ -256,28 +338,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 
 	case editor.RenameMsg:
-		current := m.store.GetCurrentRecord()
+		current := m.store.GetCurrentSnippet()
 
-		oldRecordName := current.Name
+		oldSnippetName := current.Name
 		newName := msg.FileName
 
-		if newName == oldRecordName {
+		if newName == oldSnippetName {
 			return m, nil
 		}
 
 		if err := m.store.Rename(&current, newName); err == nil {
-			m.successMessage = "Record renamed successfully."
+			m.successMessage = "Snippet renamed successfully."
 
 			return m, tea.Batch(
 				m.list.SetItem(m.list.Index(), item{
-					title: current.Name,
-					desc:  fmt.Sprintf("Last modified: %s", current.UpdatedAt.Format("02/01/2006 15:04")),
+					snippet: current,
 				}),
 				clearMessages(),
 			)
 
 		} else {
-			m.error = fmt.Errorf("failed to rename record: %w", err)
+			m.error = fmt.Errorf("failed to rename snippet: %w", err)
 		}
 
 		return m, clearMessages()
@@ -300,14 +381,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ls, cmd := m.list.Update(msg)
 		m.list = ls
 		if selectedItem, ok := m.list.SelectedItem().(item); ok {
-			m.store.SetCurrentRecordName(selectedItem.Title())
+			m.store.SetCurrentSnippetName(selectedItem.snippet.Name)
 		}
-		current := m.store.GetCurrentRecord()
+		current := m.store.GetCurrentSnippet()
 		m.editor.SetContent(current.Content)
 
-		m.editor.SetLanguage(getLanguageForEditor(current.Path), styles.EditorLanguageTheme())
-		cmds = append(cmds, cmd)
-		_, cmd = m.editor.Update(nil)
 		cmds = append(cmds, cmd)
 	}
 
@@ -327,7 +405,7 @@ func (m Model) View() string {
 	case viewList:
 		return styles.ViewPadding.Render(m.list.View()) + "\n" + m.statusBarView()
 
-	case viewRecord:
+	case viewSnippet:
 		return m.editor.View()
 
 	case viewSplit:
@@ -340,9 +418,9 @@ func (m Model) View() string {
 		return styles.ViewPadding.Render(
 			lipgloss.JoinVertical(
 				lipgloss.Left,
-				styles.Primary.Render("No data exported."),
+				styles.Primary.Render("No snippets available."),
 				"\n",
-				styles.Subtext0.Render("Press '<leader>c' to go back."),
+				styles.Subtext0.Render("Press '<leader>ns' to save a snippet or '<leader>c' to go back."),
 			),
 		)
 
@@ -372,7 +450,7 @@ func (m *Model) handleWindowSize(msg tea.WindowSizeMsg) {
 		m.list.SetSize(availableWidth, availableHeight)
 	}
 
-	if m.view == viewRecord {
+	if m.view == viewSnippet {
 		m.editor.SetSize(msg.Width, msg.Height)
 	}
 
@@ -404,7 +482,7 @@ func (m *Model) getSplitView() string {
 	availableWidth := m.width - horizontalFrameSize
 
 	listWidth := min(minListWidth, availableWidth/2) - horizontalFrameBorderSize*2 - splitViewSeparatorWidth
-	noteWidth := availableWidth - listWidth - horizontalFrameBorderSize*2 - splitViewSeparatorWidth
+	snippetWidth := availableWidth - listWidth - horizontalFrameBorderSize*2 - splitViewSeparatorWidth
 
 	var joinedContent string
 
@@ -416,7 +494,7 @@ func (m *Model) getSplitView() string {
 				Render(m.list.View()),
 			splitViewSeparator,
 			styles.InactiveBorder.
-				Width(noteWidth).
+				Width(snippetWidth).
 				Height(m.list.Height()).
 				Render(m.editor.View()),
 		)
@@ -428,7 +506,7 @@ func (m *Model) getSplitView() string {
 				Render(m.list.View()),
 			splitViewSeparator,
 			styles.ActiveBorder.
-				Width(noteWidth).
+				Width(snippetWidth).
 				Height(m.list.Height()).
 				Render(m.editor.View()),
 		)
@@ -455,13 +533,12 @@ func (m *Model) statusBarView() string {
 		Render(m.renderStatusBar())
 }
 
-func processRecords(records []export.Record) []list.Item {
-	items := make([]list.Item, 0, len(records))
+func processSnippets(snippets []snippets.Snippet) []list.Item {
+	items := make([]list.Item, 0, len(snippets))
 
-	for _, record := range records {
+	for _, snippet := range snippets {
 		items = append(items, item{
-			title: record.Name,
-			desc:  fmt.Sprintf("Last modified: %s", record.UpdatedAt.Format("02/01/2006 15:04")),
+			snippet: snippet,
 		})
 	}
 
@@ -473,11 +550,17 @@ func (m *Model) renderStatusBar() string {
 
 	separator := styles.Surface0.Render(" | ")
 
-	serverName := styles.Primary.Background(bg).Render(m.server.Name)
+	current := m.store.GetCurrentSnippet()
+	scopeLabel := "Global"
+	if current.Scope == snippets.ScopeServer {
+		scopeLabel = m.server.Name
+	}
 
-	database := styles.Accent.Background(bg).Render(m.server.Database)
+	scope := styles.Primary.Background(bg).Render(scopeLabel)
 
-	left := serverName + separator + database
+	snippetName := styles.Accent.Background(bg).Render(strings.TrimSuffix(current.Name, ".sql"))
+
+	left := scope + separator + snippetName
 
 	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
 
@@ -505,8 +588,7 @@ func (m Model) CanTriggerLeaderKey() bool {
 }
 
 func (m *Model) HandleHelpToggle() {
-	if m.editor.IsInsertMode() ||
-		m.editor.IsCommandMode() ||
+	if !m.editor.IsNormalMode() ||
 		m.view == viewPlaceholder {
 		return
 	}
@@ -521,8 +603,7 @@ func (m *Model) HandleHelpToggle() {
 }
 
 func (m Model) openInExternalEditor() (tea.Model, tea.Cmd) {
-	path := m.store.GetCurrentRecord().Path
-
+	path := m.store.GetCurrentSnippet().Path
 	execCmd := tea.ExecProcess(exec.Command(m.store.Editor(), path), func(error) tea.Msg {
 		return editorClosedMsg{}
 	})
@@ -530,15 +611,15 @@ func (m Model) openInExternalEditor() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleEditorClose() (Model, tea.Cmd) {
-	records, err := m.store.Load()
+	snippetList, err := m.store.Load()
 	if err != nil {
 		m.error = err
 		return m, nil
 	}
 
-	m.list.SetItems(processRecords(records))
+	m.list.SetItems(processSnippets(snippetList))
 
-	current := m.store.GetCurrentRecord()
+	current := m.store.GetCurrentSnippet()
 	m.editor.SetContent(current.Content)
 
 	m.list.ResetFilter()
@@ -549,12 +630,25 @@ func (m Model) handleEditorClose() (Model, tea.Cmd) {
 	return m, cmd
 }
 
-func getLanguageForEditor(path string) string {
-	lang := "json"
-	if filepath.Ext(path) == ".json" {
-		lang = "json"
-	} else if filepath.Ext(path) == ".csv" {
-		lang = "csv"
+func (m *Model) GetCurrentSnippet() *snippets.Snippet {
+	selected := m.list.SelectedItem()
+	if selected != nil {
+		if item, ok := selected.(item); ok {
+			return &item.snippet
+		}
 	}
-	return lang
+	return nil
+}
+
+func (m *Model) SetSize(width, height int) {
+	m.width = width
+	m.height = height
+
+	w, h := m.getAvailableSizes()
+	lsWidth := max(50, w/3)
+
+	m.list.SetSize(lsWidth, h)
+
+	vpW := max(1, w-lsWidth-styles.ViewPadding.GetHorizontalFrameSize()-2)
+	m.editor.SetSize(vpW, max(1, h))
 }

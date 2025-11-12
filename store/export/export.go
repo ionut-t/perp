@@ -47,7 +47,6 @@ type store struct {
 
 func (s *store) Load() ([]Record, error) {
 	err := s.load()
-
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +61,7 @@ func (s *store) Load() ([]Record, error) {
 func (s *store) Update(record Record) error {
 	path := filepath.Join(s.storage, record.Name)
 
-	if err := os.WriteFile(path, []byte(record.Content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(record.Content), 0o644); err != nil {
 		return err
 	}
 
@@ -174,7 +173,6 @@ func (s store) generateUniqueName(name string, oldName string) string {
 
 func loadRecordFromFile(path string) (Record, error) {
 	data, err := os.ReadFile(path)
-
 	if err != nil {
 		return Record{}, err
 	}
@@ -182,7 +180,6 @@ func loadRecordFromFile(path string) (Record, error) {
 	content := strings.TrimSuffix(string(data), "\n")
 
 	fileInfo, err := os.Stat(path)
-
 	if err != nil {
 		return Record{}, err
 	}

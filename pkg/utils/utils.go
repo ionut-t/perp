@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,4 +55,30 @@ func Duration(duration time.Duration) string {
 	default:
 		return fmt.Sprintf("%.3fs", duration.Seconds())
 	}
+}
+
+// GenerateUniqueName generates a unique name by appending a counter suffix if the name already exists.
+// It filters existing names by extension and performs case-insensitive comparison.
+// The oldName parameter allows excluding a specific name from conflict checks (useful when renaming).
+func GenerateUniqueName(existingNames []string, name, oldName string) string {
+	ext := filepath.Ext(name)
+	baseName := strings.TrimSuffix(name, ext)
+
+	// Build a list of existing base names with the same extension, excluding oldName
+	existingBaseNames := make(map[string]bool)
+	for _, existing := range existingNames {
+		if filepath.Ext(existing) == ext && existing != oldName {
+			existingBaseNames[strings.ToLower(strings.TrimSuffix(existing, ext))] = true
+		}
+	}
+
+	// Check if the base name conflicts and generate a unique name
+	uniqueName := baseName
+	counter := 1
+	for existingBaseNames[strings.ToLower(uniqueName)] {
+		uniqueName = baseName + "-" + strconv.Itoa(counter)
+		counter++
+	}
+
+	return uniqueName + ext
 }

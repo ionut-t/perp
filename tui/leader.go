@@ -20,6 +20,7 @@ func (m *model) updateMenuContext() {
 		InExportView:    m.view == viewExportData,
 		InMainView:      m.view == viewMain,
 		InHistoryView:   m.view == viewHistory,
+		InSnippetsView:  m.view == viewSnippets,
 		FocusedOnTable:  m.focused == focusedContent,
 		FocusedOnEditor: m.focused == focusedEditor,
 		IsFullScreen:    m.fullScreen,
@@ -107,6 +108,8 @@ func (m model) canTriggerLeaderKey() bool {
 		return true
 	case viewHistory:
 		return m.history.CanTriggerLeaderKey()
+	case viewSnippets:
+		return m.snippets.CanTriggerLeaderKey()
 	default:
 		return true
 	}

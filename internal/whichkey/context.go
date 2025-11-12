@@ -11,6 +11,7 @@ type MenuContext struct {
 	InExportView    bool
 	InMainView      bool
 	InHistoryView   bool
+	InSnippetsView  bool
 	FocusedOnTable  bool
 	FocusedOnEditor bool
 	IsFullScreen    bool
@@ -35,6 +36,7 @@ func NewMenuContext() *MenuContext {
 		InServersView:   false,
 		InExportView:    false,
 		InHistoryView:   false,
+		InSnippetsView:  false,
 		FocusedOnEditor: true,
 		FocusedOnTable:  false,
 		IsFullScreen:    false,

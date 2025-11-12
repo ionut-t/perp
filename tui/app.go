@@ -20,8 +20,10 @@ import (
 	llmFactory "github.com/ionut-t/perp/pkg/llm/llm_factory"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/server"
+	pkgSnippets "github.com/ionut-t/perp/pkg/snippets"
 	"github.com/ionut-t/perp/pkg/utils"
 	exportStore "github.com/ionut-t/perp/store/export"
+	snippetsStore "github.com/ionut-t/perp/store/snippets"
 	"github.com/ionut-t/perp/tui/command"
 	"github.com/ionut-t/perp/tui/content"
 	exportData "github.com/ionut-t/perp/tui/export_data"
@@ -29,6 +31,7 @@ import (
 	"github.com/ionut-t/perp/tui/menu"
 	"github.com/ionut-t/perp/tui/prompt"
 	"github.com/ionut-t/perp/tui/servers"
+	snippetsView "github.com/ionut-t/perp/tui/snippets"
 	"github.com/ionut-t/perp/ui/help"
 )
 
@@ -70,6 +73,10 @@ type model struct {
 	historyNavigating     bool
 	originalEditorContent string
 	history               historyView.Model
+
+	// snippets management
+	snippets      snippetsView.Model
+	snippetsStore snippetsStore.Store
 
 	// navigation components
 	leaderMgr    *leader.Manager
@@ -113,8 +120,10 @@ func New(config config.Config) model {
 	sp.Spinner = spinner.Dot
 	sp.Style = styles.Primary
 
-	// Initialize navigation components
 	menuRegistry := whichkey.NewRegistry()
+
+	globalSnippetsPath := pkgSnippets.GetGlobalSnippetsPath(config.Storage())
+	snippetsStoreInstance := snippetsStore.New(globalSnippetsPath, "", config.Editor())
 
 	return model{
 		config:          config,
@@ -134,6 +143,7 @@ func New(config config.Config) model {
 		menuRegistry:    menuRegistry,
 		showingMenu:     false,
 		prompt:          prompt.New(),
+		snippetsStore:   snippetsStoreInstance,
 	}
 }
 
@@ -187,6 +197,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.history.SetSize(width, height)
 		}
 
+		if m.view == viewSnippets {
+			m.snippets.SetSize(width, height)
+		}
+
 		m.prompt.SetSize(width, height)
 
 		// Update which-key menu size
@@ -236,6 +250,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.view == viewServers ||
 			m.view == viewExportData ||
 			m.view == viewHistory ||
+			m.view == viewSnippets ||
 			m.isPromptActive ||
 			!m.editor.IsNormalMode() && m.focused == focusedEditor {
 			break
@@ -346,6 +361,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case command.LeaderKeyChangedMsg:
 		return m.updateLeaderKey(msg)
 
+	case command.SaveSnippetMsg:
+		return m.saveSnippet(msg.Name)
+
 	case command.ErrorMsg:
 		return m, m.errorNotification(msg.Err)
 
@@ -383,7 +401,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case whichkey.ListExportsMsg:
 		m.view = viewExportData
-		storage := filepath.Join(m.config.Storage(), m.server.Name)
+		storage := filepath.Join(m.config.Storage(), m.server.Name, exportDataDirectory)
 		exportStore := exportStore.New(storage, m.config.Editor())
 		m.exportData = exportData.New(exportStore, m.server, m.width, m.height)
 
@@ -451,6 +469,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view = viewMain
 		m.focusEditor()
 		return m, nil
+
+	case whichkey.ListSnippetsMsg:
+		m.listSnippets()
+
+	case whichkey.SaveSnippetMsg:
+		m.isPromptActive = true
+		m.prompt.SetAction(prompt.SaveSnippetAction)
+
+	case whichkey.CloseSnippetsMsg:
+		m.view = viewMain
+		m.focusEditor()
+		return m, nil
+
+	case snippetsView.SelectedMsg:
+		return m.applySnippet(msg)
 
 	// Database schema actions
 	case whichkey.ListTablesMsg:
@@ -562,6 +595,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
+	if m.view == viewSnippets {
+		snippetsModel, cmd := m.snippets.Update(msg)
+		m.snippets = snippetsModel.(snippetsView.Model)
+		cmds = append(cmds, cmd)
+	}
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -576,6 +615,8 @@ func (m *model) handleHelpToggle() {
 		m.editor.Focus()
 	case viewExportData:
 		m.exportData.HandleHelpToggle()
+	case viewSnippets:
+		m.snippets.HandleHelpToggle()
 	}
 }
 
@@ -609,6 +650,9 @@ func (m model) View() string {
 
 	case viewHistory:
 		return m.history.View()
+
+	case viewSnippets:
+		return m.snippets.View()
 
 	default:
 		return ""

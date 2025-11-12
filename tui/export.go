@@ -34,7 +34,7 @@ func (m model) exportAsJSON(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 		return m, m.errorNotification(err)
 	}
 
-	storage := filepath.Join(m.config.Storage(), m.server.Name)
+	storage := filepath.Join(m.config.Storage(), m.server.Name, exportDataDirectory)
 	fileName, err := export.AsJson(storage, data, msg.Filename)
 	if err != nil {
 		return m, m.errorNotification(err)
@@ -44,7 +44,7 @@ func (m model) exportAsJSON(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 	m.command.Reset()
 
 	return m, m.successNotification(
-		fmt.Sprintf("Data exported successfully as JSON to %s", fileName),
+		fmt.Sprintf("Data exported as JSON to %s", fileName),
 	)
 }
 
@@ -58,7 +58,7 @@ func (m model) exportAsCSV(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 		return m, m.errorNotification(err)
 	}
 
-	storage := filepath.Join(m.config.Storage(), m.server.Name)
+	storage := filepath.Join(m.config.Storage(), m.server.Name, exportDataDirectory)
 	fileName, err := export.AsCsv(storage, data, msg.Filename)
 	if err != nil {
 		return m, m.errorNotification(err)

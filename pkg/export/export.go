@@ -15,14 +15,13 @@ import (
 // AsJson exports the provided data as a JSON file and opens it in the configured editor.
 func AsJson(storage string, data any, fileName string) (string, error) {
 	records, err := load(storage, ".json")
-
 	if err != nil {
 		return "", err
 	}
 
 	fileName = generateUniqueName(fileName, records)
 
-	if err := os.MkdirAll(storage, 0755); err != nil {
+	if err := os.MkdirAll(storage, 0o755); err != nil {
 		return "", err
 	}
 
@@ -33,7 +32,7 @@ func AsJson(storage string, data any, fileName string) (string, error) {
 		return "", err
 	}
 
-	if err := os.WriteFile(path, jsonData, 0644); err != nil {
+	if err := os.WriteFile(path, jsonData, 0o644); err != nil {
 		return "", err
 	}
 
@@ -43,14 +42,13 @@ func AsJson(storage string, data any, fileName string) (string, error) {
 // AsCsv exports the provided data as a CSV file.
 func AsCsv(storage string, data [][]string, fileName string) (string, error) {
 	records, err := load(storage, ".csv")
-
 	if err != nil {
 		return "", err
 	}
 
 	fileName = generateUniqueName(fileName, records)
 
-	if err := os.MkdirAll(storage, 0755); err != nil {
+	if err := os.MkdirAll(storage, 0o755); err != nil {
 		return "", err
 	}
 	path := filepath.Join(storage, fileName)

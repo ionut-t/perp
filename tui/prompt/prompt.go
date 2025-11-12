@@ -22,6 +22,7 @@ const (
 	ExportAllAsJSONAction
 	ExportAllAsCSVAction
 	ChangeLeaderKeyAction
+	SaveSnippetAction
 )
 
 func (a Action) prompt() string {
@@ -34,6 +35,8 @@ func (a Action) prompt() string {
 		return "Filename"
 	case ChangeLeaderKeyAction:
 		return "Leader key"
+	case SaveSnippetAction:
+		return "Snippet name"
 	default:
 		return "unknown"
 	}
@@ -51,6 +54,8 @@ func (a Action) title() string {
 		return "Export all rows as CSV"
 	case ChangeLeaderKeyAction:
 		return "Change leader key"
+	case SaveSnippetAction:
+		return "Save current query as snippet"
 	default:
 		return "unknown"
 	}
@@ -178,6 +183,9 @@ func (m Model) handleAction(value string) tea.Cmd {
 
 	case ChangeLeaderKeyAction:
 		return utils.Dispatch(command.LeaderKeyChangedMsg{Key: value})
+
+	case SaveSnippetAction:
+		return utils.Dispatch(command.SaveSnippetMsg{Name: value})
 	}
 
 	return nil

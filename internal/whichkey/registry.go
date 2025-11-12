@@ -15,6 +15,7 @@ type Registry struct {
 	llmMenu      *Menu
 	databaseMenu *Menu
 	historyMenu  *Menu
+	snippetsMenu *Menu
 	configMenu   *Menu
 }
 
@@ -234,6 +235,59 @@ func (r *Registry) buildHistoryMenu() *Menu {
 	})
 }
 
+func (r *Registry) buildSnippetsMenu() *Menu {
+	return NewDynamicMenu("Snippet Operations", func() []MenuItem {
+		if r.context.InSnippetsView {
+			return []MenuItem{
+				{
+					Key:         "e",
+					Label:       "Editor",
+					Description: "Open snippet in external editor",
+					Action:      CommandAction{Cmd: SnippetEditorCmd},
+				},
+				{
+					Key:         "c",
+					Label:       "Close",
+					Description: "Close snippets view",
+					Action:      CommandAction{Cmd: CloseSnippetsCmd},
+				},
+				{
+					Key:         "?",
+					Label:       "Help",
+					Description: "Show help",
+					Action:      CommandAction{Cmd: ToggleHelpCmd},
+				},
+				{
+					Key:         "q",
+					Label:       "Quit",
+					Description: "Exit application",
+					Action:      CommandAction{Cmd: QuitCmd},
+				},
+			}
+		}
+
+		return []MenuItem{
+			{
+				Key:         "l",
+				Label:       "List snippets",
+				Description: "Browse SQL snippets",
+				Action:      CommandAction{Cmd: ListSnippetsCmd},
+			},
+			{
+				Key:         "s",
+				Label:       "Save snippet",
+				Description: "Save current query as snippet",
+				Action: CommandAction{
+					Cmd: SaveSnippetCmd,
+					Validator: func(ctx *MenuContext) bool {
+						return ctx.IsConnected
+					},
+				},
+			},
+		}
+	})
+}
+
 func (r *Registry) buildConfigMenu() *Menu {
 	return NewMenu("Configuration", []MenuItem{
 		{
@@ -286,6 +340,11 @@ func (r *Registry) buildRootMenu() *Menu {
 			return r.historyMenu.GetItems()
 		}
 
+		// In snippets view - return snippets menu items (which are context-aware)
+		if r.context.InSnippetsView {
+			return r.snippetsMenu.GetItems()
+		}
+
 		items := []MenuItem{
 			{
 				Key:         "d",
@@ -300,16 +359,16 @@ func (r *Registry) buildRootMenu() *Menu {
 				Action:      SubmenuAction{Menu: r.exportMenu},
 			},
 			{
-				Key:         "s",
-				Label:       "Servers",
-				Description: "Manage database connections",
-				Action:      SubmenuAction{Menu: r.serverMenu},
-			},
-			{
 				Key:         "h",
 				Label:       "History",
 				Description: "Query history management",
 				Action:      SubmenuAction{Menu: r.historyMenu},
+			},
+			{
+				Key:         "s",
+				Label:       "Snippets",
+				Description: "SQL snippet library",
+				Action:      SubmenuAction{Menu: r.snippetsMenu},
 			},
 			{
 				Key:         "l",
@@ -317,6 +376,13 @@ func (r *Registry) buildRootMenu() *Menu {
 				Description: "AI-powered SQL assistance",
 				Action:      SubmenuAction{Menu: r.llmMenu},
 			},
+			{
+				Key:         "S",
+				Label:       "Servers",
+				Description: "Manage database connections",
+				Action:      SubmenuAction{Menu: r.serverMenu},
+			},
+
 			{
 				Key:         "c",
 				Label:       "Config",
@@ -360,6 +426,7 @@ func (r *Registry) buildMenus() {
 	r.llmMenu = r.buildLLMMenu()
 	r.databaseMenu = r.buildDatabaseMenu()
 	r.historyMenu = r.buildHistoryMenu()
+	r.snippetsMenu = r.buildSnippetsMenu()
 	r.configMenu = r.buildConfigMenu()
 	r.rootMenu = r.buildRootMenu()
 
@@ -369,6 +436,7 @@ func (r *Registry) buildMenus() {
 	r.llmMenu.SetParent(r.rootMenu)
 	r.databaseMenu.SetParent(r.rootMenu)
 	r.historyMenu.SetParent(r.rootMenu)
+	r.snippetsMenu.SetParent(r.rootMenu)
 	r.configMenu.SetParent(r.rootMenu)
 }
 
@@ -456,6 +524,19 @@ type (
 func ListHistoryCmd() tea.Msg  { return ListHistoryMsg{} }
 func ClearHistoryCmd() tea.Msg { return ClearHistoryMsg{} }
 func CloseHistoryCmd() tea.Msg { return CloseHistoryMsg{} }
+
+// Snippets actions
+type (
+	ListSnippetsMsg  struct{}
+	SaveSnippetMsg   struct{}
+	CloseSnippetsMsg struct{}
+	SnippetEditorMsg struct{}
+)
+
+func ListSnippetsCmd() tea.Msg  { return ListSnippetsMsg{} }
+func SaveSnippetCmd() tea.Msg   { return SaveSnippetMsg{} }
+func CloseSnippetsCmd() tea.Msg { return CloseSnippetsMsg{} }
+func SnippetEditorCmd() tea.Msg { return SnippetEditorMsg{} }
 
 // Config actions
 type (

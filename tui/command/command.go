@@ -34,6 +34,10 @@ type LeaderKeyChangedMsg struct {
 	Key string
 }
 
+type SaveSnippetMsg struct {
+	Name string
+}
+
 type CancelMsg struct{}
 
 type QuitMsg struct{}
@@ -129,6 +133,10 @@ func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 			return c.handleLeaderKeyChanged(cmdValue)
 		}
 
+		if strings.HasPrefix(cmdValue, "snippet") {
+			return c.handleSnippet(cmdValue)
+		}
+
 		return c, utils.Dispatch(ErrorMsg{Err: fmt.Errorf("unknown command: %s", cmdValue)})
 	}
 
@@ -218,6 +226,18 @@ func (c Model) handleLeaderKeyChanged(cmdValue string) (Model, tea.Cmd) {
 	c.input.Value(&empty)
 
 	return c, utils.Dispatch(LeaderKeyChangedMsg{Key: leaderKey})
+}
+
+func (c Model) handleSnippet(cmdValue string) (Model, tea.Cmd) {
+	snipetName := strings.TrimPrefix(cmdValue, "snippet")
+	if snipetName == "" {
+		return c, utils.Dispatch(ErrorMsg{Err: errors.New("no snippet name specified")})
+	}
+
+	empty := ""
+	c.input.Value(&empty)
+
+	return c, utils.Dispatch(SaveSnippetMsg{Name: snipetName})
 }
 
 func parseExportCommand(value string) ([]int, bool, string, error) {

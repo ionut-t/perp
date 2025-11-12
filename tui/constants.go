@@ -11,6 +11,7 @@ const (
 	viewExportData
 	viewHelp
 	viewHistory
+	viewSnippets
 )
 
 // focused represents which component currently has focus
@@ -22,6 +23,7 @@ const (
 	focusedContent
 	focusedCommand
 	focusedHistory
+	focusedSnippets
 )
 
 // Layout constants
@@ -36,3 +38,6 @@ const (
 	LeaderKeyTimeout     = 500 * time.Millisecond
 	NotificationDuration = 2 * time.Second
 )
+
+// Directory constants
+const exportDataDirectory = "data"
