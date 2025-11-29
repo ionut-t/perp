@@ -4,18 +4,23 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ionut-t/perp/pkg/utils"
+	"github.com/ionut-t/perp/store/common"
 )
 
 type Record struct {
 	Name      string
 	Content   string
 	UpdatedAt time.Time
-	Path      string
 }
+
+// Implement FileItem interface
+func (r Record) GetName() string         { return r.Name }
+func (r Record) GetContent() string      { return r.Content }
+func (r Record) GetUpdatedAt() time.Time { return r.UpdatedAt }
 
 type Store interface {
 	Load() ([]Record, error)                     // Load retrieves all export records from the configured storage directory.
@@ -25,152 +30,107 @@ type Store interface {
 	Editor() string                              // Editor returns the configured editor for opening records.
 	GetCurrentRecord() Record                    // GetCurrentRecord returns the currently selected record.
 	SetCurrentRecordName(name string)            // SetCurrentRecordName sets the name of the currently selected record.
+	GetPath(record Record) string                // GetPath returns the full file path for a record.
 }
 
-func New(storage, editor string) Store {
+func New(storage, editor string) *store {
 	return &store{
-		records:           []Record{},
-		recordsMap:        make(map[string]Record),
-		storage:           storage,
-		editor:            editor,
-		currentRecordName: "",
+		FileStore: common.NewFileStore(
+			storage,
+			editor,
+			loadRecordFromFile,
+			validateRecordName,
+			utils.GenerateUniqueName,
+		),
 	}
 }
 
 type store struct {
-	records           []Record
+	*common.FileStore[Record]
 	currentRecordName string
-	recordsMap        map[string]Record
-	storage           string
-	editor            string
 }
 
+// Load retrieves all records and sets the current record if needed
 func (s *store) Load() ([]Record, error) {
-	err := s.load()
+	records, err := s.FileStore.Load()
 	if err != nil {
 		return nil, err
 	}
 
-	if len(s.records) > 0 && s.currentRecordName == "" {
-		s.currentRecordName = s.records[0].Name
+	// Set the first record as current if we don't have one yet
+	if len(records) > 0 && s.currentRecordName == "" {
+		s.currentRecordName = records[0].Name
 	}
 
-	return s.records, nil
+	return records, nil
 }
 
-func (s *store) Update(record Record) error {
-	path := filepath.Join(s.storage, record.Name)
-
-	if err := os.WriteFile(path, []byte(record.Content), 0o644); err != nil {
-		return err
-	}
-
-	return nil
-}
-
+// Delete removes the record and optionally cleans up empty directories
 func (s *store) Delete(record Record) error {
-	path := filepath.Join(s.storage, record.Name)
-
-	if len(s.records) == 1 {
-		if err := os.RemoveAll(filepath.Dir(path)); err != nil {
-			return err
-		}
-
-		return nil
+	if err := s.FileStore.Delete(record); err != nil {
+		return err
 	}
 
-	if err := os.Remove(path); err != nil {
-		return err
+	// Update current record if we just deleted it
+	itemsMap := s.GetItemsMap()
+	if s.currentRecordName == record.Name {
+		// Try to set to the first available record
+		for name := range itemsMap {
+			s.currentRecordName = name
+			break
+		}
+		// If no records left, clear current
+		if len(itemsMap) == 0 {
+			s.currentRecordName = ""
+		}
+	}
+
+	// Clean up empty storage directory
+	if len(itemsMap) == 0 {
+		// Ignore cleanup errors - file deletion succeeded
+		_ = s.CleanEmptyStorageDir()
 	}
 
 	return nil
 }
 
-func (s *store) GetCurrentRecord() Record {
-	return s.recordsMap[s.currentRecordName]
+// Rename changes the record name and updates current if needed
+func (s *store) Rename(record *Record, newName string) error {
+	oldName := record.Name
+	if err := s.FileStore.Rename(record, newName); err != nil {
+		return err
+	}
+
+	// Update current record name if we renamed the current record
+	if s.currentRecordName == oldName {
+		s.currentRecordName = record.Name
+	}
+
+	return nil
 }
 
-func (s *store) SetCurrentRecordName(name string) {
-	s.currentRecordName = name
+// GetCurrentRecord returns the currently selected record
+func (s *store) GetCurrentRecord() Record {
+	itemsMap := s.GetItemsMap()
+	return itemsMap[s.currentRecordName]
+}
 
-	if _, exists := s.recordsMap[name]; !exists {
+// SetCurrentRecordName sets the name of the currently selected record
+func (s *store) SetCurrentRecordName(name string) {
+	itemsMap := s.GetItemsMap()
+	if _, exists := itemsMap[name]; exists {
+		s.currentRecordName = name
+	} else {
 		s.currentRecordName = ""
 	}
 }
 
-func (s *store) Rename(record *Record, newName string) error {
-	ext := filepath.Ext(newName)
-
-	if ext == "" {
-		ext = filepath.Ext(record.Name)
-		newName += ext
-	}
-
-	if ext != filepath.Ext(record.Name) {
-		return errors.New("cannot change file extension when renaming record")
-	}
-
-	uniqueName := s.generateUniqueName(newName, record.Name)
-
-	oldPath := record.Path
-	newPath := filepath.Join(s.storage, uniqueName)
-
-	if err := os.Rename(oldPath, newPath); err != nil {
-		return err
-	}
-
-	oldName := record.Name
-
-	delete(s.recordsMap, oldName)
-
-	record.Name = uniqueName
-	record.Path = newPath
-
-	s.recordsMap[uniqueName] = *record
-
-	for i := range s.records {
-		if s.records[i].Name == oldName {
-			s.records[i] = *record
-			break
-		}
-	}
-
-	if s.currentRecordName == oldName {
-		s.currentRecordName = uniqueName
-	}
-
-	return nil
+// GetPath returns the full file path for a record
+func (s *store) GetPath(record Record) string {
+	return s.FileStore.GetPath(record)
 }
 
-func (s *store) Editor() string {
-	return s.editor
-}
-
-func (s store) generateUniqueName(name string, oldName string) string {
-	ext := filepath.Ext(name)
-
-	var records []string
-	for _, r := range s.records {
-		if filepath.Ext(r.Name) == ext && r.Name != oldName {
-			records = append(records, strings.TrimSuffix(r.Name, ext))
-		}
-	}
-
-	name = strings.TrimSuffix(name, ext)
-	originalName := name
-	counter := 1
-
-	for _, record := range records {
-		if strings.EqualFold(record, name) {
-			name = originalName + "-" + strconv.Itoa(counter)
-			counter++
-			continue
-		}
-	}
-
-	return name + ext
-}
-
+// loadRecordFromFile loads a single record from a file
 func loadRecordFromFile(path string) (Record, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -188,50 +148,21 @@ func loadRecordFromFile(path string) (Record, error) {
 		Name:      filepath.Base(path),
 		Content:   content,
 		UpdatedAt: fileInfo.ModTime(),
-		Path:      path,
 	}, nil
 }
 
-func (s *store) load() error {
-	var records []Record
+// validateRecordName validates and ensures proper extension for record names
+func validateRecordName(oldName, newName string) (string, error) {
+	ext := filepath.Ext(newName)
 
-	err := filepath.WalkDir(s.storage, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		record, err := loadRecordFromFile(path)
-		if err != nil {
-			return err
-		}
-
-		records = append(records, record)
-		s.recordsMap[record.Name] = record
-		return nil
-	})
-
-	slices.SortStableFunc(records, func(i, j Record) int {
-		if i.UpdatedAt.After(j.UpdatedAt) {
-			return -1
-		}
-
-		if i.UpdatedAt.Before(j.UpdatedAt) {
-			return 1
-		}
-
-		return 0
-	})
-
-	if err == nil {
-		s.records = records
+	if ext == "" {
+		ext = filepath.Ext(oldName)
+		newName += ext
 	}
 
-	return err
+	if ext != filepath.Ext(oldName) {
+		return "", errors.New("cannot change file extension when renaming record")
+	}
+
+	return newName, nil
 }

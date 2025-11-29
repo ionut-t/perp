@@ -1,48 +1,15 @@
-package snippets
+package splitview
 
 import (
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ionut-t/coffee/styles"
-	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/ui/help"
 )
 
-var changeFocused = key.NewBinding(
-	key.WithKeys("tab"),
-	key.WithHelp("tab", "change focus between editor and list"),
-)
-
-func (m Model) renderHelp() string {
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		m.renderUsefulHelp(),
-		m.renderListHelp(),
-		m.renderEditorHelp(),
-	)
-}
-
-func (m Model) renderUsefulHelp() string {
-	bindings := []key.Binding{
-		key.NewBinding(
-			key.WithKeys("<leader>c"),
-			key.WithHelp("leader>c", "go back to the main view"),
-		),
-		key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "select snippet"),
-		),
-		keymap.ForceQuit,
-		changeFocused,
-		keymap.Editor,
-	}
-
-	title := styles.Text.Bold(true).Render("Useful Shortcuts")
-
-	return title + help.RenderHelpView(m.width, bindings)
-}
-
-func (m Model) renderEditorHelp() string {
+// RenderCommonEditorHelp returns the standard vim-like editor help section
+func RenderCommonEditorHelp(width int) string {
 	commands := []struct {
 		Command     string
 		Description string
@@ -73,15 +40,16 @@ func (m Model) renderEditorHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderCmdHelp(m.width, commands),
+		help.RenderCmdHelp(width, commands),
 	)
 }
 
-func (m Model) renderListHelp() string {
+// RenderCommonListHelp returns the standard list navigation help section
+func RenderCommonListHelp(width int, listModel list.Model) string {
 	bindings := []key.Binding{
-		m.list.KeyMap.CursorDown,
-		m.list.KeyMap.CursorUp,
-		m.list.KeyMap.Filter,
+		listModel.KeyMap.CursorDown,
+		listModel.KeyMap.CursorUp,
+		listModel.KeyMap.Filter,
 	}
 
 	title := styles.Text.Bold(true).Render("List Navigation")
@@ -94,6 +62,12 @@ func (m Model) renderListHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderHelpView(m.width, bindings),
+		help.RenderHelpView(width, bindings),
 	)
+}
+
+// RenderCommonUsefulHelp returns a standard "Useful Shortcuts" section
+func RenderCommonUsefulHelp(width int, additionalBindings []key.Binding) string {
+	title := styles.Text.Bold(true).Render("Useful Shortcuts")
+	return title + help.RenderHelpView(width, additionalBindings)
 }
