@@ -6,10 +6,11 @@ import (
 	"log"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/fang"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/fang/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/config"
+	"github.com/ionut-t/perp/internal/debug"
 	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/tui"
 	"github.com/spf13/cobra"
@@ -25,17 +26,24 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
+	cleanup, err := debug.Listen()
+	if err != nil {
+		fmt.Printf("Error setting up debug logging: %v\n", err)
+		os.Exit(1)
+	}
+
+	defer cleanup()
+
 	rootCmd.AddCommand(configCmd())
 	rootCmd.AddCommand(llmInstructionsCmd())
 
-	err := fang.Execute(
+	err = fang.Execute(
 		context.Background(),
 		rootCmd,
 		fang.WithNotifySignal(os.Interrupt, os.Kill),
 		fang.WithColorSchemeFunc(styles.FangColorScheme),
 		fang.WithoutCompletions(),
 	)
-
 	if err != nil {
 		os.Exit(1)
 	}
@@ -59,7 +67,7 @@ func appUI() {
 
 	m := tui.New(c)
 
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion())
+	p := tea.NewProgram(m)
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running UI: %v\n", err)

@@ -4,7 +4,6 @@ import (
 	_ "embed"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 )
 
 //go:embed glamour-themes/catppuccin-mocha.json
@@ -14,11 +13,12 @@ var catppuccinMochaTheme []byte
 var catppuccinLatteTheme []byte
 
 func getThemeBytes() []byte {
-	if lipgloss.HasDarkBackground() {
-		return catppuccinMochaTheme
-	}
-
-	return catppuccinLatteTheme
+	return catppuccinMochaTheme
+	// if lipgloss.HasDarkBackground(os.Stdout, os.Stderr) {
+	// 	return catppuccinMochaTheme
+	// }
+	//
+	// return catppuccinLatteTheme
 }
 
 type Model struct {

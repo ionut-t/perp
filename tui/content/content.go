@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/constants"
@@ -73,41 +73,47 @@ type Model struct {
 	expandedDisplay   bool
 	tableRows         [][]string
 	tableHeaders      []string
+	styles            styles.Styles
 }
 
 func New(width, height int) Model {
 	t := table.New()
-	t.SetSize(width-1, height)
+	t.SetSize(min(width-1, 1), height)
 	t.SetSelectionMode(table.SelectionCell | table.SelectionRow)
-	t.SetTheme(styles.TableTheme())
 
 	return Model{
 		width:           width,
 		height:          height,
-		viewport:        viewport.New(width, height),
+		viewport:        viewport.New(viewport.WithWidth(width), viewport.WithHeight(height)),
 		table:           t,
 		llmSharedSchema: "No schema shared with LLM.",
 		markdown:        markdown.New(),
 	}
 }
 
+func (m *Model) SetStyles(s styles.Styles) {
+	m.styles = s
+	m.table.SetTheme(styles.TableTheme(s))
+}
+
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 
-	m.viewport.Width = width
-	m.viewport.Height = height
+	m.viewport.SetWidth(width)
+	m.viewport.SetHeight(height)
 
 	m.table.SetSize(width-1, height)
 
 	switch m.view {
 	case viewInfo, viewDBSchema, viewLLMSharedSchema:
-		m.viewport.Height = height
-		m.viewport.Width = width
+		m.viewport.SetWidth(width)
+		m.viewport.SetHeight(height)
 
 	case viewConnectionInfo:
-		m.viewport.Height = height
-		m.viewport.Width = width - lipgloss.Width(m.renderLogo())
+		m.viewport.SetHeight(height)
+		m.viewport.SetWidth(width - lipgloss.Width(m.renderLogo()))
+
 	case viewTable:
 		m.table.SetSize(width-1, height)
 	}
@@ -173,7 +179,7 @@ func (m *Model) ShowLLMSharedSchema() {
 
 func (m *Model) ShowPsqlHelp() {
 	m.view = viewPSQLHelp
-	m.viewport.SetContent(help.RenderCmdHelp(m.width-1, psql.CommandDescriptions))
+	m.viewport.SetContent(help.RenderCmdHelp(m.styles, m.width-1, psql.CommandDescriptions))
 }
 
 func (m *Model) SetExpandedDisplay(expanded bool) {
@@ -295,7 +301,7 @@ func (m *Model) SetLLMResponse(response llm.Response, query string) {
 		m.view = viewError
 	} else {
 		m.viewport.SetContent(out)
-		m.viewport.YOffset = 0
+		m.viewport.SetYOffset(0)
 		m.view = viewLLMExplanation
 	}
 }
@@ -304,14 +310,14 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case clearYankMsg:
-		m.table.SetTheme(styles.TableTheme())
+		m.table.SetTheme(styles.TableTheme(m.styles))
 
 	case ResizeMsg:
 		if m.view == viewTable {
-			m.table.SetTheme(styles.TableTheme())
+			m.table.SetTheme(styles.TableTheme(m.styles))
 			m.table.SetSize(m.width-1, m.height)
 			m.table.SetHeaders(m.tableHeaders)
 			m.table.SetRows(m.tableRows)
@@ -371,7 +377,7 @@ func (m Model) View() string {
 }
 
 func (m *Model) renderError(width, height int) string {
-	return styles.Error.
+	return m.styles.Error.
 		Padding(0, 1).
 		Height(height).
 		Width(width).
@@ -529,14 +535,14 @@ func (m *Model) setViewportContent() {
 	}
 }
 
-func (m Model) yankSelectedCell() (tea.Model, tea.Cmd) {
+func (m Model) yankSelectedCell() (Model, tea.Cmd) {
 	if cell, ok := m.table.GetSelectedCell(); ok {
 
 		if err := clipboard.Write(cell); err != nil {
 			return m, nil
 		}
 
-		defaultTheme := styles.TableTheme()
+		defaultTheme := styles.TableTheme(m.styles)
 		theme := table.Theme{
 			Header:      defaultTheme.Header,
 			Border:      defaultTheme.Border,
@@ -555,7 +561,7 @@ func (m Model) yankSelectedCell() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) yankSelectedRow() (tea.Model, tea.Cmd) {
+func (m Model) yankSelectedRow() (Model, tea.Cmd) {
 	row := m.table.GetSelectedRow()
 
 	data := m.queryResults[row]
@@ -576,7 +582,7 @@ func (m Model) yankSelectedRow() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	defaultTheme := styles.TableTheme()
+	defaultTheme := styles.TableTheme(m.styles)
 	selectedRow := defaultTheme.SelectedRow.
 		Background(defaultTheme.SelectedRow.GetForeground()).
 		Foreground(defaultTheme.SelectedRow.GetBackground())
@@ -604,7 +610,7 @@ func (m Model) renderSharedTablesList() string {
 	sb.WriteString("\n")
 
 	for _, table := range m.llmSharedTables {
-		sb.WriteString(fmt.Sprintf("- %s\n", table))
+		fmt.Fprintf(&sb, "- %s\n", table)
 	}
 
 	return lipgloss.NewStyle().Padding(1, 1).Render(strings.TrimSpace(sb.String()))
@@ -617,7 +623,7 @@ func (m *Model) renderLogo() string {
 
 	var newVersion string
 	if m.latestReleaseInfo != nil && m.latestReleaseInfo.HasUpdate {
-		newVersion = styles.Warning.Render(styles.Wrap(logoW, fmt.Sprintf("New version available: %s. Press 'ctrl+u' to update or 'ctrl+x' to ignore.", m.latestReleaseInfo.TagName)))
+		newVersion = m.styles.Warning.Render(styles.Wrap(logoW, fmt.Sprintf("New version available: %s. Press 'ctrl+u' to update or 'ctrl+x' to ignore.", m.latestReleaseInfo.TagName)))
 	}
 
 	version := lipgloss.Place(
@@ -625,7 +631,7 @@ func (m *Model) renderLogo() string {
 		1,
 		lipgloss.Center,
 		lipgloss.Center,
-		styles.Primary.Render(version.Version()),
+		m.styles.Primary.Render(version.Version()),
 	)
 
 	return lipgloss.Place(
@@ -633,6 +639,6 @@ func (m *Model) renderLogo() string {
 		m.height,
 		lipgloss.Right,
 		lipgloss.Bottom,
-		styles.Primary.Padding(0, 1).Render(logo+version+"\n"+newVersion),
+		m.styles.Primary.Padding(0, 1).Render(logo+version+"\n"+newVersion),
 	)
 }

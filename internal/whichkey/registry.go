@@ -3,7 +3,7 @@ package whichkey
 import (
 	"slices"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Registry manages all available menus

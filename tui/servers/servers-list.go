@@ -6,19 +6,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/constants"
 	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/pkg/server"
 )
 
-var (
-	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(styles.Primary.GetForeground()).Bold(true)
-)
+var itemStyle = lipgloss.NewStyle().PaddingLeft(4)
 
 type item struct {
 	title  string
@@ -28,7 +25,9 @@ type item struct {
 func (i item) Title() string       { return i.title }
 func (i item) FilterValue() string { return i.title }
 
-type itemDelegate struct{}
+type itemDelegate struct {
+	selectedItemStyle lipgloss.Style
+}
 
 func (d itemDelegate) Height() int                             { return 1 }
 func (d itemDelegate) Spacing() int                            { return 0 }
@@ -39,7 +38,7 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	fn := itemStyle.Render
 	if index == m.Index() {
 		fn = func(s ...string) string {
-			return selectedItemStyle.Render("> " + strings.Join(s, " "))
+			return d.selectedItemStyle.Render("> " + strings.Join(s, " "))
 		}
 	}
 
@@ -60,6 +59,7 @@ type serversListModel struct {
 	width, height int
 	list          list.Model
 	showPassword  bool
+	styles        styles.Styles
 }
 
 func newServersListModel(servers []server.Server) serversListModel {
@@ -77,17 +77,29 @@ func newServersListModel(servers []server.Server) serversListModel {
 	l.SetShowHelp(false)
 	l.SetShowPagination(false)
 	l.Title = "Select a server"
-	l.Styles = styles.ListStyles()
 	l.DisableQuitKeybindings()
+	l.InfiniteScrolling = true
 
 	return serversListModel{
 		list: l,
 	}
 }
 
+func (m *serversListModel) setStyles(s styles.Styles, isDark bool) {
+	m.styles = s
+	m.list.Styles = styles.ListStyles(s, isDark)
+	delegete := itemDelegate{
+		selectedItemStyle: s.Primary.PaddingLeft(2),
+	}
+	m.list.SetDelegate(delegete)
+
+	m.list.SetSize(50, 5)
+}
+
 func (m *serversListModel) setSize(width, height int) {
 	m.width = width
 	m.height = height
+	m.list.SetSize(50, 5)
 }
 
 func (m *serversListModel) setServers(servers []server.Server) {
@@ -106,7 +118,7 @@ func (m serversListModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m serversListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m serversListModel) Update(msg tea.Msg) (serversListModel, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -196,7 +208,7 @@ func (m *serversListModel) renderLogo() string {
 		1,
 		lipgloss.Center,
 		lipgloss.Center,
-		styles.Primary.Render(version.Version()),
+		m.styles.Primary.Render(version.Version()),
 	)
 
 	return lipgloss.Place(
@@ -204,16 +216,16 @@ func (m *serversListModel) renderLogo() string {
 		lipgloss.Height(logo)+4,
 		lipgloss.Center,
 		lipgloss.Center,
-		styles.Primary.Render(logo+version),
+		m.styles.Primary.Render(logo+version),
 	)
 }
 
 func (m *serversListModel) renderHelpText() string {
 	var sb strings.Builder
-	sb.WriteString(styles.Subtext0.Render("Press n to create a new server") + "\n")
-	sb.WriteString(styles.Subtext0.Render("Press e to edit the selected server") + "\n")
-	sb.WriteString(styles.Subtext0.Render("Press ctrl+d to delete the selected server") + "\n")
-	sb.WriteString(styles.Subtext0.Render("Press p to toggle password visibility") + "\n")
+	sb.WriteString(m.styles.Subtext0.Render("Press n to create a new server") + "\n")
+	sb.WriteString(m.styles.Subtext0.Render("Press e to edit the selected server") + "\n")
+	sb.WriteString(m.styles.Subtext0.Render("Press ctrl+d to delete the selected server") + "\n")
+	sb.WriteString(m.styles.Subtext0.Render("Press p to toggle password visibility") + "\n")
 
 	return sb.String()
 }
@@ -225,9 +237,9 @@ func (m *serversListModel) renderServerInfo() string {
 			Height(m.height-lipgloss.Height(m.renderLogo())-lipgloss.Height(m.renderHelpText())-2).
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(styles.Subtext0.GetForeground()).
+			BorderForeground(m.styles.Subtext0.GetForeground()).
 			Padding(1, 2).
-			Render(styles.Subtext0.Render("No servers available"))
+			Render(m.styles.Subtext0.Render("No servers available"))
 		return emptyMessage
 	}
 
@@ -238,9 +250,9 @@ func (m *serversListModel) renderServerInfo() string {
 			Height(m.height-lipgloss.Height(m.renderLogo())-lipgloss.Height(m.renderHelpText())-2).
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(styles.Subtext0.GetForeground()).
+			BorderForeground(m.styles.Subtext0.GetForeground()).
 			Padding(1, 2).
-			Render(styles.Subtext0.Render("No server selected."))
+			Render(m.styles.Subtext0.Render("No server selected."))
 		return noSelectionMessage
 	}
 
@@ -287,7 +299,7 @@ func (m *serversListModel) renderServerInfo() string {
 		Height(m.height-logoHeight-helpHeight-2).
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(styles.Subtext0.GetForeground()).
+		BorderForeground(m.styles.Subtext0.GetForeground()).
 		Padding(1, 2).
 		Render(sb.String())
 

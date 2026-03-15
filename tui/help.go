@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	table "github.com/ionut-t/gotable"
 	"github.com/ionut-t/perp/internal/keymap"
@@ -30,9 +30,9 @@ func (m model) renderUsefulHelp() string {
 		viewHistoryEntries,
 	}
 
-	title := styles.Text.Bold(true).Render("Useful Shortcuts")
+	title := m.styles.Text.Bold(true).Render("Useful Shortcuts")
 
-	return title + help.RenderHelpView(m.width, bindings)
+	return title + help.RenderHelpView(m.styles, m.width, bindings)
 }
 
 func (m model) renderLLMHelp() string {
@@ -70,9 +70,9 @@ func (m model) renderLLMHelp() string {
 				 `},
 	}
 
-	title := styles.Text.Bold(true).Render("LLM Commands")
+	title := m.styles.Text.Bold(true).Render("LLM Commands")
 
-	description := styles.Subtext1.Render(
+	description := m.styles.Subtext1.Render(
 		styles.Wrap(m.width-1, "These commands are available when the editor is in INSERT mode."),
 	)
 
@@ -80,7 +80,7 @@ func (m model) renderLLMHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderCmdHelp(m.width, commands),
+		help.RenderCmdHelp(m.styles, m.width, commands),
 	)
 }
 
@@ -103,35 +103,35 @@ func (m model) renderEditorHelp() string {
 		{"alt+enter/ctrl+s", "execute query (no matter the editor mode)"},
 	}
 
-	title := styles.Text.Bold(true).Render("Editor")
+	title := m.styles.Text.Bold(true).Render("Editor")
 
 	description := lipgloss.JoinVertical(
 		lipgloss.Left,
-		styles.Subtext1.Render(
+		m.styles.Subtext1.Render(
 			styles.Wrap(m.width-1, "These shortcuts are available when the editor is focused."),
 		),
-		styles.Subtext1.Render(
+		m.styles.Subtext1.Render(
 			styles.Wrap(m.width-1, "If the editor is in NORMAL mode, the query will be executed automatically when enter is pressed."),
 		),
-		styles.Wrap(m.width-1, styles.Subtext1.Render(
+		styles.Wrap(m.width-1, m.styles.Subtext1.Render(
 			"If query starts with ",
-		)+styles.Accent.Render("/ask")+
-			styles.Subtext1.Render(", it will send a request to the LLM when submitted.")),
+		)+m.styles.Accent.Render("/ask")+
+			m.styles.Subtext1.Render(", it will send a request to the LLM when submitted.")),
 	)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderCmdHelp(m.width, commands),
+		help.RenderCmdHelp(m.styles, m.width, commands),
 	)
 }
 
 // Helper to render psql help
 func (m *model) renderPsqlHelp() string {
-	title := styles.Text.Bold(true).Render("PSQL Commands (experimental)")
+	title := m.styles.Text.Bold(true).Render("PSQL Commands (experimental)")
 
-	description := styles.Subtext1.Render(
+	description := m.styles.Subtext1.Render(
 		styles.Wrap(m.width-1, "These commands are available when the editor is focused."),
 	)
 
@@ -139,7 +139,7 @@ func (m *model) renderPsqlHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderCmdHelp(m.width, psql.CommandDescriptions),
+		help.RenderCmdHelp(m.styles, m.width, psql.CommandDescriptions),
 	)
 }
 
@@ -164,13 +164,13 @@ func (m model) renderTableHelp() string {
 		yankRow,
 	}
 
-	title := styles.Text.Bold(true).Render("Table")
+	title := m.styles.Text.Bold(true).Render("Table")
 	description := lipgloss.JoinVertical(
 		lipgloss.Left,
-		styles.Subtext1.Render(
+		m.styles.Subtext1.Render(
 			styles.Wrap(m.width-1, "It is accessible when a query that returns data is executed."),
 		),
-		styles.Subtext1.Render(
+		m.styles.Subtext1.Render(
 			styles.Wrap(m.width-1, "These shortcuts are available when the table is focused."),
 		),
 	)
@@ -179,7 +179,7 @@ func (m model) renderTableHelp() string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderHelpView(m.width, bindings),
+		help.RenderHelpView(m.styles, m.width, bindings),
 	)
 }
 
@@ -218,23 +218,23 @@ func (m model) renderCommandHelp() string {
 						`},
 	}
 
-	title := styles.Text.Bold(true).Render("Command Palette")
+	title := m.styles.Text.Bold(true).Render("Command Palette")
 
 	description := lipgloss.JoinVertical(
 		lipgloss.Left,
-		styles.Subtext1.Render(
+		m.styles.Subtext1.Render(
 			styles.Wrap(m.width-1, "These commands are available when the editor is not focused."),
 		),
-		styles.Wrap(m.width-1, styles.Subtext1.Render(
+		styles.Wrap(m.width-1, m.styles.Subtext1.Render(
 			"You can access the command palette by pressing ",
-		)+styles.Accent.Render(":")+
-			styles.Subtext1.Render(".")),
+		)+m.styles.Accent.Render(":")+
+			m.styles.Subtext1.Render(".")),
 	)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderCmdHelp(m.width, commands),
+		help.RenderCmdHelp(m.styles, m.width, commands),
 	)
 }

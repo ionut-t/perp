@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 )
 
@@ -16,9 +16,9 @@ func (m *model) renderDBError(width, height int) string {
 		Render(
 			lipgloss.JoinVertical(
 				lipgloss.Left,
-				styles.Error.Render(m.error.Error()),
+				m.styles.Error.Render(m.error.Error()),
 				"\n",
-				styles.Subtext0.Render("Press 'q' to go back to server selection"),
+				m.styles.Subtext0.Render("Press 'q' to go back to server selection"),
 			),
 		)
 }
@@ -35,35 +35,40 @@ func (m *model) renderServers() string {
 func (m *model) renderMain(width, height int) string {
 	var commandLine string
 
+	h, _ := styles.ViewPadding.GetFrameSize()
+	workWidth := m.width - h
+
 	if m.focused == focusedCommand {
 		commandLine = m.command.View()
 	} else {
-		commandLine = m.renderStatusBar()
+		commandLine = m.renderStatusBar(workWidth)
 	}
 
 	if m.notification != "" {
 		commandLine = m.notification
 	}
 
-	editorBorder := styles.InactiveBorder
+	editorBorder := m.styles.InactiveBorder
 	if m.focused == focusedEditor {
-		editorBorder = styles.ActiveBorder
+		editorBorder = m.styles.ActiveBorder
 	}
 
-	contentBorder := styles.InactiveBorder
+	contentBorder := m.styles.InactiveBorder
 	if m.focused == focusedContent {
-		contentBorder = styles.ActiveBorder
+		contentBorder = m.styles.ActiveBorder
 	}
+
+	paneWidth := width + m.styles.ActiveBorder.GetHorizontalFrameSize()
 
 	primaryView := lipgloss.JoinVertical(
 		lipgloss.Left,
-		editorBorder.Render(
+		editorBorder.Width(paneWidth).Render(
 			m.editor.View(),
 		),
 		commandLine,
 	)
 
-	padding := lipgloss.NewStyle().Padding(1, 1, 0)
+	padding := lipgloss.NewStyle().Padding(0, 1)
 	commandLineHeight := lipgloss.Height(commandLine)
 
 	if m.fullScreen {
@@ -71,25 +76,26 @@ func (m *model) renderMain(width, height int) string {
 			return padding.Render(primaryView)
 		}
 
-		fullScreenContentHeight := height - commandLineHeight - styles.ViewPadding.GetVerticalBorderSize()*2
+		fullScreenContentHeight := height - commandLineHeight
 
 		fullScreenContentView := lipgloss.JoinVertical(
 			lipgloss.Left,
-			contentBorder.Width(width).
-				Height(fullScreenContentHeight).
+			contentBorder.Width(paneWidth).
+				Height(fullScreenContentHeight+m.styles.ActiveBorder.GetVerticalFrameSize()).
 				Render(m.content.View()),
 			commandLine,
 		)
 		return padding.Render(fullScreenContentView)
 	}
 
-	contentHeight := height - lipgloss.Height(m.editor.View()) - lipgloss.Height(m.command.View()) - styles.ViewPadding.GetVerticalBorderSize()*2 - 2
+	editorHeight := lipgloss.Height(m.editor.View())
+	contentHeight := height - editorHeight - commandLineHeight
 
 	if m.loading {
 		return padding.Render(lipgloss.JoinVertical(
 			lipgloss.Left,
-			contentBorder.Width(width).
-				Height(contentHeight+2).
+			contentBorder.Width(paneWidth).
+				Height(contentHeight+m.styles.ActiveBorder.GetVerticalFrameSize()).
 				AlignHorizontal(lipgloss.Center).
 				AlignVertical(lipgloss.Center).
 				Render(
@@ -100,37 +106,37 @@ func (m *model) renderMain(width, height int) string {
 
 	return padding.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
-		contentBorder.Width(width).
-			Height(contentHeight).
+		contentBorder.Width(paneWidth).
+			Height(contentHeight+m.styles.ActiveBorder.GetVerticalFrameSize()).
 			Render(m.content.View()),
 		primaryView))
 }
 
-func (m *model) renderStatusBar() string {
-	bg := styles.Surface0.GetBackground()
+func (m *model) renderStatusBar(width int) string {
+	bg := m.styles.Surface0.GetBackground()
 
-	separator := styles.Surface0.Render(" | ")
+	separator := m.styles.Surface0.Render(" | ")
 
-	serverName := styles.Primary.Background(bg).Render(m.server.Name)
+	serverName := m.styles.Primary.Background(bg).Render(m.server.Name)
 
-	database := styles.Accent.Background(bg).Render(m.server.Database)
+	database := m.styles.Accent.Background(bg).Render(m.server.Database)
 
 	llm := lipgloss.NewStyle().Background(bg).Render(m.renderLLMModel())
 
 	left := serverName + separator + database + separator + llm
 
-	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
+	leftInfo := m.styles.Surface0.Padding(0, 1).Render(left)
 
-	helpText := styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
+	helpText := m.styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
 
-	displayedInfoWidth := m.width -
+	displayedInfoWidth := width -
 		lipgloss.Width(leftInfo) -
 		lipgloss.Width(helpText) -
 		lipgloss.Width(separator)
 
-	spaces := styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
+	spaces := m.styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
 
-	return styles.Surface0.Width(m.width).Render(
+	return m.styles.Surface0.Width(width).Render(
 		lipgloss.JoinHorizontal(
 			lipgloss.Right,
 			leftInfo,
@@ -141,12 +147,11 @@ func (m *model) renderStatusBar() string {
 }
 
 func (m *model) getAvailableSizes() (int, int) {
-	h, v := styles.ViewPadding.GetFrameSize()
+	h, _ := styles.ViewPadding.GetFrameSize()
+	borderV := m.styles.ActiveBorder.GetVerticalFrameSize()
 
-	statusBarHeight := 1
-
-	availableHeight := m.height - v - statusBarHeight - styles.ActiveBorder.GetBorderBottomSize()
-	availableWidth := m.width - h - styles.ActiveBorder.GetBorderLeftSize()
+	availableHeight := m.height - (2 * borderV)
+	availableWidth := m.width - h - m.styles.ActiveBorder.GetHorizontalFrameSize()
 
 	return availableWidth, availableHeight
 }
@@ -155,12 +160,12 @@ func (m *model) renderLLMModel() string {
 	llmModel, _ := m.config.GetLLMModel()
 
 	if llmModel == "" {
-		return styles.Subtext0.Render("No LLM model set")
+		return m.styles.Subtext0.Render("No LLM model set")
 	}
 
 	if m.server.ShareDatabaseSchemaLLM {
-		return styles.Accent.Render(llmModel)
+		return m.styles.Accent.Render(llmModel)
 	}
 
-	return styles.Accent.Render(llmModel)
+	return m.styles.Accent.Render(llmModel)
 }

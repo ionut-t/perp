@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/internal/whichkey"
@@ -82,7 +82,7 @@ func (i item) Title() string       { return i.title }
 func (i item) Description() string { return i.desc }
 func (i item) FilterValue() string { return i.title }
 
-func New(store export.Store, server server.Server, width, height int) Model {
+func New(store export.Store, server server.Server, width, height int, s styles.Styles, isDark bool) Model {
 	adapter := &storeAdapter{Store: store}
 
 	config := splitview.Config{
@@ -97,8 +97,8 @@ func New(store export.Store, server server.Server, width, height int) Model {
 		adapter,
 		config,
 		processRecords,
-		func(m *splitview.Model[recordItem, *storeAdapter]) string {
-			return renderStatusBar(m, server)
+		func(m *splitview.Model[recordItem, *storeAdapter], width int) string {
+			return renderStatusBar(m, server, width)
 		},
 		func(m *splitview.Model[recordItem, *storeAdapter]) string {
 			return renderHelp(m)
@@ -108,6 +108,8 @@ func New(store export.Store, server server.Server, width, height int) Model {
 		},
 		width,
 		height,
+		s,
+		isDark,
 	)
 
 	// Set the custom list selection handler
@@ -138,11 +140,11 @@ func (m Model) Init() tea.Cmd {
 	return m.Model.Init()
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case whichkey.ExternalEditorMsg:
 		updatedBase, cmd := m.OpenInExternalEditor()
-		m.Model = updatedBase.(*splitview.Model[recordItem, *storeAdapter])
+		m.Model = &updatedBase
 		return m, cmd
 
 	case tea.KeyMsg:
@@ -153,7 +155,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Delegate to base model
 	updatedModel, cmd := m.Model.Update(msg)
-	m.Model = updatedModel.(*splitview.Model[recordItem, *storeAdapter])
+	m.Model = &updatedModel
 	return m, cmd
 }
 
@@ -174,29 +176,29 @@ func processRecords(records []recordItem) []list.Item {
 	return items
 }
 
-func renderStatusBar(m *splitview.Model[recordItem, *storeAdapter], server server.Server) string {
-	bg := styles.Surface0.GetBackground()
+func renderStatusBar(m *splitview.Model[recordItem, *storeAdapter], server server.Server, width int) string {
+	bg := m.Styles.Surface0.GetBackground()
 
-	separator := styles.Surface0.Render(" | ")
+	separator := m.Styles.Surface0.Render(" | ")
 
-	serverName := styles.Primary.Background(bg).Render(server.Name)
+	serverName := m.Styles.Primary.Background(bg).Render(server.Name)
 
-	database := styles.Accent.Background(bg).Render(server.Database)
+	database := m.Styles.Accent.Background(bg).Render(server.Database)
 
 	left := serverName + separator + database
 
-	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
+	leftInfo := m.Styles.Surface0.Padding(0, 1).Render(left)
 
-	helpText := styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
+	helpText := m.Styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
 
-	displayedInfoWidth := m.GetWidth() -
+	displayedInfoWidth := width -
 		lipgloss.Width(leftInfo) -
 		lipgloss.Width(helpText) -
 		lipgloss.Width(separator)
 
-	spaces := styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
+	spaces := m.Styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
 
-	return styles.Surface0.Width(m.GetWidth()).Render(
+	return m.Styles.Surface0.Width(width).Render(
 		lipgloss.JoinHorizontal(
 			lipgloss.Right,
 			leftInfo,
@@ -210,8 +212,8 @@ func renderHelp(m *splitview.Model[recordItem, *storeAdapter]) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		renderUsefulHelp(m),
-		splitview.RenderCommonListHelp(m.GetWidth(), *m.GetList()),
-		splitview.RenderCommonEditorHelp(m.GetWidth()),
+		splitview.RenderCommonListHelp(m.Styles, m.GetWidth(), *m.GetList()),
+		splitview.RenderCommonEditorHelp(m.Styles, m.GetWidth()),
 	)
 }
 
@@ -226,7 +228,7 @@ func renderUsefulHelp(m *splitview.Model[recordItem, *storeAdapter]) string {
 		keymap.Editor,
 	}
 
-	return splitview.RenderCommonUsefulHelp(m.GetWidth(), bindings)
+	return splitview.RenderCommonUsefulHelp(m.Styles, m.GetWidth(), bindings)
 }
 
 func getLanguageForEditor(path string) string {

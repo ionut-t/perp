@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
 	"github.com/ionut-t/perp/pkg/server"
 )
@@ -134,7 +134,7 @@ func TestUpdate(t *testing.T) {
 				{ID: uuid.New(), Name: "Server 1", CreatedAt: time.Now()},
 			},
 			initialView: viewSelect,
-			msg:         tea.KeyMsg{Type: tea.KeyEnter},
+			msg:         tea.KeyPressMsg{Code: tea.KeyEnter},
 			expectedCmd: true,
 			validateModel: func(t *testing.T, m Model, cmd tea.Cmd) {
 				if cmd == nil {
@@ -148,14 +148,14 @@ func TestUpdate(t *testing.T) {
 			name:         "press esc in form view with servers returns to select",
 			setupServers: []server.Server{{ID: uuid.New(), Name: "Server 1"}},
 			initialView:  viewForm,
-			msg:          tea.KeyMsg{Type: tea.KeyEsc},
+			msg:          tea.KeyPressMsg{Code: tea.KeyEsc},
 			expectedView: viewSelect,
 		},
 		{
 			name:         "press esc in form view without servers stays in form",
 			setupServers: nil,
 			initialView:  viewForm,
-			msg:          tea.KeyMsg{Type: tea.KeyEsc},
+			msg:          tea.KeyPressMsg{Code: tea.KeyEsc},
 			expectedView: viewForm,
 		},
 
@@ -163,7 +163,7 @@ func TestUpdate(t *testing.T) {
 		{
 			name:        "ctrl+c quits from any view",
 			initialView: viewSelect,
-			msg:         tea.KeyMsg{Type: tea.KeyCtrlC},
+			msg:         tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl},
 			expectedCmd: true,
 		},
 	}
@@ -186,7 +186,7 @@ func TestUpdate(t *testing.T) {
 			}
 
 			model, cmd := m.Update(tt.msg)
-			updatedModel := model.(Model)
+			updatedModel := model
 
 			if tt.expectedView != 0 && updatedModel.view != tt.expectedView {
 				t.Errorf("Expected view %v, got %v", tt.expectedView, updatedModel.view)
@@ -379,7 +379,7 @@ func TestEditServerFlow(t *testing.T) {
 
 		// Manually trigger editServerMsg since key press 'e' goes through the list
 		model, _ := m.Update(editServerMsg{Server: *createdServer})
-		m = model.(Model)
+		m = model
 
 		// Verify we're in form view
 		if m.view != viewForm {
@@ -387,8 +387,8 @@ func TestEditServerFlow(t *testing.T) {
 		}
 
 		// Simulate escape to cancel edit
-		model, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-		m = model.(Model)
+		model, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+		m = model
 
 		// Should be back in select view
 		if m.view != viewSelect {
@@ -514,8 +514,8 @@ func TestKeyPressIntegration(t *testing.T) {
 		m.SetSize(100, 50)
 
 		// Send 'n' key to the model
-		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-		m = model.(Model)
+		model, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+		m = model
 
 		// Should return a command that generates newServerMsg
 		if cmd == nil {
@@ -530,7 +530,7 @@ func TestKeyPressIntegration(t *testing.T) {
 
 		// Process the message
 		model, _ = m.Update(msg)
-		m = model.(Model)
+		m = model
 
 		// Should now be in form view
 		if m.view != viewForm {
@@ -555,8 +555,8 @@ func TestKeyPressIntegration(t *testing.T) {
 		m.SetSize(100, 50)
 
 		// Send 'e' key
-		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
-		m = model.(Model)
+		model, cmd := m.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+		m = model
 
 		if cmd == nil {
 			t.Fatal("Expected command from 'e' key press")
@@ -576,7 +576,7 @@ func TestKeyPressIntegration(t *testing.T) {
 
 		// Process message
 		model, _ = m.Update(msg)
-		m = model.(Model)
+		m = model
 
 		if m.view != viewForm {
 			t.Error("Expected form view after processing editServerMsg")
@@ -617,8 +617,8 @@ func TestKeyPressIntegration(t *testing.T) {
 		firstServerID := m.servers[0].ID
 
 		// Send ctrl+d
-		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
-		m = model.(Model)
+		model, cmd := m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+		m = model
 
 		if cmd == nil {
 			t.Fatal("Expected command from ctrl+d")
@@ -639,7 +639,7 @@ func TestKeyPressIntegration(t *testing.T) {
 
 		// Process message
 		model, _ = m.Update(msg)
-		m = model.(Model)
+		m = model
 
 		// Should have 1 server left
 		if len(m.servers) != 1 {
@@ -684,8 +684,8 @@ func TestKeyPressIntegration(t *testing.T) {
 		serverID := m.servers[0].ID
 
 		// Send ctrl+d to delete
-		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
-		m = model.(Model)
+		model, cmd := m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+		m = model
 
 		if cmd == nil {
 			t.Fatal("Expected command from ctrl+d")
@@ -705,7 +705,7 @@ func TestKeyPressIntegration(t *testing.T) {
 
 		// Process deletion message
 		model, _ = m.Update(msg)
-		m = model.(Model)
+		m = model
 
 		// Should now have 0 servers
 		if len(m.servers) != 0 {
@@ -863,8 +863,8 @@ func TestServerListNavigation(t *testing.T) {
 		m.SetSize(100, 50)
 
 		// Press enter
-		model, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		m = model.(Model)
+		model, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+		m = model
 
 		if cmd == nil {
 			t.Fatal("Expected command from enter key")
@@ -912,7 +912,7 @@ func TestURIBasedServerCreation(t *testing.T) {
 
 		// Process create message
 		model, cmd := m.Update(createMsg)
-		m = model.(Model)
+		m = model
 
 		// Should return a command to select the new server
 		if cmd == nil {
@@ -1094,7 +1094,7 @@ func BenchmarkUpdate(b *testing.B) {
 	}()
 
 	m := New(tempDir)
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}
+	msg := tea.KeyPressMsg{Code: 'n', Text: "n"}
 
 	for b.Loop() {
 		m.Update(msg)

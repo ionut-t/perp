@@ -3,8 +3,9 @@ package servers
 import (
 	"sort"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/cursor"
+	tea "charm.land/bubbletea/v2"
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/pkg/server"
 )
 
@@ -26,6 +27,7 @@ type Model struct {
 	serversList   serversListModel
 	view          view
 	width, height int
+	styles        styles.Styles
 }
 
 func New(storage string) Model {
@@ -50,6 +52,11 @@ func New(storage string) Model {
 	}
 }
 
+func (m *Model) SetStyles(s styles.Styles, isDark bool) {
+	m.styles = s
+	m.serversList.setStyles(s, isDark)
+}
+
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
@@ -60,7 +67,7 @@ func (m Model) Init() tea.Cmd {
 	return cursor.Blink
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -69,11 +76,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case newServerMsg:
 		m.serverForm = newServerFormModel(m.servers)
+		m.serverForm.setStyles(m.styles)
 		m.view = viewForm
 		return m, cursor.Blink
 
 	case editServerMsg:
-		m.serverForm = editServerFormModel(m.servers, &msg.Server)
+		m.serverForm = editServerFormModel(m.servers, &msg.Server, m.styles)
 		m.view = viewForm
 		return m, cursor.Blink
 
@@ -84,6 +92,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if len(m.servers) == 0 {
 				m.serverForm = newServerFormModel(m.servers)
+				m.serverForm.setStyles(m.styles)
 				m.view = viewForm
 			}
 		}
@@ -110,11 +119,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.view {
 	case viewSelect:
 		serverList, cmd := m.serversList.Update(msg)
-		m.serversList = serverList.(serversListModel)
+		m.serversList = serverList
 		cmds = append(cmds, cmd)
 	case viewForm:
 		serverForm, cmd := m.serverForm.Update(msg)
-		m.serverForm = serverForm.(serverFormModel)
+		m.serverForm = serverForm
 		cmds = append(cmds, cmd)
 	}
 

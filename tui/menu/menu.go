@@ -1,8 +1,8 @@
 package menu
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/utils"
@@ -28,7 +28,7 @@ type menuStyles struct {
 	Dimmed      lipgloss.Style
 }
 
-func defaultMenuStyles() menuStyles {
+func defaultMenuStyles(styles styles.Styles) menuStyles {
 	return menuStyles{
 		Border: lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
@@ -52,9 +52,12 @@ func New(menu *whichkey.Menu, width, height int) Model {
 		context:     whichkey.NewMenuContext(),
 		width:       width,
 		height:      height,
-		styles:      defaultMenuStyles(),
 		visible:     true,
 	}
+}
+
+func (m *Model) SetStyles(s styles.Styles) {
+	m.styles = defaultMenuStyles(s)
 }
 
 // SetContext updates the menu context for validation

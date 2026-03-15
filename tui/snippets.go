@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	pkgSnippets "github.com/ionut-t/perp/pkg/snippets"
 	snippetsStore "github.com/ionut-t/perp/store/snippets"
 	snippetsView "github.com/ionut-t/perp/tui/snippets"
@@ -47,5 +47,5 @@ func (m *model) listSnippets() {
 	m.view = viewSnippets
 	m.focused = focusedSnippets
 	m.editor.Blur()
-	m.snippets = snippetsView.New(m.snippetsStore, m.server, m.width, m.height)
+	m.snippets = snippetsView.New(m.snippetsStore, m.server, m.width, m.height, m.styles, m.isDark)
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/ionut-t/perp/pkg/export"
 	"github.com/ionut-t/perp/tui/command"
 )

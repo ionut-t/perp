@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/keymap"
@@ -89,11 +89,14 @@ type Model[T Item, S Store[T]] struct {
 	help           help.Model
 
 	// Callbacks for custom behavior
-	ProcessItems    func([]T) []list.Item         // Convert items to list items
-	OnListSelection func(*Model[T, S], list.Item) // Called when list selection changes
-	RenderStatusBar func(*Model[T, S]) string     // Custom status bar rendering
-	RenderHelp      func(*Model[T, S]) string     // Custom help rendering
-	GetQuitCmd      func() tea.Msg                // Command to dispatch when quitting
+	ProcessItems    func([]T) []list.Item          // Convert items to list items
+	OnListSelection func(*Model[T, S], list.Item)  // Called when list selection changes
+	RenderStatusBar func(*Model[T, S], int) string // Custom status bar rendering
+	RenderHelp      func(*Model[T, S]) string      // Custom help rendering
+	GetQuitCmd      func() tea.Msg                 // Command to dispatch when quitting
+
+	Styles styles.Styles
+	IsDark bool
 }
 
 // New creates a new split-view model
@@ -101,19 +104,21 @@ func New[T Item, S Store[T]](
 	store S,
 	config Config,
 	processItems func([]T) []list.Item,
-	renderStatusBar func(*Model[T, S]) string,
+	renderStatusBar func(*Model[T, S], int) string,
 	renderHelp func(*Model[T, S]) string,
 	getQuitCmd func() tea.Msg,
 	width, height int,
+	s styles.Styles,
+	isDark bool,
 ) *Model[T, S] {
 	items, err := store.Load()
 
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles = styles.ListItemStyles()
+	delegate.Styles = styles.ListItemStyles(s, isDark)
 
 	editorModel := editor.New(80, 20)
-	editorModel.WithTheme(styles.EditorTheme())
-	editorModel.SetLanguage(config.EditorLanguage, styles.EditorLanguageTheme())
+	editorModel.WithTheme(styles.EditorTheme(s))
+	editorModel.SetLanguage(config.EditorLanguage, styles.EditorLanguageTheme(isDark))
 
 	if len(items) > 0 {
 		editorModel.SetContent(items[0].GetContent())
@@ -122,9 +127,8 @@ func New[T Item, S Store[T]](
 	listItems := processItems(items)
 
 	l := list.New(listItems, delegate, 80, 20)
-	l.Styles = styles.ListStyles()
-	l.FilterInput.PromptStyle = styles.Accent
-	l.FilterInput.Cursor.Style = styles.Accent
+	l.Styles = styles.ListStyles(s, isDark)
+
 	l.InfiniteScrolling = true
 	l.SetShowHelp(false)
 	l.SetShowTitle(false)
@@ -147,26 +151,26 @@ func New[T Item, S Store[T]](
 		RenderStatusBar: renderStatusBar,
 		RenderHelp:      renderHelp,
 		GetQuitCmd:      getQuitCmd,
+		Styles:          s,
+		IsDark:          isDark,
 	}
 
-	m.handleWindowSize(tea.WindowSizeMsg{
-		Width:  width,
-		Height: height,
-	})
+	m.handleWindowSize(width, height)
 
 	return m
 }
 
 // Init implements tea.Model
-func (m *Model[T, S]) Init() tea.Cmd {
+func (m Model[T, S]) Init() tea.Cmd {
 	return nil
 }
 
 // Update implements tea.Model
-func (m *Model[T, S]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model[T, S]) Update(msg tea.Msg) (Model[T, S], tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.handleWindowSize(msg)
+		m.handleWindowSize(msg.Width, msg.Height)
+		return m, nil
 
 	case tea.KeyMsg:
 		if m.list.FilterState() == list.Filtering {
@@ -235,7 +239,7 @@ func (m *Model[T, S]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.view == ViewHelp {
 		hp, cmd := m.help.Update(msg)
-		m.help = hp.(help.Model)
+		m.help = hp
 		return m, cmd
 	}
 
@@ -248,7 +252,7 @@ func (m *Model[T, S]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update current item when list selection changes
 		if selectedItem := m.list.SelectedItem(); selectedItem != nil {
 			if m.OnListSelection != nil {
-				m.OnListSelection(m, selectedItem)
+				m.OnListSelection(&m, selectedItem)
 			}
 		}
 
@@ -260,7 +264,7 @@ func (m *Model[T, S]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	em, cmd := m.editor.Update(msg)
-	m.editor = em.(editor.Model)
+	m.editor = em
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
@@ -269,12 +273,14 @@ func (m *Model[T, S]) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View implements tea.Model
 func (m *Model[T, S]) View() string {
 	if m.error != nil {
-		return styles.Error.Render(m.error.Error())
+		return m.Styles.Error.Render(m.error.Error())
 	}
+
+	availableWidth, _ := m.getAvailableSizes()
 
 	switch m.view {
 	case ViewList:
-		return styles.ViewPadding.Render(m.list.View()) + "\n" + m.statusBarView()
+		return styles.ViewPadding.Render(m.list.View()) + "\n" + m.statusBarView(availableWidth)
 
 	case ViewDetail:
 		return m.editor.View()
@@ -286,13 +292,12 @@ func (m *Model[T, S]) View() string {
 		return m.help.View()
 
 	case ViewPlaceholder:
-		return styles.ViewPadding.Render(
-			lipgloss.JoinVertical(
-				lipgloss.Left,
-				styles.Primary.Render(m.config.PlaceholderTitle),
-				"\n",
-				styles.Subtext0.Render(m.config.PlaceholderSubtitle),
-			),
+		return styles.ViewPadding.Render(lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.Styles.Primary.Render(m.config.PlaceholderTitle),
+			"\n",
+			m.Styles.Subtext0.Render(m.config.PlaceholderSubtitle),
+		),
 		)
 
 	default:
@@ -301,13 +306,15 @@ func (m *Model[T, S]) View() string {
 }
 
 // handleWindowSize updates dimensions and recalculates layouts
-func (m *Model[T, S]) handleWindowSize(msg tea.WindowSizeMsg) {
-	m.help.SetSize(msg.Width, msg.Height)
+func (m *Model[T, S]) handleWindowSize(width, height int) {
+	m.help.SetSize(width, height)
 	if m.RenderHelp != nil {
 		m.help.SetContent(m.RenderHelp(m))
 	}
 
-	if msg.Width < 2*minListWidth {
+	m.width, m.height = width, height
+
+	if width < 2*minListWidth {
 		switch m.view {
 		case ViewSplit:
 			m.view = ViewList
@@ -316,8 +323,6 @@ func (m *Model[T, S]) handleWindowSize(msg tea.WindowSizeMsg) {
 		}
 	}
 
-	m.width, m.height = msg.Width, msg.Height
-
 	availableWidth, availableHeight := m.getAvailableSizes()
 
 	if m.view == ViewList {
@@ -325,26 +330,34 @@ func (m *Model[T, S]) handleWindowSize(msg tea.WindowSizeMsg) {
 	}
 
 	if m.view == ViewDetail {
-		m.editor.SetSize(msg.Width, msg.Height)
+		m.editor.SetSize(width, height)
 	}
 
 	if m.view == ViewSplit {
-		listWidth := min(availableWidth/2, minListWidth)
+		// Calculate split
+		horizontalFrameBorderSize := m.Styles.ActiveBorder.GetHorizontalFrameSize()
 
-		m.list.SetHeight(availableHeight)
-		m.list.SetWidth(listWidth)
+		listWidth := min(minListWidth, availableWidth/2)
+		detailWidth := availableWidth - listWidth - splitViewSeparatorWidth
 
-		m.editor.SetSize(availableWidth-listWidth, availableHeight)
+		// Content dimensions inside borders
+		listContentWidth := listWidth - horizontalFrameBorderSize
+		detailContentWidth := detailWidth - horizontalFrameBorderSize
+
+		borderV := m.Styles.ActiveBorder.GetVerticalFrameSize()
+		paneContentHeight := availableHeight - borderV
+
+		m.list.SetSize(listContentWidth, paneContentHeight)
+		m.editor.SetSize(detailContentWidth, paneContentHeight)
 	}
 }
 
 // getAvailableSizes calculates available space for content
 func (m *Model[T, S]) getAvailableSizes() (int, int) {
-	h, v := styles.ViewPadding.GetFrameSize()
+	h, _ := styles.ViewPadding.GetFrameSize()
+	statusBarHeight := 1
 
-	statusBarHeight := lipgloss.Height(m.statusBarView())
-
-	availableHeight := m.height - v - statusBarHeight - styles.ActiveBorder.GetBorderBottomSize()
+	availableHeight := m.height - statusBarHeight
 	availableWidth := m.width - h
 
 	return availableWidth, availableHeight
@@ -352,69 +365,61 @@ func (m *Model[T, S]) getAvailableSizes() (int, int) {
 
 // getSplitView renders the split view layout
 func (m *Model[T, S]) getSplitView() string {
-	horizontalFrameSize := styles.ViewPadding.GetHorizontalFrameSize()
-	horizontalFrameBorderSize := styles.ActiveBorder.GetHorizontalFrameSize()
+	availableWidth, availableHeight := m.getAvailableSizes()
 
-	availableWidth := m.width - horizontalFrameSize
+	listWidth := min(minListWidth, availableWidth/2)
+	detailWidth := availableWidth - listWidth - splitViewSeparatorWidth
 
-	listWidth := min(minListWidth, availableWidth/2) - horizontalFrameBorderSize*2 - splitViewSeparatorWidth
-	detailWidth := availableWidth - listWidth - horizontalFrameBorderSize*2 - splitViewSeparatorWidth
-
-	var joinedContent string
+	listBorder := m.Styles.InactiveBorder
+	detailBorder := m.Styles.InactiveBorder
 
 	if m.focusedView == FocusedViewList {
-		joinedContent = lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			styles.ActiveBorder.
-				Width(listWidth).
-				Render(m.list.View()),
-			splitViewSeparator,
-			styles.InactiveBorder.
-				Width(detailWidth).
-				Height(m.list.Height()).
-				Render(m.editor.View()),
-		)
+		listBorder = m.Styles.ActiveBorder
 	} else {
-		joinedContent = lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			styles.InactiveBorder.
-				Width(listWidth).
-				Render(m.list.View()),
-			splitViewSeparator,
-			styles.ActiveBorder.
-				Width(detailWidth).
-				Height(m.list.Height()).
-				Render(m.editor.View()),
-		)
+		detailBorder = m.Styles.ActiveBorder
 	}
 
-	renderedView := styles.ViewPadding.Render(lipgloss.JoinVertical(
+	joinedContent := lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		listBorder.
+			Width(listWidth).
+			Height(availableHeight).
+			Render(m.list.View()),
+		splitViewSeparator,
+		detailBorder.
+			Width(detailWidth).
+			Height(availableHeight).
+			Render(m.editor.View()),
+	)
+
+	padding := lipgloss.NewStyle().Padding(0, 1)
+
+	return padding.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
 		joinedContent,
+		m.statusBarView(availableWidth),
 	))
-
-	return renderedView + "\n" + m.statusBarView()
 }
 
 // statusBarView renders the status bar
-func (m *Model[T, S]) statusBarView() string {
+func (m *Model[T, S]) statusBarView(width int) string {
 	if m.error != nil {
-		return styles.Error.Margin(0, 2).Render(m.error.Error())
+		return m.Styles.Error.Margin(0, 2).Render(m.error.Error())
 	}
 
 	if m.successMessage != "" {
-		return styles.Success.Margin(0, 2).Render(m.successMessage)
+		return m.Styles.Success.Margin(0, 2).Render(m.successMessage)
 	}
 
 	if m.RenderStatusBar != nil {
-		return lipgloss.NewStyle().Margin(0, 1).Render(m.RenderStatusBar(m))
+		return m.RenderStatusBar(m, width)
 	}
 
 	return ""
 }
 
 // OpenInExternalEditor opens the current item in an external editor
-func (m *Model[T, S]) OpenInExternalEditor() (tea.Model, tea.Cmd) {
+func (m Model[T, S]) OpenInExternalEditor() (Model[T, S], tea.Cmd) {
 	current := m.store.GetCurrent()
 	path := m.store.GetPath(current)
 
@@ -425,7 +430,7 @@ func (m *Model[T, S]) OpenInExternalEditor() (tea.Model, tea.Cmd) {
 }
 
 // handleEditorClose handles the return from external editor
-func (m *Model[T, S]) handleEditorClose() (tea.Model, tea.Cmd) {
+func (m Model[T, S]) handleEditorClose() (Model[T, S], tea.Cmd) {
 	items, err := m.store.Load()
 	if err != nil {
 		m.error = err
@@ -440,13 +445,13 @@ func (m *Model[T, S]) handleEditorClose() (tea.Model, tea.Cmd) {
 	m.list.ResetFilter()
 
 	textEditor, cmd := m.editor.Update(nil)
-	m.editor = textEditor.(editor.Model)
+	m.editor = textEditor
 
 	return m, cmd
 }
 
 // handleSave handles editor save messages
-func (m *Model[T, S]) handleSave(msg editor.SaveMsg) (tea.Model, tea.Cmd) {
+func (m Model[T, S]) handleSave(msg editor.SaveMsg) (Model[T, S], tea.Cmd) {
 	current := m.store.GetCurrent()
 	current.SetContent(string(msg.Content))
 	err := m.store.Update(current)
@@ -466,7 +471,7 @@ func (m *Model[T, S]) handleSave(msg editor.SaveMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleDelete handles file deletion
-func (m *Model[T, S]) handleDelete() (tea.Model, tea.Cmd) {
+func (m Model[T, S]) handleDelete() (Model[T, S], tea.Cmd) {
 	current := m.store.GetCurrent()
 
 	var cmd tea.Cmd
@@ -482,7 +487,7 @@ func (m *Model[T, S]) handleDelete() (tea.Model, tea.Cmd) {
 			m.list.SetItems(listItems)
 			if selectedItem := m.list.SelectedItem(); selectedItem != nil {
 				if m.OnListSelection != nil {
-					m.OnListSelection(m, selectedItem)
+					m.OnListSelection(&m, selectedItem)
 				}
 			}
 		}
@@ -495,10 +500,10 @@ func (m *Model[T, S]) handleDelete() (tea.Model, tea.Cmd) {
 			m.view = ViewPlaceholder
 		}
 
-		var textEditor tea.Model
+		var textEditor editor.Model
 		textEditor, cmd = m.editor.Update(nil)
-		m.editor = textEditor.(editor.Model)
-		m.editor.SetLanguage(m.config.EditorLanguage, styles.EditorLanguageTheme())
+		m.editor = textEditor
+		m.editor.SetLanguage(m.config.EditorLanguage, styles.EditorLanguageTheme(m.IsDark))
 
 	} else {
 		m.error = fmt.Errorf("failed to delete: %w", err)
@@ -511,7 +516,7 @@ func (m *Model[T, S]) handleDelete() (tea.Model, tea.Cmd) {
 }
 
 // handleRename handles file rename
-func (m *Model[T, S]) handleRename(msg editor.RenameMsg) (tea.Model, tea.Cmd) {
+func (m Model[T, S]) handleRename(msg editor.RenameMsg) (Model[T, S], tea.Cmd) {
 	current := m.store.GetCurrent()
 
 	oldName := current.GetName()
@@ -584,5 +589,5 @@ func (m *Model[T, S]) GetWidth() int {
 
 // SetLanguage sets the editor language
 func (m *Model[T, S]) SetLanguage(language string) {
-	m.editor.SetLanguage(language, styles.EditorLanguageTheme())
+	m.editor.SetLanguage(language, styles.EditorLanguageTheme(m.IsDark))
 }

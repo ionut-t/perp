@@ -1,9 +1,8 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/utils"
@@ -139,6 +138,7 @@ func (m model) tryHandleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 func (m model) handleQuitKey() (tea.Model, tea.Cmd) {
 	if m.error != nil {
 		m.serverSelection = servers.New(m.config.Storage())
+		m.serverSelection.SetStyles(m.styles, m.isDark)
 		_, cmd := m.serverSelection.Update(nil)
 
 		m.view = viewServers
@@ -152,7 +152,7 @@ func (m model) handleQuitKey() (tea.Model, tea.Cmd) {
 
 		m.updateSize()
 		contentModel, cmd := m.content.Update(content.ResizeMsg{})
-		m.content = contentModel.(content.Model)
+		m.content = contentModel
 
 		return m, cmd
 	}
@@ -202,7 +202,7 @@ func (m model) handleEnterCommandKey() (tea.Model, tea.Cmd) {
 		m.editor.Blur()
 
 		ed, cmd := m.editor.Update(nil)
-		m.editor = ed.(editor.Model)
+		m.editor = ed
 
 		return m, tea.Batch(
 			m.command.Focus(),
@@ -247,7 +247,10 @@ func (m model) handleSubmitKey() (tea.Model, tea.Cmd) {
 			m.fullScreen = false
 			m.updateSize()
 
-			return m, m.sendQueryCmd()
+			return m, tea.Batch(
+				m.sendQueryCmd(),
+				m.spinner.Tick,
+			)
 		}
 	}
 
@@ -263,7 +266,10 @@ func (m model) handleExecuteQueryKey() (tea.Model, tea.Cmd) {
 		m.fullScreen = false
 		m.updateSize()
 
-		return m, m.sendQueryCmd()
+		return m, tea.Batch(
+			m.sendQueryCmd(),
+			m.spinner.Tick,
+		)
 	}
 
 	return m, nil
@@ -314,6 +320,7 @@ func (m model) handleViewHistoryKey() (tea.Model, tea.Cmd) {
 		m.historyLogs = entries
 
 		m.history = historyView.New(entries, m.width, m.height)
+		m.history.SetStyles(m.styles, m.isDark)
 	}
 
 	return m, nil

@@ -6,12 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
 	"github.com/ionut-t/perp/internal/config"
+	"github.com/ionut-t/perp/internal/debug"
 	"github.com/ionut-t/perp/internal/leader"
 	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/db"
@@ -86,28 +87,21 @@ type model struct {
 
 	prompt         prompt.Model
 	isPromptActive bool
+
+	styles styles.Styles
+	isDark bool
 }
 
 func New(config config.Config) model {
 	editor := editor.New(80, 10)
 
 	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
-	for _, keyword := range llm.LLMKeywords {
-		llmKeywordsMap[keyword] = styles.Accent.Bold(true)
-	}
-
 	psqlCommands := make(map[string]lipgloss.Style, len(psql.PSQL_COMMANDS))
-
-	for cmd := range psql.PSQL_COMMANDS {
-		psqlCommands[cmd] = styles.Primary.Bold(true)
-	}
 
 	editor.SetPlaceholder("Type your SQL query here...")
 
 	editor.Focus()
 	editor.DisableCommandMode(true)
-	editor.WithTheme(styles.EditorTheme())
-	editor.SetLanguage("postgres", styles.EditorLanguageTheme())
 
 	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
@@ -118,14 +112,13 @@ func New(config config.Config) model {
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
-	sp.Style = styles.Primary
 
 	menuRegistry := whichkey.NewRegistry()
 
 	globalSnippetsPath := pkgSnippets.GetGlobalSnippetsPath(config.Storage())
 	snippetsStoreInstance := snippetsStore.New(globalSnippetsPath, "", config.Editor())
 
-	return model{
+	m := model{
 		config:          config,
 		llm:             llm,
 		editor:          editor,
@@ -145,12 +138,15 @@ func New(config config.Config) model {
 		prompt:          prompt.New(),
 		snippetsStore:   snippetsStoreInstance,
 	}
+
+	m.setStyles(true)
+
+	return m
 }
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
-		tea.SetWindowTitle("perp"),
-		m.spinner.Tick,
+		tea.RequestBackgroundColor,
 		m.editor.CursorBlink(),
 		m.checkForUpdates(),
 	)
@@ -159,7 +155,17 @@ func (m model) Init() tea.Cmd {
 func (m *model) updateSize() {
 	width, height := m.getAvailableSizes()
 
-	commandLineHeight := lipgloss.Height(m.command.View())
+	var commandLineHeight int
+
+	if m.focused == focusedCommand {
+		commandLineHeight = lipgloss.Height(m.command.View())
+	} else {
+		commandLineHeight = 1 // Height of the status bar
+	}
+
+	if m.notification != "" {
+		commandLineHeight = lipgloss.Height(m.notification)
+	}
 
 	if m.fullScreen {
 		fullScreenHeight := height - commandLineHeight
@@ -182,12 +188,18 @@ func (m *model) updateSize() {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	debug.Printf("App Update msg: %#v", msg)
+
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.setStyles(msg.IsDark())
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
 		width, height := m.getAvailableSizes()
+		m.serverSelection.SetSize(m.width, m.height)
 		m.updateSize()
 
 		m.help.SetSize(msg.Width, msg.Height)
@@ -211,6 +223,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case spinner.TickMsg:
+		if !m.loading {
+			return m, nil
+		}
+
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
@@ -234,13 +250,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.historyNavigating && m.editor.IsFocused() && m.focused == focusedEditor {
 			// Check if it's a character input (not a special key)
-			if len(msg.String()) == 1 || msg.Type == tea.KeySpace {
+			if len(msg.String()) == 1 || msg.Key().Code == tea.KeySpace {
 				// User is typing, exit history navigation
 				m.resetHistory()
 			}
 		}
 
-		if msg.Type == tea.KeyCtrlC {
+		if msg.Key().Mod == tea.ModCtrl && msg.Key().Code == 'c' {
 			m.closeDbConnection()
 			return m, tea.Quit
 		}
@@ -293,7 +309,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case psqlCommandMsg:
 		m.loading = true
-		return m, m.runPsqlCommand(msg.command)
+		return m, tea.Batch(
+			m.runPsqlCommand(msg.command),
+			m.spinner.Tick,
+		)
 
 	case psqlResultMsg:
 		return m.handlePsqlResult(msg)
@@ -383,8 +402,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case whichkey.ExecuteAndCloseMsg:
 		m.showingMenu = false
 		m.leaderMgr.Reset()
-		// Re-process the action message through Update
-		return m.Update(msg.ActionMsg)
+		return m, utils.Dispatch(msg.ActionMsg)
 
 	case whichkey.ShowSubmenuMsg:
 		var cmd tea.Cmd
@@ -395,6 +413,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case whichkey.ShowServersViewMsg:
 		m.serverSelection = servers.New(m.config.Storage())
 		m.serverSelection.SetSize(m.width, m.height)
+		m.serverSelection.SetStyles(m.styles, m.isDark)
 		m.view = viewServers
 		m.error = nil
 		return m, nil
@@ -403,15 +422,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view = viewExportData
 		storage := filepath.Join(m.config.Storage(), m.server.Name, exportDataDirectory)
 		exportStore := exportStore.New(storage, m.config.Editor())
-		m.exportData = exportData.New(exportStore, m.server, m.width, m.height)
+		m.exportData = exportData.New(exportStore, m.server, m.width, m.height, m.styles, m.isDark)
+		exportDataModel, cmd := m.exportData.Update(nil)
+		m.exportData = exportDataModel
+		return m, cmd
 
 	case whichkey.ViewSchemaMsg:
 		if m.editor.IsNormalMode() || !m.editor.IsFocused() {
 			m.focused = focusedContent
 			m.editor.Blur()
 			m.content.ShowDBSchema()
-			c, cmd := m.content.Update(nil)
-			m.content = c.(content.Model)
+			contentModel, cmd := m.content.Update(nil)
+			m.content = contentModel
 			return m, cmd
 		}
 		return m, nil
@@ -421,8 +443,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focused = focusedContent
 			m.editor.Blur()
 			m.content.ShowLLMSharedSchema()
-			c, cmd := m.content.Update(nil)
-			m.content = c.(content.Model)
+			contentModel, cmd := m.content.Update(nil)
+			m.content = contentModel
 			return m, cmd
 		}
 		return m, nil
@@ -437,6 +459,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.historyLogs = entries
 
 			m.history = historyView.New(entries, m.width, m.height)
+			m.history.SetStyles(m.styles, m.isDark)
+
+			historyModel, cmd := m.history.Update(nil)
+			m.history = historyModel
+			return m, cmd
 		}
 
 	case whichkey.ToggleFullscreenMsg:
@@ -444,7 +471,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fullScreen = !m.fullScreen
 			m.updateSize()
 			contentModel, cmd := m.content.Update(content.ResizeMsg{})
-			m.content = contentModel.(content.Model)
+			m.content = contentModel
 			return m, cmd
 		}
 		return m, nil
@@ -472,6 +499,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case whichkey.ListSnippetsMsg:
 		m.listSnippets()
+		snippetsModel, cmd := m.snippets.Update(nil)
+		m.snippets = snippetsModel
+		return m, cmd
 
 	case whichkey.SaveSnippetMsg:
 		m.isPromptActive = true
@@ -539,7 +569,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.isPromptActive {
 		promptModel, cmd := m.prompt.Update(msg)
-		m.prompt = promptModel.(prompt.Model)
+		m.prompt = promptModel
 		return m, cmd
 	}
 
@@ -552,52 +582,52 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			lang = "markdown"
 		}
 
-		m.editor.SetLanguage(lang, styles.EditorLanguageTheme())
+		m.editor.SetLanguage(lang, styles.EditorLanguageTheme(m.isDark))
 
 		textEditor, cmd := m.editor.Update(msg)
-		m.editor = textEditor.(editor.Model)
+		m.editor = textEditor
 		cmds = append(cmds, cmd)
 	}
 
 	if m.view == viewServers {
 		s, cmd := m.serverSelection.Update(msg)
-		m.serverSelection = s.(servers.Model)
+		m.serverSelection = s
 		cmds = append(cmds, cmd)
 	}
 
 	if m.focused == focusedContent {
 		contentModel, cmd := m.content.Update(msg)
-		m.content = contentModel.(content.Model)
+		m.content = contentModel
 		cmds = append(cmds, cmd)
 	}
 
 	if m.view == viewExportData {
 		exportDataModel, cmd := m.exportData.Update(msg)
-		m.exportData = exportDataModel.(exportData.Model)
+		m.exportData = exportDataModel
 		cmds = append(cmds, cmd)
 	}
 
 	if m.focused == focusedCommand {
 		cmdModel, cmd := m.command.Update(msg)
-		m.command = cmdModel.(command.Model)
+		m.command = cmdModel
 		cmds = append(cmds, cmd)
 	}
 
 	if m.view == viewHelp {
 		helpModel, cmd := m.help.Update(msg)
-		m.help = helpModel.(help.Model)
+		m.help = helpModel
 		cmds = append(cmds, cmd)
 	}
 
 	if m.view == viewHistory {
 		historyModel, cmd := m.history.Update(msg)
-		m.history = historyModel.(historyView.Model)
+		m.history = historyModel
 		cmds = append(cmds, cmd)
 	}
 
 	if m.view == viewSnippets {
 		snippetsModel, cmd := m.snippets.Update(msg)
-		m.snippets = snippetsModel.(snippetsView.Model)
+		m.snippets = snippetsModel
 		cmds = append(cmds, cmd)
 	}
 
@@ -620,7 +650,14 @@ func (m *model) handleHelpToggle() {
 	}
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
+	view := tea.NewView(m.getView())
+	view.AltScreen = true
+
+	return view
+}
+
+func (m model) getView() string {
 	width, height := m.getAvailableSizes()
 
 	if m.error != nil {
@@ -690,4 +727,27 @@ func (m model) updateLeaderKey(msg command.LeaderKeyChangedMsg) (tea.Model, tea.
 
 func (m model) applyHistoryQuery(msg historyView.SelectedMsg) (tea.Model, tea.Cmd) {
 	return m, m.applyQueryToEditor(msg.Query)
+}
+
+func (m *model) setStyles(isDark bool) {
+	for _, keyword := range llm.LLMKeywords {
+		m.llmKeywords[keyword] = m.styles.Accent.Bold(true)
+	}
+
+	for cmd := range psql.PSQL_COMMANDS {
+		m.psqlCommands[cmd] = m.styles.Primary.Bold(true)
+	}
+
+	m.styles = styles.New(isDark)
+	m.serverSelection.SetStyles(m.styles, isDark)
+	m.isDark = isDark
+	m.editor.WithTheme(styles.EditorTheme(m.styles))
+	m.editor.SetLanguage("postgres", styles.EditorLanguageTheme(isDark))
+	m.command.SetStyles(m.styles)
+	m.prompt.SetStyles(m.styles)
+	m.spinner.Style = m.styles.Primary
+	m.content.SetStyles(m.styles)
+	m.help.SetStyles(m.styles)
+	m.whichKeyMenu.SetStyles(m.styles)
+	m.history.SetStyles(m.styles, isDark)
 }

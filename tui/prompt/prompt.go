@@ -3,10 +3,9 @@ package prompt
 import (
 	"path/filepath"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/pkg/utils"
 	"github.com/ionut-t/perp/tui/command"
@@ -65,22 +64,24 @@ type Model struct {
 	width, height int
 	input         textinput.Model
 	action        Action
+	styles        styles.Styles
 }
 
 func New() Model {
 	input := textinput.New()
 	input.Prompt = "> "
 	input.CharLimit = 256
-	input.Width = 50
+	input.SetWidth(50)
 	input.Focus()
-	input.Cursor.SetMode(cursor.CursorStatic)
 
-	input.PromptStyle = styles.Primary
-	input.TextStyle = styles.Text
-	input.Cursor.Style = styles.Primary
 	return Model{
 		input: input,
 	}
+}
+
+func (m Model) SetStyles(s styles.Styles) {
+	m.input.Styles().Focused.Prompt.Foreground(s.Primary.GetForeground())
+	m.input.Styles().Focused.Text.Foreground(s.Primary.GetForeground())
 }
 
 func (m *Model) SetSize(width, height int) {
@@ -101,7 +102,7 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -131,12 +132,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	border := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(styles.Primary.GetForeground()).
+		BorderForeground(m.styles.Primary.GetForeground()).
 		Padding(1, 2)
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Center,
-		styles.Primary.Bold(true).MarginBottom(1).Render(m.action.title()),
+		m.styles.Primary.Bold(true).MarginBottom(1).Render(m.action.title()),
 		m.input.View(),
 	)
 

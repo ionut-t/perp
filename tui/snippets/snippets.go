@@ -4,10 +4,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/internal/whichkey"
@@ -87,9 +87,9 @@ type item struct {
 
 func (i item) Title() string {
 	// Add scope indicator
-	prefix := "🌍 " // Global
+	prefix := "󰖟 " // Global
 	if i.snippet.Scope == snippets.ScopeServer {
-		prefix = "🖥️  " // Server-specific
+		prefix = "󰒋 " // Server-specific
 	}
 
 	return prefix + strings.TrimSuffix(i.snippet.Name, ".sql")
@@ -146,7 +146,7 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	_, _ = io.WriteString(w, fn(title)+"\n"+descFn(desc))
 }
 
-func New(store snippets.Store, server server.Server, width, height int) Model {
+func New(store snippets.Store, server server.Server, width, height int, s styles.Styles, isDark bool) Model {
 	adapter := &storeAdapter{Store: store}
 
 	config := splitview.Config{
@@ -161,8 +161,8 @@ func New(store snippets.Store, server server.Server, width, height int) Model {
 		adapter,
 		config,
 		processSnippets,
-		func(m *splitview.Model[snippetItem, *storeAdapter]) string {
-			return renderStatusBar(m, server)
+		func(m *splitview.Model[snippetItem, *storeAdapter], width int) string {
+			return renderStatusBar(m, server, width)
 		},
 		func(m *splitview.Model[snippetItem, *storeAdapter]) string {
 			return renderHelp(m)
@@ -172,13 +172,15 @@ func New(store snippets.Store, server server.Server, width, height int) Model {
 		},
 		width,
 		height,
+		s,
+		isDark,
 	)
 
 	// Override list delegate for custom rendering
 	items, _ := adapter.Load()
 	listItems := processSnippets(items)
 	delegate := itemDelegate{
-		styles: styles.ListItemStyles(),
+		styles: styles.ListItemStyles(s, isDark),
 	}
 
 	// Get current list dimensions from base model
@@ -188,9 +190,7 @@ func New(store snippets.Store, server server.Server, width, height int) Model {
 
 	// Create new list with custom delegate but preserve dimensions
 	listModel := list.New(listItems, delegate, listWidth, listHeight)
-	listModel.Styles = styles.ListStyles()
-	listModel.FilterInput.PromptStyle = styles.Accent
-	listModel.FilterInput.Cursor.Style = styles.Accent
+	listModel.Styles = styles.ListStyles(s, isDark)
 	listModel.InfiniteScrolling = true
 	listModel.SetShowHelp(false)
 	listModel.SetShowTitle(false)
@@ -220,11 +220,11 @@ func (m Model) Init() tea.Cmd {
 	return m.Model.Init()
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case whichkey.SnippetEditorMsg:
 		updatedBase, cmd := m.OpenInExternalEditor()
-		m.Model = updatedBase.(*splitview.Model[snippetItem, *storeAdapter])
+		m.Model = &updatedBase
 		return m, cmd
 
 	case tea.KeyMsg:
@@ -253,7 +253,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Delegate to base model
 	updatedModel, cmd := m.Model.Update(msg)
-	m.Model = updatedModel.(*splitview.Model[snippetItem, *storeAdapter])
+	m.Model = &updatedModel
 	return m, cmd
 }
 
@@ -273,10 +273,10 @@ func processSnippets(snippets []snippetItem) []list.Item {
 	return items
 }
 
-func renderStatusBar(m *splitview.Model[snippetItem, *storeAdapter], server server.Server) string {
-	bg := styles.Surface0.GetBackground()
+func renderStatusBar(m *splitview.Model[snippetItem, *storeAdapter], server server.Server, width int) string {
+	bg := m.Styles.Surface0.GetBackground()
 
-	separator := styles.Surface0.Render(" | ")
+	separator := m.Styles.Surface0.Render(" | ")
 
 	current := m.GetStore().GetCurrent()
 	scopeLabel := "Global"
@@ -284,24 +284,24 @@ func renderStatusBar(m *splitview.Model[snippetItem, *storeAdapter], server serv
 		scopeLabel = server.Name
 	}
 
-	scope := styles.Primary.Background(bg).Render(scopeLabel)
+	scope := m.Styles.Primary.Background(bg).Render(scopeLabel)
 
-	snippetName := styles.Accent.Background(bg).Render(strings.TrimSuffix(current.Name, ".sql"))
+	snippetName := m.Styles.Accent.Background(bg).Render(strings.TrimSuffix(current.Name, ".sql"))
 
 	left := scope + separator + snippetName
 
-	leftInfo := styles.Surface0.Padding(0, 1).Render(left)
+	leftInfo := m.Styles.Surface0.Padding(0, 1).Render(left)
 
-	helpText := styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
+	helpText := m.Styles.Info.Background(bg).PaddingRight(1).Render("<leader>? Help")
 
-	displayedInfoWidth := m.GetWidth() -
+	displayedInfoWidth := width -
 		lipgloss.Width(leftInfo) -
 		lipgloss.Width(helpText) -
 		lipgloss.Width(separator)
 
-	spaces := styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
+	spaces := m.Styles.Surface0.Render(strings.Repeat(" ", max(0, displayedInfoWidth)))
 
-	return styles.Surface0.Width(m.GetWidth()).Render(
+	return m.Styles.Surface0.Width(width).Render(
 		lipgloss.JoinHorizontal(
 			lipgloss.Right,
 			leftInfo,
@@ -315,8 +315,8 @@ func renderHelp(m *splitview.Model[snippetItem, *storeAdapter]) string {
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		renderUsefulHelp(m),
-		splitview.RenderCommonListHelp(m.GetWidth(), *m.GetList()),
-		splitview.RenderCommonEditorHelp(m.GetWidth()),
+		splitview.RenderCommonListHelp(m.Styles, m.GetWidth(), *m.GetList()),
+		splitview.RenderCommonEditorHelp(m.Styles, m.GetWidth()),
 	)
 }
 
@@ -335,7 +335,7 @@ func renderUsefulHelp(m *splitview.Model[snippetItem, *storeAdapter]) string {
 		keymap.Editor,
 	}
 
-	return splitview.RenderCommonUsefulHelp(m.GetWidth(), bindings)
+	return splitview.RenderCommonUsefulHelp(m.Styles, m.GetWidth(), bindings)
 }
 
 func (m Model) CanTriggerLeaderKey() bool {

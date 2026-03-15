@@ -1,7 +1,7 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/tui/servers"
 )
@@ -47,5 +47,6 @@ func (m *model) handleServerConnection(msg servers.SelectedServerMsg) (tea.Model
 	}
 
 	m.loading = false
-	return m, nil
+
+	return m, m.spinner.Tick
 }

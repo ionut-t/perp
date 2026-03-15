@@ -3,16 +3,15 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
-// resetEditor clears the editor content and updates its state
+// resetEditor clears the editor content and resets its state
 func (m *model) resetEditor() tea.Cmd {
 	m.editor.SetContent("")
 	ed, cmd := m.editor.Update(nil)
-	m.editor = ed.(editor.Model)
+	m.editor = ed
 	return cmd
 }
 
@@ -24,7 +23,7 @@ func (m *model) applyQueryToEditor(query string) tea.Cmd {
 	m.view = viewMain
 	m.focused = focusedEditor
 	ed, cmd := m.editor.Update(nil)
-	m.editor = ed.(editor.Model)
+	m.editor = ed
 	return tea.Batch(cmd, m.editor.CursorBlink())
 }
 

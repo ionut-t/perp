@@ -9,7 +9,7 @@ import (
 )
 
 func versionTemplate() string {
-	versionTpl := styles.Primary.Margin(0, 2).Render(constants.Logo) + `
+	versionTpl := styles.New(true).Primary.Margin(0, 2).Render(constants.Logo) + `
   Version        %s
   Commit         %s
   Release date   %s

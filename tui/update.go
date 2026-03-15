@@ -1,7 +1,7 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/ionut-t/perp/internal/version"
 	"github.com/ionut-t/perp/pkg/browser"
 	"github.com/ionut-t/perp/pkg/update"

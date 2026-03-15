@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/pkg/utils"
@@ -26,6 +26,7 @@ type serverFormModel struct {
 	editedServer *server.Server
 	servers      []server.Server
 	inputMode    string // "form" or "uri"
+	styles       styles.Styles
 }
 
 func newServerFormModel(servers []server.Server) serverFormModel {
@@ -103,7 +104,6 @@ func newServerFormModel(servers []server.Server) serverFormModel {
 		}),
 	)
 
-	serverForm.WithTheme(styles.HuhThemeCatppuccin())
 	serverForm.WithKeyMap(getKeymap())
 
 	return serverFormModel{
@@ -113,7 +113,12 @@ func newServerFormModel(servers []server.Server) serverFormModel {
 	}
 }
 
-func editServerFormModel(servers []server.Server, server *server.Server) serverFormModel {
+func (m *serverFormModel) setStyles(s styles.Styles) {
+	m.styles = s
+	m.serverForm.WithTheme(styles.HuhThemeCatppuccin{Styles: s})
+}
+
+func editServerFormModel(servers []server.Server, server *server.Server, s styles.Styles) serverFormModel {
 	name := huh.NewInput().Title("Name").Key("name")
 	name.Value(&server.Name)
 	name.Validate(func(s string) error {
@@ -167,7 +172,7 @@ func editServerFormModel(servers []server.Server, server *server.Server) serverF
 		),
 	)
 
-	serverForm.WithTheme(styles.HuhThemeCatppuccin())
+	serverForm.WithTheme(styles.HuhThemeCatppuccin{Styles: s})
 	serverForm.WithKeyMap(getKeymap())
 
 	return serverFormModel{
@@ -181,7 +186,7 @@ func (m serverFormModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m serverFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m serverFormModel) Update(msg tea.Msg) (serverFormModel, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	serverForm, cmd := m.serverForm.Update(msg)
@@ -243,7 +248,7 @@ func (m serverFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m serverFormModel) View() string {
-	return styles.Primary.Render(m.serverForm.View())
+	return m.styles.Primary.Render(m.serverForm.View())
 }
 
 func getKeymap() *huh.KeyMap {

@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/pkg/utils"
 )
@@ -52,11 +51,14 @@ type Model struct {
 
 func New() Model {
 	cmdInput := huh.NewInput().Prompt(": ")
-	cmdInput.WithTheme(styles.HuhThemeCatppuccin())
 
 	return Model{
 		input: cmdInput,
 	}
+}
+
+func (c *Model) SetStyles(s styles.Styles) {
+	c.input.WithTheme(styles.HuhThemeCatppuccin{Styles: s})
 }
 
 func (c Model) Reset() {
@@ -65,10 +67,10 @@ func (c Model) Reset() {
 }
 
 func (c Model) Init() tea.Cmd {
-	return cursor.Blink
+	return nil
 }
 
-func (c Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (c Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		c.input.WithWidth(msg.Width)
@@ -83,19 +85,19 @@ func (c Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return c, cmd
 }
 
+func (c Model) View() string {
+	return c.input.View()
+}
+
 func (c Model) Focus() tea.Cmd {
 	c.input.Focus()
 	return c.Init()
 }
 
-func (c Model) View() string {
-	return c.input.View()
-}
-
 func (c Model) handleCmdRunner(msg tea.KeyMsg) (Model, tea.Cmd) {
 	c.input.Focus()
 
-	switch msg.Type {
+	switch msg.Key().Code {
 	case tea.KeyEsc:
 		empty := ""
 		c.input.Value(&empty)

@@ -3,6 +3,7 @@ package export_data
 import (
 	"testing"
 
+	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/pkg/server"
 	"github.com/ionut-t/perp/store/export"
 )
@@ -104,7 +105,8 @@ func TestNew_WithNoRecords(t *testing.T) {
 		Name:     "test-server",
 		Database: "test-db",
 	}
-	m := New(store, server, width, height)
+	s := styles.New(false)
+	m := New(store, server, width, height, s, false)
 
 	// Basic sanity check that model was created
 	if m.Model == nil {

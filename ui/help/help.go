@@ -4,28 +4,33 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 )
 
 type Model struct {
 	viewport viewport.Model
+	styles   styles.Styles
 }
 
 func New() Model {
-	vp := viewport.New(0, 0)
+	vp := viewport.New()
 
 	return Model{
 		viewport: vp,
 	}
 }
 
+func (m *Model) SetStyles(s styles.Styles) {
+	m.styles = s
+}
+
 func (m *Model) SetSize(width, height int) {
-	m.viewport.Width = width
-	m.viewport.Height = height
+	m.viewport.SetWidth(width)
+	m.viewport.SetHeight(height)
 }
 
 func (m *Model) SetContent(helpText string) {
@@ -36,7 +41,7 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	vp, cmd := m.viewport.Update(msg)
 	m.viewport = vp
 
@@ -48,7 +53,7 @@ func (m Model) View() string {
 }
 
 // RenderHelpView renders a help view for key bindings with their descriptions.
-func RenderHelpView(width int, keys []key.Binding) string {
+func RenderHelpView(styles styles.Styles, width int, keys []key.Binding) string {
 	var sb strings.Builder
 
 	enabledBindings := make([]key.Binding, 0)
@@ -89,21 +94,21 @@ func RenderHelpView(width int, keys []key.Binding) string {
 			renderedDescription.WriteString(renderedLine)
 		}
 
-		sb.WriteString(fmt.Sprintf("• %s%s%s\n",
+		fmt.Fprintf(&sb, "• %s%s%s\n",
 			renderedKey,
 			padding,
-			renderedDescription.String(),
-		))
+			renderedDescription.String())
 	}
 
 	return bg.Width(width).Padding(1, 1).Render(strings.Trim(sb.String(), "\n"))
 }
 
 // RenderCmdHelp renders a help view for commands with their descriptions.
-func RenderCmdHelp(width int, entries []struct {
+func RenderCmdHelp(styles styles.Styles, width int, entries []struct {
 	Command     string
 	Description string
-}) string {
+},
+) string {
 	var sb strings.Builder
 	maxKeyWidth := 0
 
@@ -133,11 +138,10 @@ func RenderCmdHelp(width int, entries []struct {
 			renderedDescription.WriteString(renderedLine)
 		}
 
-		sb.WriteString(fmt.Sprintf("• %s%s%s\n",
+		fmt.Fprintf(&sb, "• %s%s%s\n",
 			renderedKey,
 			padding,
-			renderedDescription.String(),
-		))
+			renderedDescription.String())
 	}
 
 	return lipgloss.NewStyle().Width(width).Padding(1, 1).Render(strings.Trim(sb.String(), "\n"))

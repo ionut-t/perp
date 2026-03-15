@@ -1,15 +1,15 @@
 package splitview
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
 	"github.com/ionut-t/perp/ui/help"
 )
 
 // RenderCommonEditorHelp returns the standard vim-like editor help section
-func RenderCommonEditorHelp(width int) string {
+func RenderCommonEditorHelp(styles styles.Styles, width int) string {
 	commands := []struct {
 		Command     string
 		Description string
@@ -40,12 +40,12 @@ func RenderCommonEditorHelp(width int) string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderCmdHelp(width, commands),
+		help.RenderCmdHelp(styles, width, commands),
 	)
 }
 
 // RenderCommonListHelp returns the standard list navigation help section
-func RenderCommonListHelp(width int, listModel list.Model) string {
+func RenderCommonListHelp(styles styles.Styles, width int, listModel list.Model) string {
 	bindings := []key.Binding{
 		listModel.KeyMap.CursorDown,
 		listModel.KeyMap.CursorUp,
@@ -62,12 +62,12 @@ func RenderCommonListHelp(width int, listModel list.Model) string {
 		lipgloss.Left,
 		title,
 		description,
-		help.RenderHelpView(width, bindings),
+		help.RenderHelpView(styles, width, bindings),
 	)
 }
 
 // RenderCommonUsefulHelp returns a standard "Useful Shortcuts" section
-func RenderCommonUsefulHelp(width int, additionalBindings []key.Binding) string {
+func RenderCommonUsefulHelp(styles styles.Styles, width int, additionalBindings []key.Binding) string {
 	title := styles.Text.Bold(true).Render("Useful Shortcuts")
-	return title + help.RenderHelpView(width, additionalBindings)
+	return title + help.RenderHelpView(styles, width, additionalBindings)
 }

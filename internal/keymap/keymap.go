@@ -1,6 +1,6 @@
 package keymap
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
 var Quit = key.NewBinding(
 	key.WithKeys("q"),

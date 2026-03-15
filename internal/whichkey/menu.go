@@ -1,7 +1,7 @@
 package whichkey
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // MenuItem represents a single menu item

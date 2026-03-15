@@ -5,18 +5,25 @@ import (
 	"io"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
+	"github.com/ionut-t/perp/internal/debug"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	"github.com/ionut-t/perp/pkg/utils"
 	"github.com/ionut-t/perp/ui/markdown"
+)
+
+var (
+	splitViewSeparator      = " "
+	splitViewSeparatorWidth = lipgloss.Width(splitViewSeparator)
+	minListWidth            = 50
 )
 
 type SelectedMsg struct {
@@ -37,6 +44,7 @@ type Model struct {
 	viewport      viewport.Model
 	focused       focused
 	markdown      markdown.Model
+	styles        styles.Styles
 }
 
 type item struct {
@@ -73,16 +81,9 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 }
 
 func New(entries []history.Entry, width, height int) Model {
-	delegate := itemDelegate{
-		styles: styles.ListItemStyles(),
-	}
-
-	ls := list.New(processEntries(entries), delegate, 0, 0)
+	ls := list.New(processEntries(entries), list.NewDefaultDelegate(), 0, 0)
 	ls.Title = "History"
-	ls.Styles = styles.ListStyles()
 
-	ls.FilterInput.PromptStyle = styles.Accent
-	ls.FilterInput.Cursor.Style = styles.Accent
 	ls.AdditionalFullHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(
@@ -92,7 +93,7 @@ func New(entries []history.Entry, width, height int) Model {
 		}
 	}
 
-	vp := viewport.New(0, 0)
+	vp := viewport.New()
 
 	m := Model{
 		width:    width,
@@ -107,26 +108,47 @@ func New(entries []history.Entry, width, height int) Model {
 	return m
 }
 
+func (m *Model) SetStyles(s styles.Styles, isDark bool) {
+	m.styles = s
+	m.list.Styles = styles.ListStyles(s, isDark)
+	delegate := itemDelegate{
+		styles: styles.ListItemStyles(s, isDark),
+	}
+	m.list.SetDelegate(delegate)
+}
+
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 
 	w, h := m.getAvailableSizes()
-	lsWidth := max(50, w/3)
 
-	m.list.SetSize(lsWidth, h)
+	horizontalFrameBorderSize := m.styles.ActiveBorder.GetHorizontalFrameSize()
 
-	vpW := max(1, w-lsWidth-styles.ViewPadding.GetHorizontalFrameSize()-2)
-	m.viewport.Width = vpW
-	m.viewport.Height = max(1, h)
+	listWidth := max(minListWidth, w/3)
+	detailWidth := w - listWidth - splitViewSeparatorWidth
+
+	// Content dimensions inside borders
+	listContentWidth := listWidth - horizontalFrameBorderSize
+	detailContentWidth := detailWidth - horizontalFrameBorderSize
+
+	borderV := m.styles.ActiveBorder.GetVerticalFrameSize()
+	paneContentHeight := h - borderV
+
+	m.list.SetSize(listContentWidth, paneContentHeight)
+
+	m.viewport.SetWidth(detailContentWidth)
+	m.viewport.SetHeight(paneContentHeight)
 }
 
 func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	debug.Printf("History Update: received message of type %T", msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -180,7 +202,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.err = err
 				} else {
 					m.viewport.SetContent(out)
-					m.viewport.YOffset = 0
+					m.viewport.SetYOffset(0)
 				}
 			}
 		}
@@ -198,27 +220,48 @@ func (m Model) View() string {
 		return styles.ViewPadding.Render(
 			lipgloss.JoinVertical(
 				lipgloss.Left,
-				styles.Primary.Render("No history available."),
+				m.styles.Primary.Render("No history available."),
 				"\n",
-				styles.Subtext0.Render("Press 'q' to go back."),
+				m.styles.Subtext0.Render("Press 'q' to go back."),
 			),
 		)
 	}
 
-	listBorder := styles.ActiveBorder
-	vpBorder := styles.InactiveBorder
+	return m.getSplitView()
+}
 
-	if m.focused != focusedList {
-		listBorder = styles.InactiveBorder
-		vpBorder = styles.ActiveBorder
+func (m *Model) getSplitView() string {
+	availableWidth, availableHeight := m.getAvailableSizes()
+
+	listWidth := max(minListWidth, availableWidth/3)
+	detailWidth := availableWidth - listWidth - splitViewSeparatorWidth
+
+	borderV := m.styles.ActiveBorder.GetVerticalFrameSize()
+	paneContentHeight := availableHeight - borderV
+
+	listBorder := m.styles.InactiveBorder
+	detailBorder := m.styles.InactiveBorder
+
+	if m.focused == focusedList {
+		listBorder = m.styles.ActiveBorder
+	} else {
+		detailBorder = m.styles.ActiveBorder
 	}
 
-	return styles.ViewPadding.Render(lipgloss.JoinHorizontal(
+	joinedContent := lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		listBorder.Width(m.list.Width()).Render(m.list.View()),
-		" ",
-		vpBorder.Width(lipgloss.Width(m.viewport.View())).Render(m.viewport.View()),
-	))
+		listBorder.
+			Width(listWidth).
+			Height(paneContentHeight).
+			Render(m.list.View()),
+		splitViewSeparator,
+		detailBorder.
+			Width(detailWidth).
+			Height(paneContentHeight).
+			Render(m.viewport.View()),
+	)
+
+	return lipgloss.NewStyle().Padding(0, 1).Render(joinedContent)
 }
 
 func processEntries(entries []history.Entry) []list.Item {
@@ -235,10 +278,9 @@ func processEntries(entries []history.Entry) []list.Item {
 func (m *Model) getAvailableSizes() (int, int) {
 	h, v := styles.ViewPadding.GetFrameSize()
 
-	availableHeight := m.height - v - styles.ActiveBorder.GetBorderBottomSize()
 	availableWidth := m.width - h
 
-	return availableWidth, availableHeight
+	return availableWidth, m.height - v
 }
 
 func (m *Model) CanTriggerLeaderKey() bool {

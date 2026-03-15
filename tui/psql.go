@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/utils"

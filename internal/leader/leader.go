@@ -1,9 +1,10 @@
 package leader
 
 import (
+	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // TimeoutMsg is sent when leader key timeout expires
@@ -29,8 +30,8 @@ type Manager struct {
 
 // NewManager creates a new leader key manager
 func NewManager(timeout time.Duration, leaderKey string) *Manager {
-	if leaderKey == "" {
-		leaderKey = " "
+	if strings.TrimSpace(leaderKey) == "" {
+		leaderKey = "space"
 	}
 
 	return &Manager{
@@ -78,8 +79,8 @@ func (m *Manager) GetCurrentState() State {
 
 // SetLeaderKey changes the leader key
 func (m *Manager) SetLeaderKey(key string) {
-	if key == "" {
-		key = " "
+	if strings.TrimSpace(key) == "" {
+		key = "space"
 	}
 
 	m.leaderKey = key

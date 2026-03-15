@@ -3,7 +3,7 @@ package splitview
 import (
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // ClearMsg is sent after a delay to clear success/error messages
