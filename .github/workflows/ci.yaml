@@ -2,14 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
-  GO_VERSION: '1.25'
+  GO_VERSION: "1.26"
 
 jobs:
   test:
@@ -17,10 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -51,10 +51,10 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -73,15 +73,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
 
@@ -90,10 +90,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -112,31 +112,31 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Fetch all history for git commands
-        
+
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           check-latest: true
-          
+
       - name: Set release version
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          
+
       - name: Build binaries
         run: |
           mkdir -p dist
-          
+
           # Get commit hash
           COMMIT=$(git rev-parse --short HEAD)
           # Get current date
           BUILD_DATE=$(date -u +%d/%m/%Y)
           # Define build flags
           LDFLAGS="-X 'github.com/ionut-t/perp/internal/version.version=${{ env.VERSION }}' -X 'github.com/ionut-t/perp/internal/version.commit=$COMMIT' -X 'github.com/ionut-t/perp/internal/version.date=$BUILD_DATE'"
-          
+
           # Build for macOS (Apple Silicon)
           GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/perp-darwin-arm64
 
@@ -145,18 +145,18 @@ jobs:
                     
           # Build for Linux (64-bit)
           GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-linux-amd64
-          
+
           # Build for Windows (64-bit)
           GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/perp-windows-amd64.exe
-          
+
           # Make binaries executable
           chmod +x dist/*
-          
+
           # Create checksums
           cd dist
           sha256sum * > checksums.txt
           cd ..
-      
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
@@ -167,23 +167,23 @@ jobs:
             dist/*
           body: |
             # perp ${{ env.VERSION }}
-            
+
             ## What's New
-            
+
             <!-- Add release notes here -->
-            
+
             ## Installation
 
             ### macOS (Apple Silicon)
             ```bash
             curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/perp-darwin-arm64 -o perp && chmod +x perp
             ```
-            
+
             ### macOS (Intel)
             ```bash
             curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/perp-darwin-amd64 -o perp && chmod +x perp
             ```
-            
+
             ### Linux
             ```bash
             curl -L https://github.com/${{ github.repository }}/releases/download/${{ env.VERSION }}/perp-linux-amd64 -o perp && chmod +x perp
@@ -196,6 +196,7 @@ jobs:
             mkdir -p ~/bin && mv perp ~/bin/ && echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
             source ~/.zshrc
             ```
-            
+
             ### Windows
             Download the binary from the assets below.
+
