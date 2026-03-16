@@ -12,13 +12,12 @@ var catppuccinMochaTheme []byte
 //go:embed glamour-themes/catppuccin-latte.json
 var catppuccinLatteTheme []byte
 
-func getThemeBytes() []byte {
-	return catppuccinMochaTheme
-	// if lipgloss.HasDarkBackground(os.Stdout, os.Stderr) {
-	// 	return catppuccinMochaTheme
-	// }
-	//
-	// return catppuccinLatteTheme
+func getThemeBytes(isDark bool) []byte {
+	if isDark {
+		return catppuccinMochaTheme
+	}
+
+	return catppuccinLatteTheme
 }
 
 type Model struct {
@@ -26,8 +25,8 @@ type Model struct {
 	error    error
 }
 
-func New() Model {
-	renderer, err := createGlamourRenderer()
+func New(isDark bool) Model {
+	renderer, err := createGlamourRenderer(isDark)
 
 	return Model{
 		renderer: renderer,
@@ -44,8 +43,8 @@ func (m Model) Render(markdown string) (string, error) {
 	return m.renderer.Render(markdown)
 }
 
-func createGlamourRenderer() (*glamour.TermRenderer, error) {
-	themeBytes := getThemeBytes()
+func createGlamourRenderer(isDark bool) (*glamour.TermRenderer, error) {
+	themeBytes := getThemeBytes(isDark)
 
 	return glamour.NewTermRenderer(
 		glamour.WithStylesFromJSONBytes(themeBytes),

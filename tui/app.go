@@ -746,7 +746,7 @@ func (m *model) setStyles(isDark bool) {
 	m.command.SetStyles(m.styles)
 	m.prompt.SetStyles(m.styles)
 	m.spinner.Style = m.styles.Primary
-	m.content.SetStyles(m.styles)
+	m.content.SetStyles(m.styles, m.isDark)
 	m.help.SetStyles(m.styles)
 	m.whichKeyMenu.SetStyles(m.styles)
 	m.history.SetStyles(m.styles, isDark)

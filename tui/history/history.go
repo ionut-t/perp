@@ -100,7 +100,6 @@ func New(entries []history.Entry, width, height int) Model {
 		height:   height,
 		list:     ls,
 		viewport: vp,
-		markdown: markdown.New(),
 	}
 
 	m.SetSize(width, height)
@@ -115,6 +114,7 @@ func (m *Model) SetStyles(s styles.Styles, isDark bool) {
 		styles: styles.ListItemStyles(s, isDark),
 	}
 	m.list.SetDelegate(delegate)
+	m.markdown = markdown.New(isDark)
 }
 
 func (m *Model) SetSize(width, height int) {

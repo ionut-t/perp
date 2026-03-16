@@ -180,7 +180,7 @@ func (m *model) generateSchemaForTables(tables []string) (string, error) {
 		}
 
 		// Format the result as text
-		sb.WriteString(fmt.Sprintf("Table: %s\n", tableName))
+		fmt.Fprintf(&sb, "Table: %s\n", tableName)
 
 		if len(result.Rows) == 0 {
 			sb.WriteString("  (no columns found)\n")
@@ -202,9 +202,9 @@ func (m *model) generateSchemaForTables(tables []string) (string, error) {
 			// Modifiers might legitimately be empty
 			modifiers, _ := row["Modifiers"].(string)
 
-			sb.WriteString(fmt.Sprintf("  %s %s", column, colType))
+			fmt.Fprintf(&sb, "  %s %s", column, colType)
 			if modifiers != "" {
-				sb.WriteString(fmt.Sprintf(" %s", modifiers))
+				fmt.Fprintf(&sb, " %s", modifiers)
 			}
 			sb.WriteString("\n")
 		}

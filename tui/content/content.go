@@ -87,13 +87,13 @@ func New(width, height int) Model {
 		viewport:        viewport.New(viewport.WithWidth(width), viewport.WithHeight(height)),
 		table:           t,
 		llmSharedSchema: "No schema shared with LLM.",
-		markdown:        markdown.New(),
 	}
 }
 
-func (m *Model) SetStyles(s styles.Styles) {
+func (m *Model) SetStyles(s styles.Styles, isDark bool) {
 	m.styles = s
 	m.table.SetTheme(styles.TableTheme(s))
+	m.markdown = markdown.New(isDark)
 }
 
 func (m *Model) SetSize(width, height int) {
