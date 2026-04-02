@@ -154,6 +154,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, keymap.Submit):
+			if m.list.FilterState() == list.Filtering {
+				break
+			}
+
 			selected := m.list.SelectedItem()
 			if selected != nil {
 				if item, ok := selected.(item); ok {
