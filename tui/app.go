@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	editor "github.com/ionut-t/goeditor"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/debug"
 	"github.com/ionut-t/perp/internal/leader"
@@ -93,15 +93,17 @@ type model struct {
 }
 
 func New(config config.Config) model {
-	editor := editor.New(80, 10)
+	textEditor := editor.New(80, 10)
 
 	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
 	psqlCommands := make(map[string]lipgloss.Style, len(psql.PSQL_COMMANDS))
 
-	editor.SetPlaceholder("Type your SQL query here...")
+	textEditor.SetPlaceholder("Type your SQL query here...")
 
-	editor.Focus()
-	editor.DisableCommandMode(true)
+	textEditor.Focus()
+	textEditor.DisableCommandMode(true)
+	textEditor.SetExtraWordChars('-')
+	textEditor.ShowRelativeLineNumbers(true)
 
 	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
@@ -121,7 +123,7 @@ func New(config config.Config) model {
 	m := model{
 		config:          config,
 		llm:             llm,
-		editor:          editor,
+		editor:          textEditor,
 		llmKeywords:     llmKeywordsMap,
 		psqlCommands:    psqlCommands,
 		command:         command.New(),

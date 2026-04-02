@@ -12,8 +12,8 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/google/uuid v1.6.0
-	github.com/ionut-t/coffee/styles v0.0.0-20260315130139-46287407769c
-	github.com/ionut-t/goeditor/adapter-bubbletea v0.3.1
+	github.com/ionut-t/coffee/styles v0.0.0-20260319182355-742500fa483f
+	github.com/ionut-t/goeditor v0.4.9
 	github.com/ionut-t/gotable v1.0.0
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v5 v5.8.0
@@ -62,7 +62,6 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/ionut-t/goeditor/core v0.3.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect

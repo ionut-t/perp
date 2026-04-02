@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/ionut-t/coffee/styles"
-	editor "github.com/ionut-t/goeditor/adapter-bubbletea"
+	editor "github.com/ionut-t/goeditor"
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/ui/help"
 )
@@ -116,12 +116,13 @@ func New[T Item, S Store[T]](
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles = styles.ListItemStyles(s, isDark)
 
-	editorModel := editor.New(80, 20)
-	editorModel.WithTheme(styles.EditorTheme(s))
-	editorModel.SetLanguage(config.EditorLanguage, styles.EditorLanguageTheme(isDark))
+	textEditor := editor.New(80, 20)
+	textEditor.WithTheme(styles.EditorTheme(s))
+	textEditor.SetLanguage(config.EditorLanguage, styles.EditorLanguageTheme(isDark))
+	textEditor.SetExtraWordChars('-')
 
 	if len(items) > 0 {
-		editorModel.SetContent(items[0].GetContent())
+		textEditor.SetContent(items[0].GetContent())
 	}
 
 	listItems := processItems(items)
@@ -144,7 +145,7 @@ func New[T Item, S Store[T]](
 		config:          config,
 		error:           err,
 		list:            l,
-		editor:          editorModel,
+		editor:          textEditor,
 		help:            help.New(),
 		view:            view,
 		ProcessItems:    processItems,
