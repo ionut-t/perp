@@ -61,10 +61,9 @@ func (a Action) title() string {
 }
 
 type Model struct {
-	width, height int
-	input         textinput.Model
-	action        Action
-	styles        styles.Styles
+	input  textinput.Model
+	action Action
+	styles styles.Styles
 }
 
 func New() Model {
@@ -79,14 +78,10 @@ func New() Model {
 	}
 }
 
-func (m Model) SetStyles(s styles.Styles) {
+func (m *Model) SetStyles(s styles.Styles) {
+	m.styles = s
 	m.input.Styles().Focused.Prompt.Foreground(s.Primary.GetForeground())
 	m.input.Styles().Focused.Text.Foreground(s.Primary.GetForeground())
-}
-
-func (m *Model) SetSize(width, height int) {
-	m.width = width
-	m.height = height
 }
 
 func (m *Model) SetAction(action Action) {
@@ -141,13 +136,7 @@ func (m Model) View() string {
 		m.input.View(),
 	)
 
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		border.Render(content),
-	)
+	return border.Render(content)
 }
 
 func (m Model) handleAction(value string) tea.Cmd {

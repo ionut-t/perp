@@ -222,7 +222,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.snippets.SetSize(width, height)
 		}
 
-		m.prompt.SetSize(width, height)
 
 	case spinner.TickMsg:
 		if !m.loading {
@@ -721,14 +720,14 @@ func (m model) getView() string {
 		return m.renderDBError(width, height)
 	}
 
-	if m.isPromptActive {
-		return m.prompt.View()
-	}
-
 	view := m.renderMainView(width, height)
 
 	if m.whichKeyMenu.IsVisible() {
 		return m.overlayMenu(view)
+	}
+
+	if m.isPromptActive {
+		return m.overlayPrompt(view)
 	}
 
 	return view
@@ -768,6 +767,19 @@ func (m model) overlayMenu(background string) string {
 
 	bg := lipgloss.NewLayer(background)
 	overlay := lipgloss.NewLayer(menuBox).X(x).Y(y).Z(1)
+
+	return lipgloss.NewCompositor(bg, overlay).Render()
+}
+
+func (m model) overlayPrompt(background string) string {
+	promptBox := m.prompt.View()
+	promptW := lipgloss.Width(promptBox)
+	promptH := lipgloss.Height(promptBox)
+	x := max(0, (m.width-promptW)/2)
+	y := max(0, (m.height-promptH)/2)
+
+	bg := lipgloss.NewLayer(background)
+	overlay := lipgloss.NewLayer(promptBox).X(x).Y(y).Z(1)
 
 	return lipgloss.NewCompositor(bg, overlay).Render()
 }
