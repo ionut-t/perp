@@ -28,7 +28,7 @@ var padding = lipgloss.NewStyle().Padding(0, 1)
 
 type ParsedQueryResult struct {
 	Query         string
-	Type          db.QueryType
+	IsDDL         bool // Data Definition Language (CREATE/DROP/ALTER TABLE) — triggers schema refresh
 	AffectedRows  int64
 	Columns       []string
 	Rows          []map[string]db.RowResult
@@ -216,7 +216,7 @@ func (m *Model) GetError() error {
 func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 	m.queryResults = nil
 
-	if result.Type != db.QuerySelect {
+	if len(result.Columns) == 0 {
 		content := lipgloss.JoinVertical(
 			lipgloss.Left,
 			result.Query,

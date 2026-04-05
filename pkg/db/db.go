@@ -23,25 +23,11 @@ type Database interface {
 
 // QueryResult defines the contract for query results
 type QueryResult interface {
-	Type() QueryType
+	IsDDL() bool
 	Query() string
 	Rows() pgx.Rows
 	ExecutionTime() time.Duration
 }
-
-// QueryType represents the type of SQL query
-type QueryType int
-
-const (
-	QuerySelect QueryType = iota
-	QueryInsert
-	QueryUpdate
-	QueryDelete
-	QueryCreate
-	QueryDrop
-	QueryAlter
-	QueryUnknown
-)
 
 // ColumnInfo represents database column metadata
 type ColumnInfo struct {
@@ -74,15 +60,15 @@ var _ Database = (*database)(nil)
 
 // queryResult implements QueryResult interface
 type queryResult struct {
-	queryType QueryType
+	isDDL     bool
 	query     string
 	rows      pgx.Rows
 	startTime time.Time
 	endTime   time.Time
 }
 
-func (r queryResult) Type() QueryType {
-	return r.queryType
+func (r queryResult) IsDDL() bool {
+	return r.isDDL
 }
 
 func (r queryResult) Query() string {
@@ -120,38 +106,12 @@ func (d *database) Query(ctx context.Context, query string, args ...any) (QueryR
 		endTime:   time.Now(),
 	}
 
-	q := stripSQLComments(query)
-	q = strings.ToLower(strings.TrimSpace(q))
+	query = stripSQLComments(query)
+	query = strings.ToLower(strings.TrimSpace(query))
 
-	switch {
-	case strings.HasPrefix(q, "select"):
-		result.queryType = QuerySelect
-	case strings.HasPrefix(q, "insert"):
-		if strings.Contains(q, "returning") {
-			result.queryType = QuerySelect
-		} else {
-			result.queryType = QueryInsert
-		}
-	case strings.HasPrefix(q, "update"):
-		if strings.Contains(q, "returning") {
-			result.queryType = QuerySelect
-		} else {
-			result.queryType = QueryUpdate
-		}
-	case strings.HasPrefix(q, "delete"):
-		result.queryType = QueryDelete
-
-	case strings.HasPrefix(q, "create table"):
-		result.queryType = QueryCreate
-
-	case strings.HasPrefix(q, "drop table"):
-		result.queryType = QueryDrop
-
-	case strings.HasPrefix(q, "alter table"):
-		result.queryType = QueryAlter
-	default:
-		result.queryType = QueryUnknown
-	}
+	result.isDDL = strings.HasPrefix(query, "create table") ||
+		strings.HasPrefix(query, "drop table") ||
+		strings.HasPrefix(query, "alter table")
 
 	return result, nil
 }

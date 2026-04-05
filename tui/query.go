@@ -143,7 +143,7 @@ func (m model) executeQuery(query string) tea.Cmd {
 			return queryFailureMsg{err: err}
 		}
 
-		queryResult.Type = result.Type()
+		queryResult.IsDDL = result.IsDDL()
 		queryResult.Query = result.Query()
 		result.Rows().Close()
 		queryResult.AffectedRows = result.Rows().CommandTag().RowsAffected()
@@ -167,9 +167,7 @@ func (m model) handleQueryResult(msg executeQueryMsg) (tea.Model, tea.Cmd) {
 	message := m.formatQuerySuccessMessage(msg.AffectedRows, msg.ExecutionTime)
 
 	var schemaCmd tea.Cmd
-	if msg.Type == db.QueryCreate ||
-		msg.Type == db.QueryDrop ||
-		msg.Type == db.QueryAlter {
+	if msg.IsDDL {
 		schemaCmd = m.generateSchema()
 	}
 
