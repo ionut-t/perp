@@ -11,8 +11,6 @@ import (
 type Model struct {
 	currentMenu *whichkey.Menu
 	context     *whichkey.MenuContext
-	width       int
-	height      int
 	styles      menuStyles
 	visible     bool
 }
@@ -46,13 +44,11 @@ func defaultMenuStyles(styles styles.Styles) menuStyles {
 }
 
 // New creates a new which-key menu model
-func New(menu *whichkey.Menu, width, height int) Model {
+func New(menu *whichkey.Menu) Model {
 	return Model{
 		currentMenu: menu,
 		context:     whichkey.NewMenuContext(),
-		width:       width,
-		height:      height,
-		visible:     true,
+		visible:     false,
 	}
 }
 
@@ -70,14 +66,8 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		return m.handleKeyPress(msg)
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-	case whichkey.ShowSubmenuMsg:
-		m.currentMenu = msg.Menu
 	}
 	return m, nil
 }
@@ -112,7 +102,9 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (Model, tea.Cmd) {
 				}
 
 				if item.Action.IsSubmenu() {
-					return m, utils.Dispatch(item.Action.Execute())
+					submenu := item.Action.Execute().(whichkey.ShowSubmenuMsg)
+					m.currentMenu = submenu.Menu
+					return m, nil
 				} else {
 					// Execute action and close menu
 					m.visible = false
@@ -133,7 +125,6 @@ func (m Model) View() string {
 
 	menuItems := m.renderItems()
 
-	// Assemble the menu
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.styles.Title.Render(m.currentMenu.Title),
@@ -141,17 +132,7 @@ func (m Model) View() string {
 		m.renderFooter(),
 	)
 
-	// Add border
-	bordered := m.styles.Border.Render(content)
-
-	// Center the menu
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		bordered,
-	)
+	return m.styles.Border.Render(content)
 }
 
 func (m Model) renderItems() []string {

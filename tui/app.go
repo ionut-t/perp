@@ -84,7 +84,6 @@ type model struct {
 	leaderMgr    *leader.Manager
 	whichKeyMenu menu.Model
 	menuRegistry *whichkey.Registry
-	showingMenu  bool
 
 	prompt         prompt.Model
 	isPromptActive bool
@@ -142,9 +141,8 @@ func New(config config.Config) model {
 		llmError:        err,
 		spinner:         sp,
 		leaderMgr:       leader.NewManager(LeaderKeyTimeout, config.GetLeaderKey()),
-		whichKeyMenu:    menu.New(menuRegistry.GetRootMenu(), 0, 0),
+		whichKeyMenu:    menu.New(menuRegistry.GetRootMenu()),
 		menuRegistry:    menuRegistry,
-		showingMenu:     false,
 		prompt:          prompt.New(),
 		snippetsStore:   snippetsStoreInstance,
 	}
@@ -226,13 +224,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.prompt.SetSize(width, height)
 
-		// Update which-key menu size
-		var cmd tea.Cmd
-		m.whichKeyMenu, cmd = m.whichKeyMenu.Update(msg)
-		if cmd != nil {
-			return m, cmd
-		}
-
 	case spinner.TickMsg:
 		if !m.loading {
 			return m, nil
@@ -244,7 +235,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Priority 1: Which-key menu is showing - let it handle all keys
-		if m.showingMenu {
+		if m.whichKeyMenu.IsVisible() {
 			return m.handleWhichKeyPress(msg)
 		}
 
@@ -449,19 +440,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.showLeaderMenu()
 
 	case whichkey.CloseMenuMsg:
-		m.showingMenu = false
 		m.leaderMgr.Reset()
 		return m, nil
 
 	case whichkey.ExecuteAndCloseMsg:
-		m.showingMenu = false
 		m.leaderMgr.Reset()
 		return m, utils.Dispatch(msg.ActionMsg)
-
-	case whichkey.ShowSubmenuMsg:
-		var cmd tea.Cmd
-		m.whichKeyMenu, cmd = m.whichKeyMenu.Update(msg)
-		return m, cmd
 
 	// Which-key menu action handlers
 	case whichkey.ShowServersViewMsg:
@@ -735,10 +719,16 @@ func (m model) getView() string {
 		return m.prompt.View()
 	}
 
-	if m.showingMenu {
-		return m.whichKeyMenu.View()
+	view := m.renderMainView(width, height)
+
+	if m.whichKeyMenu.IsVisible() {
+		return m.overlayMenu(view)
 	}
 
+	return view
+}
+
+func (m model) renderMainView(width, height int) string {
 	switch m.view {
 	case viewServers:
 		return m.renderServers()
@@ -763,6 +753,19 @@ func (m model) getView() string {
 	}
 }
 
+func (m model) overlayMenu(background string) string {
+	menuBox := m.whichKeyMenu.View()
+	menuW := lipgloss.Width(menuBox)
+	menuH := lipgloss.Height(menuBox)
+	x := max(0, (m.width-menuW)/2)
+	y := max(0, (m.height-menuH)/2)
+
+	bg := lipgloss.NewLayer(background)
+	overlay := lipgloss.NewLayer(menuBox).X(x).Y(y).Z(1)
+
+	return lipgloss.NewCompositor(bg, overlay).Render()
+}
+
 func (m model) showLeaderMenu() (tea.Model, tea.Cmd) {
 	if m.leaderMgr.IsActive() {
 		// Update context before showing menu
@@ -773,7 +776,6 @@ func (m model) showLeaderMenu() (tea.Model, tea.Cmd) {
 		menu := m.menuRegistry.GetRootMenu()
 		m.whichKeyMenu.SetMenu(menu)
 		m.whichKeyMenu.Show()
-		m.showingMenu = true
 	}
 	return m, nil
 }

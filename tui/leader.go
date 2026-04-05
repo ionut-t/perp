@@ -76,7 +76,6 @@ func (m model) handleLeaderSequence(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				submenu := item.Action.Execute().(whichkey.ShowSubmenuMsg)
 				m.whichKeyMenu.SetMenu(submenu.Menu)
 				m.whichKeyMenu.Show()
-				m.showingMenu = true
 				return m, nil
 			} else {
 				// Execute direct action
