@@ -19,6 +19,7 @@ import (
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
 	llmFactory "github.com/ionut-t/perp/pkg/llm/llm_factory"
+	"github.com/ionut-t/perp/pkg/lsp"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/server"
 	pkgSnippets "github.com/ionut-t/perp/pkg/snippets"
@@ -90,6 +91,10 @@ type model struct {
 
 	styles styles.Styles
 	isDark bool
+
+	lspClient           *lsp.Client
+	lspSyncedContent    string             // last content sent to LSP via DidChange
+	lspCompletionCancel context.CancelFunc // cancels the previous in-flight LSP completion call
 }
 
 func New(config config.Config) model {
@@ -104,6 +109,9 @@ func New(config config.Config) model {
 	textEditor.DisableCommandMode(true)
 	textEditor.SetExtraWordChars('-')
 	textEditor.ShowRelativeLineNumbers(true)
+	textEditor.WithCompletionAutoTrigger(true)
+	textEditor.WithCompletionDebounce(100)
+	textEditor.SetCompletionMenuMaxVisibleItems(5)
 
 	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
@@ -183,6 +191,7 @@ func (m *model) updateSize() {
 
 	editorHeight := max(height/2-editorHalfScreenOffset, editorMinHeight)
 	m.editor.SetSize(width, editorHeight)
+	m.editor.SetCompletionMenuMaxVisibleItems(max(5, editorHeight/2))
 
 	contentHeight := height - editorHeight - commandLineHeight
 
@@ -282,6 +291,49 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return updatedModel, cmd
 		}
 		m = updatedModel.(model)
+
+	case lspConnectedMsg:
+		m.lspClient = msg.client
+		return m, m.successNotification("LSP connected")
+
+	case lspFailedMsg:
+		return m, m.errorNotification(msg.err)
+
+	case editor.CompletionRequestMsg:
+		if m.lspClient == nil || !isSQLContent(m.editor.GetCurrentContent()) {
+			return m, nil
+		}
+
+		// Cancel any in-flight completion request before starting a new one.
+		if m.lspCompletionCancel != nil {
+			m.lspCompletionCancel()
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		m.lspCompletionCancel = cancel
+
+		client := m.lspClient
+		completionCtx := msg.Context
+
+		return m, func() tea.Msg {
+			defer cancel()
+			completions, err := client.Completion(ctx, completionCtx.Position.Row, completionCtx.Position.Col)
+			return lspCompletionResultMsg{
+				completions: completions,
+				context:     completionCtx,
+				err:         err,
+			}
+		}
+
+	case lspCompletionResultMsg:
+		if msg.err != nil {
+			debug.Printf("LSP completion error: %v", msg.err)
+			return m, nil
+		}
+
+		m.editor.SetCompletions(msg.completions, msg.context)
+
+		return m, nil
 
 	case servers.SelectedServerMsg:
 		return m.handleServerConnection(msg)
@@ -589,6 +641,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		textEditor, cmd := m.editor.Update(msg)
 		m.editor = textEditor
 		cmds = append(cmds, cmd)
+
+		// Proactively sync document to LSP in insert mode whenever content changes,
+		// so the server has the latest state before the completion debounce fires.
+		if m.lspClient != nil && m.editor.IsInsertMode() {
+			if content := m.editor.GetCurrentContent(); content != m.lspSyncedContent && isSQLContent(content) {
+				m.lspSyncedContent = content
+				client := m.lspClient
+				cmds = append(cmds, func() tea.Msg {
+					_ = client.DidChange(content)
+					return nil
+				})
+			}
+		}
 	}
 
 	if m.view == viewServers {

@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"github.com/ionut-t/goeditor/core"
 	"github.com/ionut-t/perp/pkg/llm"
+	"github.com/ionut-t/perp/pkg/lsp"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/update"
 	"github.com/ionut-t/perp/tui/content"
@@ -63,4 +65,19 @@ type notificationErrorMsg struct {
 // Update check messages
 type updateAvailableMsg struct {
 	release *update.LatestReleaseInfo
+}
+
+// LSP messages
+type lspConnectedMsg struct {
+	client *lsp.Client
+}
+
+type lspFailedMsg struct {
+	err error
+}
+
+type lspCompletionResultMsg struct {
+	completions []core.Completion
+	context     core.CompletionContext
+	err         error
 }

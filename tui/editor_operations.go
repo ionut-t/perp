@@ -55,3 +55,10 @@ func (m model) setHighlightedKeywords() map[string]lipgloss.Style {
 
 	return nil
 }
+
+// isSQLContent reports whether the content should be sent to the LSP.
+// Psql meta-commands (\dt, \l, …) and LLM prompts (/) are not SQL and
+// will crash the language server if forwarded.
+func isSQLContent(content string) bool {
+	return !strings.HasPrefix(content, "\\") && !strings.HasPrefix(content, "/")
+}

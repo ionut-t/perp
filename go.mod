@@ -12,8 +12,8 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/google/uuid v1.6.0
-	github.com/ionut-t/coffee/styles v0.0.0-20260319182355-742500fa483f
-	github.com/ionut-t/goeditor v0.4.9
+	github.com/ionut-t/coffee/styles v0.0.0-20260404232152-91b6181d4e02
+	github.com/ionut-t/goeditor v0.4.10
 	github.com/ionut-t/gotable v1.0.0
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v5 v5.8.0

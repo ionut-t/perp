@@ -33,6 +33,7 @@
   - Visual mode for selecting text.
   - Paste from clipboard.
   - Undo/redo.
+  - SQL autocompletion powered by [postgres-language-server](https://github.com/supabase-community/postgres-language-server) (optional).
 - **History**:
   - View and navigate query history.
 - **Database schema**:
@@ -43,13 +44,17 @@
   - Create, edit, and delete server connections.
   - View server details.
 
-## Instalation
+## Installation
 
 ```sh
 go install github.com/ionut-t/perp
 ```
 
 Or install the binary from the [Releases](https://github.com/ionut-t/perp/releases) page.
+
+### SQL Autocompletion (optional)
+
+Install [postgres-language-server](https://github.com/supabase-community/postgres-language-server) and make sure the `postgres-language-server` or `pglsp` binary is available on `$PATH`. perp will detect it automatically on connection and shut it down on exit.
 
 ## Key Bindings
 
@@ -63,6 +68,10 @@ Or install the binary from the [Releases](https://github.com/ionut-t/perp/releas
 | `p`                     | Paste in the editor            |
 | `export 1,2,3 data.csv` | Export selected rows as CSV    |
 | `export * data.json`    | Export all rows as JSON        |
+| `ctrl+space`            | Trigger SQL autocompletion     |
+| `ctrl+n` / `ctrl+p`     | Next / previous suggestion     |
+| `ctrl+y`                | Accept suggestion              |
+| `ctrl+e` / `esc`        | Dismiss completion menu        |
 
 A complete list of key bindings and commands is accessible through the help menu.
 
@@ -145,4 +154,3 @@ The default instructions can be found [here](internal/config/llm_instructions.md
 ## License
 
 [MIT](LICENSE)
-
