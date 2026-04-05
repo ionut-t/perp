@@ -623,7 +623,7 @@ func (m *Model) renderLogo() string {
 
 	var newVersion string
 	if m.latestReleaseInfo != nil && m.latestReleaseInfo.HasUpdate {
-		newVersion = m.styles.Warning.Render(styles.Wrap(logoW, fmt.Sprintf("New version available: %s. Press 'ctrl+u' to update or 'ctrl+x' to ignore.", m.latestReleaseInfo.TagName)))
+		newVersion = m.styles.Warning.Render(styles.Wrap(logoW, fmt.Sprintf("New version available: %s", m.latestReleaseInfo.TagName)))
 	}
 
 	version := lipgloss.Place(

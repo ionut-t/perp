@@ -26,6 +26,9 @@ type MenuContext struct {
 	// Feature availability
 	LLMEnabled      bool
 	LLMSchemaShared bool
+
+	// Update availability
+	HasUpdate bool
 }
 
 // NewMenuContext creates a new menu context with default values

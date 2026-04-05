@@ -335,6 +335,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateAvailableMsg:
 		m.content.SetLatestReleaseInfo(msg.release)
 
+	case whichkey.OpenReleaseMsg:
+		return m, m.openReleaseNotes()
+
+	case whichkey.DismissUpdateMsg:
+		return m, m.dismissUpdate()
+
 	case schemaFetchedMsg:
 		schema := string(msg)
 		m.loading = false

@@ -62,16 +62,6 @@ var (
 		key.WithKeys("ctrl+r"),
 		key.WithHelp("ctrl+r", "view history logs"),
 	)
-
-	openRelease = key.NewBinding(
-		key.WithKeys("ctrl+u"),
-		key.WithHelp("ctrl+u", "open release notes in browser"),
-	)
-
-	dismissUpdate = key.NewBinding(
-		key.WithKeys("ctrl+x"),
-		key.WithHelp("ctrl+x", "dismiss release"),
-	)
 )
 
 // tryHandleKeyPress processes keyboard input in the main view
@@ -119,14 +109,6 @@ func (m model) tryHandleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 
 	case key.Matches(msg, viewHistoryEntries):
 		updatedModel, cmd = m.handleViewHistoryKey()
-		return updatedModel, cmd, true
-
-	case key.Matches(msg, openRelease):
-		updatedModel, cmd = m.openReleaseNotes()
-		return updatedModel, cmd, true
-
-	case key.Matches(msg, dismissUpdate):
-		updatedModel, cmd = m.dismissUpdate()
 		return updatedModel, cmd, true
 	}
 

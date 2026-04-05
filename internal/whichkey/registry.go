@@ -415,6 +415,22 @@ func (r *Registry) buildRootMenu() *Menu {
 			})
 		}
 
+		items = append(items, MenuItem{
+			Key:         "u",
+			Label:       "Release notes",
+			Description: "View latest release in browser",
+			Action:      CommandAction{Cmd: OpenReleaseCmd},
+		})
+
+		if r.context.HasUpdate {
+			items = append(items, MenuItem{
+				Key:         "x",
+				Label:       "Dismiss update",
+				Description: "Hide the update notification",
+				Action:      CommandAction{Cmd: DismissUpdateCmd},
+			})
+		}
+
 		return items
 	})
 }
@@ -557,3 +573,12 @@ type (
 func ToggleFullscreenCmd() tea.Msg { return ToggleFullscreenMsg{} }
 func ToggleHelpCmd() tea.Msg       { return ToggleHelpMsg{} }
 func QuitCmd() tea.Msg             { return QuitMsg{} }
+
+// Update actions
+type (
+	OpenReleaseMsg   struct{}
+	DismissUpdateMsg struct{}
+)
+
+func OpenReleaseCmd() tea.Msg   { return OpenReleaseMsg{} }
+func DismissUpdateCmd() tea.Msg { return DismissUpdateMsg{} }

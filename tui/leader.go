@@ -35,6 +35,12 @@ func (m *model) updateMenuContext() {
 		// Feature availability
 		LLMEnabled:      m.llm != nil,
 		LLMSchemaShared: m.server.ShareDatabaseSchemaLLM,
+
+		// Update availability
+		HasUpdate: func() bool {
+			_, ok := m.content.GetLatestReleaseInfo()
+			return ok
+		}(),
 	}
 
 	m.menuRegistry.UpdateContext(ctx)
