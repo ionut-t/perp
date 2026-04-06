@@ -35,13 +35,14 @@ type LLM interface {
 }
 
 func ExtractQuery(text string) string {
-	startIndex := strings.Index(strings.ToLower(text), "```sql")
-	if startIndex == -1 {
-		startIndex = strings.Index(text, "```")
-	}
+	const sqlFence = "```sql"
+	const fence = "```"
 
-	if startIndex != -1 {
-		startIndex += len("```sql")
+	var startIndex int
+	if idx := strings.Index(strings.ToLower(text), sqlFence); idx != -1 {
+		startIndex = idx + len(sqlFence)
+	} else if idx := strings.Index(text, fence); idx != -1 {
+		startIndex = idx + len(fence)
 	} else {
 		return text
 	}

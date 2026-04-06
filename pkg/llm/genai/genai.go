@@ -42,8 +42,7 @@ func (g *GenAI) Ask(prompt string, cmd llm.Command, providerName string) (*llm.R
 			return nil, fmt.Errorf("request timed out after %v for %s", timeout, providerName)
 		}
 
-		if errors.As(err, &genai.APIError{}) {
-			apiErr := err.(genai.APIError)
+		if apiErr, ok := errors.AsType[genai.APIError](err); ok {
 			return nil, errors.New(apiErr.Message)
 		}
 
@@ -100,8 +99,7 @@ func (g *GenAI) SetModel(model, providerName string) error {
 			return fmt.Errorf("request timed out after %v for %s", timeout, providerName)
 		}
 
-		if errors.As(err, &genai.APIError{}) {
-			apiErr := err.(genai.APIError)
+		if apiErr, ok := errors.AsType[genai.APIError](err); ok {
 			return errors.New(apiErr.Message)
 		}
 
