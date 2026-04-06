@@ -178,14 +178,12 @@ func (m *model) updateSize() {
 	}
 
 	if m.fullScreen {
-		fullScreenHeight := height - commandLineHeight
-
 		if m.editor.IsFocused() {
-			m.editor.SetSize(width, fullScreenHeight)
+			m.editor.SetSize(width, height+1)
 			return
 		}
 
-		m.content.SetSize(width, fullScreenHeight)
+		m.content.SetSize(width, height+1)
 		return
 	}
 

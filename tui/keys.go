@@ -181,7 +181,9 @@ func (m model) handleChangeFocusKey() (tea.Model, tea.Cmd) {
 func (m model) handleEnterCommandKey() (tea.Model, tea.Cmd) {
 	if m.view == viewMain && m.editor.IsNormalMode() {
 		m.focused = focusedCommand
+		m.fullScreen = false
 		m.editor.Blur()
+		m.updateSize()
 
 		ed, cmd := m.editor.Update(nil)
 		m.editor = ed
