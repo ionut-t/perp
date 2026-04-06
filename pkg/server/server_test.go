@@ -2,12 +2,15 @@ package server
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
@@ -595,7 +598,7 @@ func TestConnectionString(t *testing.T) {
 				Port:     5433,
 				Database: "my-db",
 			},
-			expected: "postgres://user@domain:p@ss!word@db.example.com:5433/my-db",
+			expected: "postgres://user%40domain:p%40ss%21word@db.example.com:5433/my-db",
 		},
 		{
 			name: "connection with IP address",
@@ -618,6 +621,77 @@ func TestConnectionString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDisplayString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		server   Server
+		expected string
+	}{
+		{
+			name: "plain credentials are human readable",
+			server: Server{
+				Username: "user",
+				Password: "pass",
+				Address:  "localhost",
+				Port:     5432,
+				Database: "mydb",
+			},
+			expected: "postgres://user:****@localhost:5432/mydb",
+		},
+		{
+			name: "special characters are not percent-encoded",
+			server: Server{
+				Username: "user@domain",
+				Password: "p@ss!word",
+				Address:  "db.example.com",
+				Port:     5433,
+				Database: "my-db",
+			},
+			expected: "postgres://user@domain:****@db.example.com:5433/my-db",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.server.DisplayString()
+			assert.Equal(t, tt.expected, result)
+			// MaskedString must be identical to DisplayString
+			assert.Equal(t, result, tt.server.MaskedString(), "MaskedString() should equal DisplayString()")
+		})
+	}
+}
+
+func TestStringVsDisplayString(t *testing.T) {
+	t.Parallel()
+
+	// Credentials with special characters that require URL encoding.
+	srv := Server{
+		Username: "user@domain",
+		Password: "p@ss!word",
+		Address:  "localhost",
+		Port:     5432,
+		Database: "db",
+	}
+
+	connURL := srv.String()
+	display := srv.DisplayString()
+
+	// String() must percent-encode so pgx can parse it unambiguously.
+	assert.NotEqual(t, connURL, display, "String() and DisplayString() should differ for credentials with special characters")
+
+	// String() must be parseable and round-trip credentials correctly.
+	parsed, err := url.Parse(connURL)
+	require.NoError(t, err, "url.Parse(String()) should not fail")
+	assert.Equal(t, srv.Username, parsed.User.Username())
+	password, _ := parsed.User.Password()
+	assert.Equal(t, srv.Password, password)
+
+	// DisplayString() must contain raw special characters (human-readable).
+	assert.Contains(t, display, srv.Username, "DisplayString() should contain raw username")
 }
 
 func TestFilePermissions(t *testing.T) {
@@ -647,8 +721,8 @@ func TestFilePermissions(t *testing.T) {
 	}
 
 	mode := info.Mode()
-	if mode.Perm() != 0644 {
-		t.Errorf("Expected file permissions 0644, got %v", mode.Perm())
+	if mode.Perm() != 0o600 {
+		t.Errorf("Expected file permissions 0600, got %v", mode.Perm())
 	}
 }
 
@@ -799,7 +873,7 @@ func saveServers(storage string, servers []Server) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }
 
 func contains(s, substr string) bool {

@@ -273,7 +273,7 @@ func (m *serversListModel) renderServerInfo() string {
 	sb.WriteString("Username: " + srv.Username + "\n")
 
 	password := server.MaskedPassword
-	connectionString := srv.MaskedString()
+	connectionString := srv.DisplayString()
 	if m.showPassword {
 		password = srv.Password
 		connectionString = srv.String()

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -41,7 +42,6 @@ type CreateServer struct {
 // New creates a new server instance and saves it to the storage file.
 func New(server CreateServer, storage string) (*Server, error) {
 	port, err := strconv.Atoi(server.Port)
-
 	if err != nil {
 		return nil, fmt.Errorf("invalid port '%s': %w", server.Port, err)
 	}
@@ -73,7 +73,6 @@ func Load(storage string) ([]Server, error) {
 	var servers []Server
 	if _, err := os.Stat(path); err == nil {
 		data, err := os.ReadFile(path)
-
 		if err != nil {
 			return nil, fmt.Errorf("failed to read server file: %w", err)
 		}
@@ -117,12 +116,11 @@ func save(server *Server, storage string) error {
 	})
 
 	data, err := json.MarshalIndent(servers, "", "  ")
-
 	if err != nil {
 		return fmt.Errorf("failed to marshal server data: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write server file: %w", err)
 	}
 
@@ -132,7 +130,6 @@ func save(server *Server, storage string) error {
 // Update modifies an existing server's details.
 func (s *Server) Update(server CreateServer, storage string) error {
 	port, err := strconv.Atoi(server.Port)
-
 	if err != nil {
 		return fmt.Errorf("invalid port '%s': %w", server.Port, err)
 	}
@@ -204,7 +201,7 @@ func Delete(id uuid.UUID, storage string) ([]Server, error) {
 		return nil, fmt.Errorf("failed to marshal server data: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return nil, fmt.Errorf("failed to write server file: %w", err)
 	}
 
@@ -213,12 +210,22 @@ func Delete(id uuid.UUID, storage string) ([]Server, error) {
 
 // String returns the PostgreSQL connection string for the server.
 func (s *Server) String() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		s.Username, s.Password, s.Address, s.Port, s.Database)
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(s.Username, s.Password),
+		Host:   fmt.Sprintf("%s:%d", s.Address, s.Port),
+		Path:   s.Database,
+	}
+	return u.String()
 }
 
-// MaskedString returns the PostgreSQL connection string with the password masked.
-func (s *Server) MaskedString() string {
+// DisplayString returns the human-readable connection string with the password masked.
+func (s *Server) DisplayString() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
 		s.Username, MaskedPassword, s.Address, s.Port, s.Database)
+}
+
+// MaskedString is an alias for DisplayString for backwards compatibility.
+func (s *Server) MaskedString() string {
+	return s.DisplayString()
 }
