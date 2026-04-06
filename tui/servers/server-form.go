@@ -22,7 +22,7 @@ type updateServerMsg struct {
 }
 
 type serverFormModel struct {
-	serverForm   *huh.Form
+	form         *huh.Form
 	editedServer *server.Server
 	servers      []server.Server
 	inputMode    string // "form" or "uri"
@@ -107,15 +107,18 @@ func newServerFormModel(servers []server.Server) serverFormModel {
 	serverForm.WithKeyMap(getKeymap())
 
 	return serverFormModel{
-		servers:    servers,
-		serverForm: serverForm,
-		inputMode:  inputMode,
+		servers:   servers,
+		form:      serverForm,
+		inputMode: inputMode,
 	}
 }
 
 func (m *serverFormModel) setStyles(s styles.Styles) {
 	m.styles = s
-	m.serverForm.WithTheme(styles.HuhThemeCatppuccin{Styles: s})
+
+	if m.form != nil {
+		m.form.WithTheme(styles.HuhThemeCatppuccin{Styles: s})
+	}
 }
 
 func editServerFormModel(servers []server.Server, server *server.Server, s styles.Styles) serverFormModel {
@@ -178,7 +181,7 @@ func editServerFormModel(servers []server.Server, server *server.Server, s style
 	return serverFormModel{
 		servers:      servers,
 		editedServer: server,
-		serverForm:   serverForm,
+		form:         serverForm,
 	}
 }
 
@@ -189,27 +192,27 @@ func (m serverFormModel) Init() tea.Cmd {
 func (m serverFormModel) Update(msg tea.Msg) (serverFormModel, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	serverForm, cmd := m.serverForm.Update(msg)
-	m.serverForm = serverForm.(*huh.Form)
+	serverForm, cmd := m.form.Update(msg)
+	m.form = serverForm.(*huh.Form)
 	cmds = append(cmds, cmd)
 
 	// Update input mode from form
-	if mode := m.serverForm.GetString("inputMode"); mode != "" {
+	if mode := m.form.GetString("inputMode"); mode != "" {
 		m.inputMode = mode
 	}
 
-	if m.serverForm.State == huh.StateCompleted {
+	if m.form.State == huh.StateCompleted {
 		var value server.CreateServer
 
 		// Check the selected mode and create server accordingly
-		mode := m.serverForm.GetString("inputMode")
+		mode := m.form.GetString("inputMode")
 		if mode == "" {
 			mode = m.inputMode // fallback to stored mode (for edit)
 		}
 
 		if mode == "uri" {
 			// Parse URI and create server from parsed components
-			uri := m.serverForm.GetString("connectionUri")
+			uri := m.form.GetString("connectionUri")
 			parsed, err := server.ParseConnectionURI(uri)
 			if err != nil {
 				// This shouldn't happen as validation should catch it
@@ -218,19 +221,19 @@ func (m serverFormModel) Update(msg tea.Msg) (serverFormModel, tea.Cmd) {
 			}
 
 			value = parsed.ToCreateServer(
-				m.serverForm.GetString("name"),
-				m.serverForm.GetBool("shareDatabaseSchemaLLM"),
+				m.form.GetString("name"),
+				m.form.GetBool("shareDatabaseSchemaLLM"),
 			)
 		} else {
 			// Use individual form fields
 			value = server.CreateServer{
-				Name:                   m.serverForm.GetString("name"),
-				Address:                m.serverForm.GetString("address"),
-				Port:                   m.serverForm.GetString("port"),
-				Username:               m.serverForm.GetString("username"),
-				Password:               m.serverForm.GetString("password"),
-				Database:               m.serverForm.GetString("database"),
-				ShareDatabaseSchemaLLM: m.serverForm.GetBool("shareDatabaseSchemaLLM"),
+				Name:                   m.form.GetString("name"),
+				Address:                m.form.GetString("address"),
+				Port:                   m.form.GetString("port"),
+				Username:               m.form.GetString("username"),
+				Password:               m.form.GetString("password"),
+				Database:               m.form.GetString("database"),
+				ShareDatabaseSchemaLLM: m.form.GetBool("shareDatabaseSchemaLLM"),
 			}
 		}
 
@@ -248,7 +251,7 @@ func (m serverFormModel) Update(msg tea.Msg) (serverFormModel, tea.Cmd) {
 }
 
 func (m serverFormModel) View() string {
-	return m.styles.Primary.Render(m.serverForm.View())
+	return m.styles.Primary.Render(m.form.View())
 }
 
 func getKeymap() *huh.KeyMap {

@@ -55,6 +55,7 @@ func New(storage string) Model {
 func (m *Model) SetStyles(s styles.Styles, isDark bool) {
 	m.styles = s
 	m.serversList.setStyles(s, isDark)
+	m.serverForm.setStyles(s)
 }
 
 func (m *Model) SetSize(width, height int) {
