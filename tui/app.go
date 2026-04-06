@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -13,6 +14,7 @@ import (
 	editor "github.com/ionut-t/goeditor"
 	"github.com/ionut-t/perp/internal/config"
 	"github.com/ionut-t/perp/internal/debug"
+	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/internal/leader"
 	"github.com/ionut-t/perp/internal/whichkey"
 	"github.com/ionut-t/perp/pkg/db"
@@ -222,7 +224,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.snippets.SetSize(width, height)
 		}
 
-
 	case spinner.TickMsg:
 		if !m.loading {
 			return m, nil
@@ -262,7 +263,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		// Don't handle keys if in special views or command mode
+		// In insert mode, submit on enter if query ends with ; or is a psql command
+		if m.editor.IsInsertMode() && key.Matches(msg, keymap.Submit) {
+			content := strings.TrimSpace(m.editor.GetCurrentContent())
+			if strings.HasSuffix(content, ";") || strings.HasPrefix(content, "\\") {
+				return m.submitQuery()
+			}
+		}
+
+		// Don't handle keys if in special views, command mode, or editor insert mode
 		if m.focused == focusedCommand ||
 			m.view == viewServers ||
 			m.view == viewExportData ||

@@ -216,27 +216,28 @@ func (m model) handleInsertKey() (tea.Model, tea.Cmd) {
 // handleSubmitKey submits the current query (normal mode only)
 func (m model) handleSubmitKey() (tea.Model, tea.Cmd) {
 	if m.editor.IsNormalMode() {
-		content := m.editor.GetCurrentContent()
-
-		if content == "" {
-			return m, nil
-		}
-
-		if !m.loading {
-			m.loading = true
-			m.resetHistory()
-			m.addToHistory()
-			m.fullScreen = false
-			m.updateSize()
-
-			return m, tea.Batch(
-				m.sendQueryCmd(),
-				m.spinner.Tick,
-			)
-		}
+		return m.submitQuery()
 	}
 
 	return m, nil
+}
+
+// submitQuery executes the current editor content regardless of editor mode
+func (m model) submitQuery() (tea.Model, tea.Cmd) {
+	if m.editor.GetCurrentContent() == "" || m.loading {
+		return m, nil
+	}
+
+	m.loading = true
+	m.resetHistory()
+	m.addToHistory()
+	m.fullScreen = false
+	m.updateSize()
+
+	return m, tea.Batch(
+		m.sendQueryCmd(),
+		m.spinner.Tick,
+	)
 }
 
 // handleExecuteQueryKey executes query regardless of editor mode
@@ -257,22 +258,6 @@ func (m model) handleExecuteQueryKey() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleCancelKey cancels current operation
-func (m model) handleCancelKey() (tea.Model, tea.Cmd) {
-	if m.view == viewMain && m.focused == focusedEditor {
-		m.resetHistory()
-
-		if m.editor.IsNormalMode() {
-			if m.editor.IsFocused() {
-				m.focused = focusedContent
-				m.editor.Blur()
-			}
-		}
-	}
-
-	return m, nil
-}
-
 // handlePreviousHistoryKey navigates to previous history entry
 func (m model) handlePreviousHistoryKey() (tea.Model, tea.Cmd) {
 	if m.editor.IsFocused() && len(m.historyLogs) > 0 {
@@ -286,6 +271,22 @@ func (m model) handlePreviousHistoryKey() (tea.Model, tea.Cmd) {
 func (m model) handleNextHistoryKey() (tea.Model, tea.Cmd) {
 	if m.editor.IsFocused() && m.historyNavigating {
 		m.nextHistory()
+	}
+
+	return m, nil
+}
+
+// handleCancelKey cancels current operation
+func (m model) handleCancelKey() (tea.Model, tea.Cmd) {
+	if m.view == viewMain && m.focused == focusedEditor {
+		m.resetHistory()
+
+		if m.editor.IsNormalMode() {
+			if m.editor.IsFocused() {
+				m.focused = focusedContent
+				m.editor.Blur()
+			}
+		}
 	}
 
 	return m, nil
