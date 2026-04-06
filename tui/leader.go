@@ -38,8 +38,13 @@ func (m *model) updateMenuContext() {
 
 		// Update availability
 		HasUpdate: func() bool {
-			_, ok := m.content.GetLatestReleaseInfo()
-			return ok
+			release := m.latestRelease
+
+			if release == nil {
+				return false
+			}
+
+			return release.HasUpdate
 		}(),
 	}
 

@@ -25,6 +25,7 @@ import (
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/server"
 	pkgSnippets "github.com/ionut-t/perp/pkg/snippets"
+	"github.com/ionut-t/perp/pkg/update"
 	"github.com/ionut-t/perp/pkg/utils"
 	exportStore "github.com/ionut-t/perp/store/export"
 	snippetsStore "github.com/ionut-t/perp/store/snippets"
@@ -77,6 +78,8 @@ type model struct {
 	historyNavigating     bool
 	originalEditorContent string
 	history               historyView.Model
+
+	latestRelease *update.LatestReleaseInfo
 
 	// snippets management
 	snippets      snippetsView.Model
@@ -339,6 +342,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notification = ""
 
 	case updateAvailableMsg:
+		m.latestRelease = msg.release
 		m.content.SetLatestReleaseInfo(msg.release)
 
 	case whichkey.OpenReleaseMsg:

@@ -129,14 +129,6 @@ func (m *Model) SetLatestReleaseInfo(release *update.LatestReleaseInfo) {
 	m.latestReleaseInfo = release
 }
 
-func (m *Model) GetLatestReleaseInfo() (*update.LatestReleaseInfo, bool) {
-	if m.latestReleaseInfo == nil {
-		return nil, false
-	}
-
-	return m.latestReleaseInfo, true
-}
-
 func (m *Model) SetLLMSharedTables(tables []string) {
 	m.llmSharedTables = tables
 	m.setViewportContent()

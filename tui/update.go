@@ -24,13 +24,11 @@ func (m model) checkForUpdates() tea.Cmd {
 }
 
 func (m *model) openReleaseNotes() tea.Cmd {
-	release, ok := m.content.GetLatestReleaseInfo()
-
-	if !ok {
+	if m.latestRelease == nil {
 		return nil
 	}
 
-	if err := browser.Open(release.ReleaseURL); err != nil {
+	if err := browser.Open(m.latestRelease.ReleaseURL); err != nil {
 		return m.errorNotification(err)
 	}
 
@@ -38,13 +36,14 @@ func (m *model) openReleaseNotes() tea.Cmd {
 }
 
 func (m *model) dismissUpdate() tea.Cmd {
-	if _, ok := m.content.GetLatestReleaseInfo(); !ok {
+	if m.latestRelease == nil {
 		return nil
 	}
 
 	checker := update.New("", m.config.Storage(), 0)
 	_ = checker.DismissUpdate()
 	m.content.SetLatestReleaseInfo(nil)
+	m.latestRelease = nil
 
 	return nil
 }
