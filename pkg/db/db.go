@@ -11,6 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var schemaTemplate = template.Must(template.New("schema").Parse(`
+Database Schema:
+{{range $tableName, $cols := .}}
+Table: {{$tableName}}
+{{range $col := $cols}}- {{$col.ColumnName}} ({{$col.DataType}}): {{$col.ColumnDefault}} {{if $col.IsNullable}}[nullable]{{else}}[not nullable]{{end}}
+{{end}}
+{{end}}
+`))
+
 // Database defines the contract for database operations
 type Database interface {
 	// Execute a SQL query and return the result
@@ -49,6 +58,27 @@ func New(dbDSN string) (Database, error) {
 	}
 
 	return &database{pool: pool}, nil
+}
+
+// isDDLQuery reports whether the query is a DDL statement that modifies the schema.
+func isDDLQuery(query string) bool {
+	q := strings.ToLower(strings.TrimSpace(stripSQLComments(query)))
+	ddlPrefixes := []string{
+		"create table", "create index", "create unique index",
+		"create view", "create materialized view",
+		"create schema", "create type", "create extension",
+		"drop table", "drop index",
+		"drop view", "drop materialized view",
+		"drop schema", "drop type", "drop extension",
+		"alter table", "alter view", "alter type",
+		"truncate",
+	}
+	for _, prefix := range ddlPrefixes {
+		if strings.HasPrefix(q, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // database encapsulates the pgx database connection pool
@@ -104,14 +134,8 @@ func (d *database) Query(ctx context.Context, query string, args ...any) (QueryR
 		query:     query,
 		startTime: startTime,
 		endTime:   time.Now(),
+		isDDL:     isDDLQuery(query),
 	}
-
-	query = stripSQLComments(query)
-	query = strings.ToLower(strings.TrimSpace(query))
-
-	result.isDDL = strings.HasPrefix(query, "create table") ||
-		strings.HasPrefix(query, "drop table") ||
-		strings.HasPrefix(query, "alter table")
 
 	return result, nil
 }
@@ -167,16 +191,8 @@ func (d *database) GenerateSchema() (string, error) {
 	}
 
 	var b strings.Builder
-	tmpl := template.Must(template.New("schema").Parse(`
-Database Schema:
-{{range $tableName, $cols := .}}
-Table: {{$tableName}}
-{{range $col := $cols}}- {{$col.ColumnName}} ({{$col.DataType}}): {{$col.ColumnDefault}} {{if $col.IsNullable}}[nullable]{{else}}[not nullable]{{end}}
-{{end}}
-{{end}}
-`))
 
-	if err := tmpl.Execute(&b, tables); err != nil {
+	if err := schemaTemplate.Execute(&b, tables); err != nil {
 		return "", fmt.Errorf("failed to execute schema template: %w", err)
 	}
 
