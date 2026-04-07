@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/psql"
 	"github.com/ionut-t/perp/pkg/utils"
 	"github.com/ionut-t/perp/tui/servers"
@@ -59,26 +58,13 @@ func (m model) runPsqlCommand(cmd *psql.Command) tea.Cmd {
 
 // connectToDatabase handles the \c command
 func (m model) connectToDatabase(database string) tea.Msg {
-	oldDatabase := m.server.Database
-
-	if oldDatabase == database {
-		return m.errorNotification(fmt.Errorf("already connected to database '%s'", database))
+	if m.server.Database == database {
+		return notificationErrorMsg{err: fmt.Errorf("already connected to '%s' database", database)}
 	}
 
 	m.server.Database = database
 
-	m.closeDbConnection()
-
-	newDb, err := db.New(m.server.String())
-	if err != nil {
-		m.server.Database = oldDatabase
-		return psqlErrorMsg{err: fmt.Errorf("failed to connect to database '%s': %w", database, err)}
-	}
-
-	m.db = newDb
-	return servers.SelectedServerMsg{
-		Server: m.server,
-	}
+	return servers.SelectedServerMsg{Server: m.server}
 }
 
 func (m model) handlePsqlResult(msg psqlResultMsg) (tea.Model, tea.Cmd) {
