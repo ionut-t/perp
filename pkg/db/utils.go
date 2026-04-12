@@ -208,8 +208,8 @@ func stripSQLComments(q string) string {
 		// Multi-line comments
 		if c == '/' && i+1 < len(q) && q[i+1] == '*' {
 			i += 2
-			for i < len(q)-1 {
-				if q[i] == '*' && q[i+1] == '/' {
+			for i < len(q) {
+				if i+1 < len(q) && q[i] == '*' && q[i+1] == '/' {
 					i += 2
 					break
 				}

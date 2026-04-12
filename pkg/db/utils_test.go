@@ -126,6 +126,19 @@ func TestStripSQLComments(t *testing.T) {
 			expected: `SELECT $tag$ not a comment $tag$; `,
 		},
 		{
+			// Regression: previously the last character of an unterminated comment
+			// leaked into the output because the inner loop used i < len(q)-1,
+			// exiting one character early and letting the outer loop write it.
+			name:     "unterminated multi-line comment discards all content",
+			input:    `SELECT 1; /* unterminated`,
+			expected: `SELECT 1; `,
+		},
+		{
+			name:     "unterminated multi-line comment at end of query",
+			input:    `/* unterminated`,
+			expected: ``,
+		},
+		{
 			name: "complex query",
 			input: `
 -- Get all active users
