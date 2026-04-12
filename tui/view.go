@@ -163,9 +163,5 @@ func (m *model) renderLLMModel() string {
 		return m.styles.Subtext0.Render("No LLM model set")
 	}
 
-	if m.server.ShareDatabaseSchemaLLM {
-		return m.styles.Accent.Render(llmModel)
-	}
-
 	return m.styles.Accent.Render(llmModel)
 }
