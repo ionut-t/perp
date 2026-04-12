@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/alecthomas/assert/v2"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFormatValue(t *testing.T) {
@@ -152,27 +152,13 @@ FROM
 WHERE
     u.active = TRUE; /* Only active users */
 `,
-			expected: `
-
-SELECT
-    u.id,
-    u.name,
-    p.profile_data ->> 'email' AS email 
-FROM
-    users u
-    JOIN profiles p ON u.id = p.user_id
-WHERE
-    u.active = TRUE; 
-`,
+				expected: "\n\nSELECT\n    u.id,\n    u.name,\n    p.profile_data ->> 'email' AS email \nFROM\n    users u\n    JOIN profiles p ON u.id = p.user_id\nWHERE\n    u.active = TRUE; \n",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := stripSQLComments(tc.input)
-			if result != tc.expected {
-				t.Errorf("\n--- FAIL: %s ---\nInput:    %q\nGot:      %q\nExpected: %q", tc.name, tc.input, result, tc.expected)
-			}
+			assert.Equal(t, tc.expected, stripSQLComments(tc.input))
 		})
 	}
 }
