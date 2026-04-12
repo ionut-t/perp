@@ -45,7 +45,8 @@ type jsonrpcError struct {
 type Client struct {
 	stdin      io.WriteCloser
 	stdout     *bufio.Reader
-	cfgDir     string // temp directory holding the config file; cleaned up on Close
+	cmd        *exec.Cmd // the running LSP subprocess; used to terminate it on Close
+	cfgDir     string    // temp directory holding the config file; cleaned up on Close
 	binaryPath string
 
 	mu      sync.Mutex
@@ -89,6 +90,7 @@ func New(binaryPath string, db server.Server) (*Client, error) {
 	client := &Client{
 		stdin:      stdin,
 		stdout:     bufio.NewReader(stdoutPipe),
+		cmd:        cmd,
 		cfgDir:     cfgDir,
 		binaryPath: binaryPath,
 		pending:    make(map[int64]chan *jsonrpcMsg),
@@ -166,10 +168,18 @@ func (c *Client) Completion(ctx context.Context, line, char int) ([]core.Complet
 	return nil, nil
 }
 
-// Close stops the LSP server via the binary's stop subcommand and releases resources.
+// Close stops the LSP subprocess and releases resources.
 func (c *Client) Close() {
 	_ = c.stdin.Close()
+
+	// stop gracefully shuts down all processes spawned by the LSP binary.
 	_ = exec.Command(c.binaryPath, "stop").Run()
+
+	// Kill the main process as a fallback and reap it in the background.
+	if c.cmd != nil && c.cmd.Process != nil {
+		_ = c.cmd.Process.Kill()
+		go c.cmd.Wait() //nolint:errcheck // reap to avoid zombie
+	}
 
 	if c.cfgDir != "" {
 		_ = os.RemoveAll(c.cfgDir)
