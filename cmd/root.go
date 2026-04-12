@@ -20,7 +20,12 @@ var rootCmd = &cobra.Command{
 	Use:   "perp",
 	Short: "perp is a TUI application for interacting with PostgreSQL databases.",
 	Run: func(cmd *cobra.Command, args []string) {
-		appUI()
+		url, err := cmd.Flags().GetString("url")
+		if err != nil {
+			fmt.Printf("Error parsing URL flag: %v\n", err)
+			os.Exit(1)
+		}
+		appUI(url)
 	},
 	Version: version.Version(),
 }
@@ -54,18 +59,20 @@ func init() {
 
 	cobra.OnInitialize(initConfig)
 
+	rootCmd.Flags().StringP("url", "u", "", "PostgreSQL connection URL (e.g. postgres://user:pass@host:5432/db)")
+
 	if err := config.InitializeLLMInstructions(); err != nil {
 		fmt.Printf("Error writing default LLM instructions: %v", err)
 	}
 }
 
-func appUI() {
+func appUI(url string) {
 	c, err := config.New()
 	if err != nil {
 		log.Fatalf("Error initializing config: %v", err)
 	}
 
-	m := tui.New(c)
+	m := tui.New(c, url)
 
 	p := tea.NewProgram(m)
 

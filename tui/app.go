@@ -42,6 +42,7 @@ import (
 
 type model struct {
 	config          config.Config
+	connectURL      string
 	width, height   int
 	view            view
 	focused         focused
@@ -101,7 +102,7 @@ type model struct {
 	lspCompletionCancel context.CancelFunc // cancels the previous in-flight LSP completion call
 }
 
-func New(config config.Config) model {
+func New(config config.Config, url string) model {
 	textEditor := editor.New(80, 10)
 
 	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
@@ -134,6 +135,7 @@ func New(config config.Config) model {
 
 	m := model{
 		config:          config,
+		connectURL:      url,
 		llm:             llm,
 		editor:          textEditor,
 		llmKeywords:     llmKeywordsMap,
@@ -158,11 +160,34 @@ func New(config config.Config) model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		tea.RequestBackgroundColor,
 		m.editor.CursorBlink(),
 		m.checkForUpdates(),
-	)
+	}
+
+	if m.connectURL != "" {
+		parsed, err := server.ParseConnectionURI(m.connectURL)
+		if err != nil {
+			cmds = append(cmds, func() tea.Msg {
+				return notificationErrorMsg{err: err}
+			})
+		} else {
+			srv := server.Server{
+				Name:     parsed.Host + "/" + parsed.Database,
+				Address:  parsed.Host,
+				Port:     mustParsePort(parsed.Port),
+				Username: parsed.Username,
+				Password: parsed.Password,
+				Database: parsed.Database,
+			}
+			cmds = append(cmds, func() tea.Msg {
+				return servers.SelectedServerMsg{Server: srv}
+			})
+		}
+	}
+
+	return tea.Batch(cmds...)
 }
 
 func (m *model) updateSize() {
