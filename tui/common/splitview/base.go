@@ -11,6 +11,7 @@ import (
 	"github.com/ionut-t/coffee/styles"
 	editor "github.com/ionut-t/goeditor"
 	"github.com/ionut-t/perp/internal/keymap"
+	"github.com/ionut-t/perp/pkg/clipboard"
 	"github.com/ionut-t/perp/ui/help"
 )
 
@@ -116,7 +117,7 @@ func New[T Item, S Store[T]](
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles = styles.ListItemStyles(s, isDark)
 
-	textEditor := editor.New(80, 20)
+	textEditor := editor.New(80, 20, editor.WithClipboard(&clipboard.Clipboard{}))
 	textEditor.WithTheme(styles.EditorTheme(s))
 	textEditor.SetLanguage(config.EditorLanguage, styles.EditorLanguageTheme(isDark))
 	textEditor.SetExtraWordChars('-')

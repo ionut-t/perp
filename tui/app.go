@@ -17,6 +17,7 @@ import (
 	"github.com/ionut-t/perp/internal/keymap"
 	"github.com/ionut-t/perp/internal/leader"
 	"github.com/ionut-t/perp/internal/whichkey"
+	"github.com/ionut-t/perp/pkg/clipboard"
 	"github.com/ionut-t/perp/pkg/db"
 	"github.com/ionut-t/perp/pkg/history"
 	"github.com/ionut-t/perp/pkg/llm"
@@ -103,7 +104,7 @@ type model struct {
 }
 
 func New(config config.Config, url string) model {
-	textEditor := editor.New(80, 10)
+	textEditor := editor.New(80, 10, editor.WithClipboard(&clipboard.Clipboard{}))
 
 	llmKeywordsMap := make(map[string]lipgloss.Style, len(llm.LLMKeywords))
 	psqlCommands := make(map[string]lipgloss.Style, len(psql.PSQL_COMMANDS))
@@ -560,11 +561,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case whichkey.ExportJSONMsg:
 		m.isPromptActive = true
-		m.prompt.SetAction((prompt.ExportAllAsJSONAction))
+		m.prompt.SetAction(prompt.ExportAllAsJSONAction)
 
 	case whichkey.ExportCSVMsg:
 		m.isPromptActive = true
-		m.prompt.SetAction((prompt.ExportAllAsCSVAction))
+		m.prompt.SetAction(prompt.ExportAllAsCSVAction)
 
 	case whichkey.CloseExportMsg:
 		m.view = viewMain
@@ -624,13 +625,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Config actions
 	case whichkey.ChangeLLMModelMsg:
 		m.isPromptActive = true
-		m.prompt.SetAction((prompt.LLMModelAction))
+		m.prompt.SetAction(prompt.LLMModelAction)
 		model, _ := m.config.GetLLMModel()
 		m.prompt.SetInitialValue(model)
 
 	case whichkey.SetEditorMsg:
 		m.isPromptActive = true
-		m.prompt.SetAction((prompt.EditorAction))
+		m.prompt.SetAction(prompt.EditorAction)
 		m.prompt.SetInitialValue(m.config.Editor())
 
 	case whichkey.ChangeLeaderMsg:
