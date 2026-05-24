@@ -152,7 +152,7 @@ FROM
 WHERE
     u.active = TRUE; /* Only active users */
 `,
-				expected: "\n\nSELECT\n    u.id,\n    u.name,\n    p.profile_data ->> 'email' AS email \nFROM\n    users u\n    JOIN profiles p ON u.id = p.user_id\nWHERE\n    u.active = TRUE; \n",
+			expected: "\n\nSELECT\n    u.id,\n    u.name,\n    p.profile_data ->> 'email' AS email \nFROM\n    users u\n    JOIN profiles p ON u.id = p.user_id\nWHERE\n    u.active = TRUE; \n",
 		},
 	}
 

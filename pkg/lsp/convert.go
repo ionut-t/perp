@@ -31,13 +31,13 @@ const (
 
 // lspCompletionItem represents a single item from an LSP completion response.
 type lspCompletionItem struct {
-	Label            string          `json:"label"`
-	Kind             completionItemKind `json:"kind,omitempty"`
-	Detail           string          `json:"detail,omitempty"`
-	Documentation    json.RawMessage `json:"documentation,omitempty"`
-	SortText         string          `json:"sortText,omitempty"`
-	FilterText       string          `json:"filterText,omitempty"`
-	InsertText       string          `json:"insertText,omitempty"`
+	Label         string             `json:"label"`
+	Kind          completionItemKind `json:"kind,omitempty"`
+	Detail        string             `json:"detail,omitempty"`
+	Documentation json.RawMessage    `json:"documentation,omitempty"`
+	SortText      string             `json:"sortText,omitempty"`
+	FilterText    string             `json:"filterText,omitempty"`
+	InsertText    string             `json:"insertText,omitempty"`
 }
 
 // kindToType maps an LSP CompletionItemKind to a human-readable type string
