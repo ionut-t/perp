@@ -87,9 +87,10 @@ func (m model) handleAddTables() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		message := "Table added to LLM schema"
-		if len(m.llmSharedTablesSchema) > 1 {
-			message = "Tables added to LLM schema"
+		n := len(m.llmSharedTablesSchema)
+		message := "1 table added to LLM schema"
+		if n > 1 {
+			message = fmt.Sprintf("%d tables added to LLM schema", n)
 		}
 
 		return llmSharedSchemaMsg{

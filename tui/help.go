@@ -62,6 +62,7 @@ func (m model) renderLLMHelp() string {
 		{"/add", `adds tables to the LLM instructions
 				 Example:
 				 /add users, orders
+				 /add * -> adds all tables to the LLM instructions
 				 `},
 		{"/remove", `removes tables from the LLM instructions
 				 Example:

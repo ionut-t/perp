@@ -46,16 +46,58 @@ func (m *model) validateLLMSchemaSharing() error {
 	return nil
 }
 
-// parseAddTablesCommand extracts and validates table names from the /add command
+// parseAddTablesCommand extracts and validates table names from the /add command.
+// The special value "*" resolves to all visible tables in the database.
 func (m *model) parseAddTablesCommand() ([]string, error) {
 	value := strings.TrimSpace(strings.TrimPrefix(m.editor.GetCurrentContent(), "/add"))
 	if value == "" {
 		return nil, fmt.Errorf("no tables specified to add")
 	}
 
+	if value == "*" {
+		return m.getAllTableNames()
+	}
+
 	tables := utils.ParseTableNames(value)
 	if len(tables) == 0 {
 		return nil, fmt.Errorf("no valid table names provided")
+	}
+
+	return tables, nil
+}
+
+// getAllTableNames returns the names of all visible tables in the database.
+func (m *model) getAllTableNames() ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DatabaseQueryTimeout)
+	defer cancel()
+
+	executor := psql.New(m.db)
+
+	cmd, err := psql.Parse(`\dt`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse list-tables command: %w", err)
+	}
+
+	result, err := executor.Execute(ctx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tables: %w", err)
+	}
+
+	if len(result.Rows) == 0 {
+		return nil, fmt.Errorf("no tables found in the database")
+	}
+
+	tables := make([]string, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		name, ok := row["Name"].(string)
+		if !ok || name == "" {
+			continue
+		}
+		tables = append(tables, name)
+	}
+
+	if len(tables) == 0 {
+		return nil, fmt.Errorf("no tables found in the database")
 	}
 
 	return tables, nil
