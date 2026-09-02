@@ -154,17 +154,16 @@ func PrepareJSON(queryResults []map[string]any, rows []int, all bool) (any, erro
 }
 
 // PrepareCSV processes query results and selected rows for CSV export.
-func PrepareCSV(queryResults []map[string]any, rows []int, all bool) ([][]string, error) {
+// The columns argument carries the column order returned by the query and is
+// used as the CSV header. When it is empty (or does not match the results), the
+// column names are derived from the first result and sorted alphabetically,
+// since a result row is a map and therefore carries no order of its own.
+func PrepareCSV(queryResults []map[string]any, columns []string, rows []int, all bool) ([][]string, error) {
 	if len(queryResults) == 0 {
 		return nil, errors.New("no query results to export")
 	}
 
-	// Create header and determine column order from the first result.
-	header := make([]string, 0, len(queryResults[0]))
-	for k := range queryResults[0] {
-		header = append(header, k)
-	}
-	slices.Sort(header)
+	header := buildHeader(queryResults[0], columns)
 
 	data := [][]string{header}
 
@@ -182,6 +181,31 @@ func PrepareCSV(queryResults []map[string]any, rows []int, all bool) ([][]string
 	}
 
 	return data, nil
+}
+
+// buildHeader returns the CSV header, preferring the column order reported by
+// the query and falling back to the sorted keys of a result row.
+func buildHeader(result map[string]any, columns []string) []string {
+	if len(columns) > 0 {
+		header := make([]string, 0, len(columns))
+		for _, column := range columns {
+			if _, ok := result[column]; ok {
+				header = append(header, column)
+			}
+		}
+
+		if len(header) == len(result) {
+			return header
+		}
+	}
+
+	header := make([]string, 0, len(result))
+	for k := range result {
+		header = append(header, k)
+	}
+	slices.Sort(header)
+
+	return header
 }
 
 // toSlice converts a map to a slice based on the provided header.

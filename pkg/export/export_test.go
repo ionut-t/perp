@@ -252,7 +252,6 @@ func TestPrepareJSONEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := PrepareJSON(tt.queryResults, tt.rows, tt.all)
-
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
@@ -307,5 +306,95 @@ func BenchmarkPrepareJSONAll(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		_, _ = PrepareJSON(sampleResults, []int{}, true)
+	}
+}
+
+func TestPrepareCSV_UsesQueryColumnOrder(t *testing.T) {
+	queryResults := []map[string]any{
+		{"name": "foo", "id": 1, "created_at": "2026-01-01"},
+		{"name": "bar", "id": 2, "created_at": "2026-01-02"},
+	}
+	columns := []string{"name", "id", "created_at"}
+
+	data, err := PrepareCSV(queryResults, columns, nil, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := [][]string{
+		{"name", "id", "created_at"},
+		{"foo", "1", "2026-01-01"},
+		{"bar", "2", "2026-01-02"},
+	}
+	if !reflect.DeepEqual(data, expected) {
+		t.Errorf("expected %v, got %v", expected, data)
+	}
+}
+
+func TestPrepareCSV_SelectedRowsUseQueryColumnOrder(t *testing.T) {
+	queryResults := []map[string]any{
+		{"name": "foo", "id": 1},
+		{"name": "bar", "id": 2},
+		{"name": "baz", "id": 3},
+	}
+	columns := []string{"name", "id"}
+
+	data, err := PrepareCSV(queryResults, columns, []int{1, 3}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := [][]string{
+		{"name", "id"},
+		{"foo", "1"},
+		{"baz", "3"},
+	}
+	if !reflect.DeepEqual(data, expected) {
+		t.Errorf("expected %v, got %v", expected, data)
+	}
+}
+
+func TestPrepareCSV_FallsBackToSortedKeysWithoutColumns(t *testing.T) {
+	queryResults := []map[string]any{
+		{"name": "foo", "id": 1, "created_at": "2026-01-01"},
+	}
+
+	data, err := PrepareCSV(queryResults, nil, nil, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := [][]string{
+		{"created_at", "id", "name"},
+		{"2026-01-01", "1", "foo"},
+	}
+	if !reflect.DeepEqual(data, expected) {
+		t.Errorf("expected %v, got %v", expected, data)
+	}
+}
+
+func TestPrepareCSV_FallsBackWhenColumnsDoNotCoverResults(t *testing.T) {
+	queryResults := []map[string]any{
+		{"name": "foo", "id": 1},
+	}
+
+	// Stale/partial columns must not silently drop the "id" column.
+	data, err := PrepareCSV(queryResults, []string{"name"}, nil, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := [][]string{
+		{"id", "name"},
+		{"1", "foo"},
+	}
+	if !reflect.DeepEqual(data, expected) {
+		t.Errorf("expected %v, got %v", expected, data)
+	}
+}
+
+func TestPrepareCSV_NoResults(t *testing.T) {
+	if _, err := PrepareCSV(nil, []string{"id"}, nil, true); err == nil {
+		t.Error("expected an error for empty query results")
 	}
 }

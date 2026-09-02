@@ -64,6 +64,7 @@ type Model struct {
 	dbSchema          string
 	llmSharedSchema   string
 	queryResults      []map[string]any
+	queryColumns      []string
 	viewport          viewport.Model
 	table             table.Model
 	server            server.Server
@@ -207,6 +208,7 @@ func (m *Model) GetError() error {
 
 func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 	m.queryResults = nil
+	m.queryColumns = nil
 
 	if len(result.Columns) == 0 {
 		content := lipgloss.JoinVertical(
@@ -223,6 +225,8 @@ func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 
 		return nil
 	}
+
+	m.queryColumns = result.Columns
 
 	m.queryResults = make([]map[string]any, len(result.Rows))
 	for i, row := range result.Rows {
@@ -260,8 +264,14 @@ func (m *Model) GetQueryResults() []map[string]any {
 	return m.queryResults
 }
 
+// GetQueryColumns returns the column names in the order reported by the query.
+func (m *Model) GetQueryColumns() []string {
+	return m.queryColumns
+}
+
 func (m *Model) SetPsqlResult(result *psql.Result) {
 	m.queryResults = result.Rows
+	m.queryColumns = result.Columns
 
 	if len(result.Rows) == 0 {
 		m.table.SetHeaders([]string{})
