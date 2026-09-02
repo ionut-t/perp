@@ -82,6 +82,9 @@ func FormatValue(val any, oid uint32) any {
 		}
 
 	case pgtype.JSONOID, pgtype.JSONBOID:
+		// A json/jsonb column decodes to whatever its top-level value is: an
+		// object, but equally an array, a string or a number. Every one of them
+		// is rendered back as JSON rather than as its Go representation.
 		switch v := val.(type) {
 		case []byte:
 			var out bytes.Buffer
@@ -89,7 +92,13 @@ func FormatValue(val any, oid uint32) any {
 				return out.String()
 			}
 			return string(v)
-		case map[string]any:
+		case string:
+			var out bytes.Buffer
+			if err := json.Compact(&out, []byte(v)); err == nil {
+				return out.String()
+			}
+			return v
+		default:
 			jsonBytes, err := json.Marshal(v)
 			if err == nil {
 				return string(jsonBytes)

@@ -1,15 +1,20 @@
 package export
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/ionut-t/perp/pkg/db"
 )
 
 // AsJson exports the provided data as a JSON file and opens it in the configured editor.
@@ -122,61 +127,123 @@ func generateUniqueName(name string, names []string) string {
 	return uniqueName + ext
 }
 
-// PrepareJSON processes query results and selected rows for export.
-func PrepareJSON(queryResults []map[string]any, rows []int, all bool) (any, error) {
-	if queryResults != nil {
-		var data any
-		if len(rows) > 1 {
-			data = make([]map[string]any, 0)
+// PrepareJSON processes query results and selected rows for export. The columns
+// argument carries the column order returned by the query, which the exported
+// objects keep.
+func PrepareJSON(queryResults []map[string]any, columns []string, rows []int, all bool) (any, error) {
+	if queryResults == nil {
+		return nil, errors.New("no query results to export")
+	}
 
-			for _, rowIdx := range rows {
-				idx := rowIdx - 1
-				if idx >= 0 && idx < len(queryResults) {
-					data = append(data.([]map[string]any), queryResults[idx])
-				}
-			}
-		} else if len(rows) == 1 {
-			idx := rows[0] - 1
-			if idx >= 0 && idx < len(queryResults) {
-				data = queryResults[idx]
-			}
-		}
-
-		if all {
-			data = make([]map[string]any, 0)
-			data = append(data.([]map[string]any), queryResults...)
+	if all {
+		data := make([]orderedRow, 0, len(queryResults))
+		for _, result := range queryResults {
+			data = append(data, newOrderedRow(result, columns))
 		}
 
 		return data, nil
 	}
 
-	return nil, errors.New("no query results to export")
+	if len(rows) == 1 {
+		idx := rows[0] - 1
+		if idx >= 0 && idx < len(queryResults) {
+			return newOrderedRow(queryResults[idx], columns), nil
+		}
+
+		return nil, nil
+	}
+
+	if len(rows) > 1 {
+		data := make([]orderedRow, 0, len(rows))
+		for _, rowIdx := range rows {
+			idx := rowIdx - 1
+			if idx >= 0 && idx < len(queryResults) {
+				data = append(data, newOrderedRow(queryResults[idx], columns))
+			}
+		}
+
+		return data, nil
+	}
+
+	return nil, nil
+}
+
+// orderedRow is a result row that marshals its columns in the order the query
+// returned them. A plain map cannot do this: encoding/json always sorts map
+// keys alphabetically.
+type orderedRow struct {
+	columns []string
+	values  map[string]any
+}
+
+// newOrderedRow pairs a row with its column order, falling back to the row's
+// sorted keys when the query order is unknown or does not cover the row.
+func newOrderedRow(values map[string]any, columns []string) orderedRow {
+	return orderedRow{
+		columns: buildHeader(values, columns),
+		values:  values,
+	}
+}
+
+func (r orderedRow) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+
+	buf.WriteByte('{')
+
+	for i, column := range r.columns {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+
+		key, err := json.Marshal(column)
+		if err != nil {
+			return nil, err
+		}
+
+		value, err := json.Marshal(r.values[column])
+		if err != nil {
+			return nil, err
+		}
+
+		buf.Write(key)
+		buf.WriteByte(':')
+		buf.Write(value)
+	}
+
+	buf.WriteByte('}')
+
+	return buf.Bytes(), nil
 }
 
 // PrepareCSV processes query results and selected rows for CSV export.
-func PrepareCSV(queryResults []map[string]any, rows []int, all bool) ([][]string, error) {
+// The columns argument carries the column order returned by the query and is
+// used as the CSV header. When it is empty (or does not match the results), the
+// column names are derived from the first result and sorted alphabetically,
+// since a result row is a map and therefore carries no order of its own.
+func PrepareCSV(
+	queryResults []map[string]any,
+	columns []string,
+	columnTypes map[string]uint32,
+	rows []int,
+	all bool,
+) ([][]string, error) {
 	if len(queryResults) == 0 {
 		return nil, errors.New("no query results to export")
 	}
 
-	// Create header and determine column order from the first result.
-	header := make([]string, 0, len(queryResults[0]))
-	for k := range queryResults[0] {
-		header = append(header, k)
-	}
-	slices.Sort(header)
+	header := buildHeader(queryResults[0], columns)
 
 	data := [][]string{header}
 
 	if all {
 		for _, result := range queryResults {
-			data = append(data, toSlice(result, header))
+			data = append(data, toSlice(result, header, columnTypes))
 		}
 	} else {
 		for _, rowIdx := range rows {
 			idx := rowIdx - 1
 			if idx >= 0 && idx < len(queryResults) {
-				data = append(data, toSlice(queryResults[idx], header))
+				data = append(data, toSlice(queryResults[idx], header, columnTypes))
 			}
 		}
 	}
@@ -184,14 +251,85 @@ func PrepareCSV(queryResults []map[string]any, rows []int, all bool) ([][]string
 	return data, nil
 }
 
+// buildHeader returns the CSV header, preferring the column order reported by
+// the query and falling back to the sorted keys of a result row.
+func buildHeader(result map[string]any, columns []string) []string {
+	if len(columns) > 0 {
+		header := make([]string, 0, len(columns))
+		for _, column := range columns {
+			if _, ok := result[column]; ok {
+				header = append(header, column)
+			}
+		}
+
+		if len(header) == len(result) {
+			return header
+		}
+	}
+
+	header := make([]string, 0, len(result))
+	for k := range result {
+		header = append(header, k)
+	}
+	slices.Sort(header)
+
+	return header
+}
+
 // toSlice converts a map to a slice based on the provided header.
-func toSlice(m map[string]any, header []string) []string {
+func toSlice(m map[string]any, header []string, columnTypes map[string]uint32) []string {
 	record := make([]string, len(header))
 	for i, key := range header {
 		if val, ok := m[key]; ok {
-			record[i] = fmt.Sprintf("%v", val)
+			record[i] = formatValue(val, columnTypes[key])
 		}
 	}
 
 	return record
+}
+
+// formatValue renders a value for a CSV field.
+//
+// NULL is written as an empty field (the convention used by COPY ... TO CSV)
+// rather than Go's "<nil>". Other values go through db.FormatValue, so bytea,
+// json, numeric and array columns are written the way PostgreSQL writes them
+// instead of dumping their Go representation.
+//
+// Floats and timestamps are the exception: db.FormatValue renders them for
+// display in the results table, which pads floats to six decimals and prints
+// timestamps in Go's own layout. A CSV file is read back by other tools, so
+// they are written in a round-trippable form here.
+//
+// A zero OID (the psql command path, whose values are already formatted by
+// db.ExtractPsqlResults) matches no type and leaves the value as it is.
+func formatValue(val any, oid uint32) string {
+	if isNil(val) {
+		return ""
+	}
+
+	switch v := val.(type) {
+	case time.Time:
+		return v.Format(time.RFC3339Nano)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+
+	return fmt.Sprintf("%v", db.FormatValue(val, oid))
+}
+
+// isNil reports whether val is nil, including a typed nil held in an interface.
+func isNil(val any) bool {
+	if val == nil {
+		return true
+	}
+
+	switch v := reflect.ValueOf(val); v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface,
+		reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
