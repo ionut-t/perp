@@ -1,6 +1,7 @@
 package export
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -126,35 +127,92 @@ func generateUniqueName(name string, names []string) string {
 	return uniqueName + ext
 }
 
-// PrepareJSON processes query results and selected rows for export.
-func PrepareJSON(queryResults []map[string]any, rows []int, all bool) (any, error) {
-	if queryResults != nil {
-		var data any
-		if len(rows) > 1 {
-			data = make([]map[string]any, 0)
+// PrepareJSON processes query results and selected rows for export. The columns
+// argument carries the column order returned by the query, which the exported
+// objects keep.
+func PrepareJSON(queryResults []map[string]any, columns []string, rows []int, all bool) (any, error) {
+	if queryResults == nil {
+		return nil, errors.New("no query results to export")
+	}
 
-			for _, rowIdx := range rows {
-				idx := rowIdx - 1
-				if idx >= 0 && idx < len(queryResults) {
-					data = append(data.([]map[string]any), queryResults[idx])
-				}
-			}
-		} else if len(rows) == 1 {
-			idx := rows[0] - 1
-			if idx >= 0 && idx < len(queryResults) {
-				data = queryResults[idx]
-			}
-		}
-
-		if all {
-			data = make([]map[string]any, 0)
-			data = append(data.([]map[string]any), queryResults...)
+	if all {
+		data := make([]orderedRow, 0, len(queryResults))
+		for _, result := range queryResults {
+			data = append(data, newOrderedRow(result, columns))
 		}
 
 		return data, nil
 	}
 
-	return nil, errors.New("no query results to export")
+	if len(rows) == 1 {
+		idx := rows[0] - 1
+		if idx >= 0 && idx < len(queryResults) {
+			return newOrderedRow(queryResults[idx], columns), nil
+		}
+
+		return nil, nil
+	}
+
+	if len(rows) > 1 {
+		data := make([]orderedRow, 0, len(rows))
+		for _, rowIdx := range rows {
+			idx := rowIdx - 1
+			if idx >= 0 && idx < len(queryResults) {
+				data = append(data, newOrderedRow(queryResults[idx], columns))
+			}
+		}
+
+		return data, nil
+	}
+
+	return nil, nil
+}
+
+// orderedRow is a result row that marshals its columns in the order the query
+// returned them. A plain map cannot do this: encoding/json always sorts map
+// keys alphabetically.
+type orderedRow struct {
+	columns []string
+	values  map[string]any
+}
+
+// newOrderedRow pairs a row with its column order, falling back to the row's
+// sorted keys when the query order is unknown or does not cover the row.
+func newOrderedRow(values map[string]any, columns []string) orderedRow {
+	return orderedRow{
+		columns: buildHeader(values, columns),
+		values:  values,
+	}
+}
+
+func (r orderedRow) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+
+	buf.WriteByte('{')
+
+	for i, column := range r.columns {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+
+		key, err := json.Marshal(column)
+		if err != nil {
+			return nil, err
+		}
+
+		value, err := json.Marshal(r.values[column])
+		if err != nil {
+			return nil, err
+		}
+
+		buf.Write(key)
+		buf.WriteByte(':')
+		buf.Write(value)
+	}
+
+	buf.WriteByte('}')
+
+	return buf.Bytes(), nil
 }
 
 // PrepareCSV processes query results and selected rows for CSV export.
