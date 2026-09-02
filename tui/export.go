@@ -52,7 +52,13 @@ func (m model) exportAsJSON(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 func (m model) exportAsCSV(msg command.ExportMsg) (tea.Model, tea.Cmd) {
 	queryResults := m.content.GetQueryResults()
 
-	data, err := export.PrepareCSV(queryResults, m.content.GetQueryColumns(), msg.Rows, msg.All)
+	data, err := export.PrepareCSV(
+		queryResults,
+		m.content.GetQueryColumns(),
+		m.content.GetQueryColumnTypes(),
+		msg.Rows,
+		msg.All,
+	)
 	if err != nil {
 		m.focusEditor()
 		return m, m.errorNotification(err)

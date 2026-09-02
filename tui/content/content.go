@@ -65,6 +65,7 @@ type Model struct {
 	llmSharedSchema   string
 	queryResults      []map[string]any
 	queryColumns      []string
+	queryColumnTypes  map[string]uint32
 	viewport          viewport.Model
 	table             table.Model
 	server            server.Server
@@ -209,6 +210,7 @@ func (m *Model) GetError() error {
 func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 	m.queryResults = nil
 	m.queryColumns = nil
+	m.queryColumnTypes = nil
 
 	if len(result.Columns) == 0 {
 		content := lipgloss.JoinVertical(
@@ -227,6 +229,15 @@ func (m *Model) SetQueryResults(result ParsedQueryResult) error {
 	}
 
 	m.queryColumns = result.Columns
+
+	// The column types are needed to format values on export; a column has the
+	// same type in every row, so the first one is enough.
+	if len(result.Rows) > 0 {
+		m.queryColumnTypes = make(map[string]uint32, len(result.Rows[0]))
+		for column, value := range result.Rows[0] {
+			m.queryColumnTypes[column] = value.Type
+		}
+	}
 
 	m.queryResults = make([]map[string]any, len(result.Rows))
 	for i, row := range result.Rows {
@@ -269,9 +280,16 @@ func (m *Model) GetQueryColumns() []string {
 	return m.queryColumns
 }
 
+// GetQueryColumnTypes returns the PostgreSQL OID of each column. It is empty
+// for psql command results, whose values are already formatted.
+func (m *Model) GetQueryColumnTypes() map[string]uint32 {
+	return m.queryColumnTypes
+}
+
 func (m *Model) SetPsqlResult(result *psql.Result) {
 	m.queryResults = result.Rows
 	m.queryColumns = result.Columns
+	m.queryColumnTypes = nil
 
 	if len(result.Rows) == 0 {
 		m.table.SetHeaders([]string{})

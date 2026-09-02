@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/ionut-t/perp/pkg/db"
 )
 
 // AsJson exports the provided data as a JSON file and opens it in the configured editor.
@@ -158,7 +162,13 @@ func PrepareJSON(queryResults []map[string]any, rows []int, all bool) (any, erro
 // used as the CSV header. When it is empty (or does not match the results), the
 // column names are derived from the first result and sorted alphabetically,
 // since a result row is a map and therefore carries no order of its own.
-func PrepareCSV(queryResults []map[string]any, columns []string, rows []int, all bool) ([][]string, error) {
+func PrepareCSV(
+	queryResults []map[string]any,
+	columns []string,
+	columnTypes map[string]uint32,
+	rows []int,
+	all bool,
+) ([][]string, error) {
 	if len(queryResults) == 0 {
 		return nil, errors.New("no query results to export")
 	}
@@ -169,13 +179,13 @@ func PrepareCSV(queryResults []map[string]any, columns []string, rows []int, all
 
 	if all {
 		for _, result := range queryResults {
-			data = append(data, toSlice(result, header))
+			data = append(data, toSlice(result, header, columnTypes))
 		}
 	} else {
 		for _, rowIdx := range rows {
 			idx := rowIdx - 1
 			if idx >= 0 && idx < len(queryResults) {
-				data = append(data, toSlice(queryResults[idx], header))
+				data = append(data, toSlice(queryResults[idx], header, columnTypes))
 			}
 		}
 	}
@@ -209,13 +219,59 @@ func buildHeader(result map[string]any, columns []string) []string {
 }
 
 // toSlice converts a map to a slice based on the provided header.
-func toSlice(m map[string]any, header []string) []string {
+func toSlice(m map[string]any, header []string, columnTypes map[string]uint32) []string {
 	record := make([]string, len(header))
 	for i, key := range header {
 		if val, ok := m[key]; ok {
-			record[i] = fmt.Sprintf("%v", val)
+			record[i] = formatValue(val, columnTypes[key])
 		}
 	}
 
 	return record
+}
+
+// formatValue renders a value for a CSV field.
+//
+// NULL is written as an empty field (the convention used by COPY ... TO CSV)
+// rather than Go's "<nil>". Other values go through db.FormatValue, so bytea,
+// json, numeric and array columns are written the way PostgreSQL writes them
+// instead of dumping their Go representation.
+//
+// Floats and timestamps are the exception: db.FormatValue renders them for
+// display in the results table, which pads floats to six decimals and prints
+// timestamps in Go's own layout. A CSV file is read back by other tools, so
+// they are written in a round-trippable form here.
+//
+// A zero OID (the psql command path, whose values are already formatted by
+// db.ExtractPsqlResults) matches no type and leaves the value as it is.
+func formatValue(val any, oid uint32) string {
+	if isNil(val) {
+		return ""
+	}
+
+	switch v := val.(type) {
+	case time.Time:
+		return v.Format(time.RFC3339Nano)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+
+	return fmt.Sprintf("%v", db.FormatValue(val, oid))
+}
+
+// isNil reports whether val is nil, including a typed nil held in an interface.
+func isNil(val any) bool {
+	if val == nil {
+		return true
+	}
+
+	switch v := reflect.ValueOf(val); v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface,
+		reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }

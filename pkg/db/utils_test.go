@@ -40,6 +40,27 @@ func TestFormatValue(t *testing.T) {
 			expected: "{\"bazz\":\"buzz\",\"foo\":\"bar\"}",
 		},
 		{
+			name: "jsonb value from array",
+			input: []any{
+				map[string]any{"name": "Liverpool", "price": 1.53},
+				map[string]any{"name": "Draw"},
+			},
+			oid:      pgtype.JSONBOID,
+			expected: `[{"name":"Liverpool","price":1.53},{"name":"Draw"}]`,
+		},
+		{
+			name:     "jsonb value from string",
+			input:    `{"key": "value"}`,
+			oid:      pgtype.JSONBOID,
+			expected: `{"key":"value"}`,
+		},
+		{
+			name:     "jsonb scalar value",
+			input:    float64(5),
+			oid:      pgtype.JSONBOID,
+			expected: "5",
+		},
+		{
 			name:     "uuid value",
 			input:    uuidBytes,
 			oid:      pgtype.UUIDOID,
