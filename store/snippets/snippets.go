@@ -152,6 +152,16 @@ func (s *store) Create(name, content string, scope SnippetScope) error {
 		return fmt.Errorf("failed to parse snippet content: %w", err)
 	}
 
+	// Delegate to the appropriate FileStore
+	fs := s.serverFS
+	if scope == ScopeGlobal {
+		fs = s.globalFS
+	}
+
+	if err := fs.Update(snippet); err != nil {
+		return err
+	}
+
 	// Set as current if it's the first snippet
 	s.mu.Lock()
 	if s.currentSnippetName == "" {
@@ -159,11 +169,7 @@ func (s *store) Create(name, content string, scope SnippetScope) error {
 	}
 	s.mu.Unlock()
 
-	// Delegate to the appropriate FileStore
-	if scope == ScopeGlobal {
-		return s.globalFS.Update(snippet)
-	}
-	return s.serverFS.Update(snippet)
+	return nil
 }
 
 func (s *store) Update(snippet Snippet) error {

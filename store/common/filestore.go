@@ -68,8 +68,18 @@ func (s *FileStore[T]) Load() ([]T, error) {
 	return s.items, nil
 }
 
-// Update writes the content of the provided item to storage
+// Update writes the content of the provided item to storage.
+// The storage directory is created if it doesn't exist yet, since it is
+// removed whenever the last item is deleted (see CleanEmptyStorageDir).
 func (s *FileStore[T]) Update(item T) error {
+	if s.storage == "" {
+		return errors.New("storage directory is not configured")
+	}
+
+	if err := os.MkdirAll(s.storage, 0o755); err != nil {
+		return fmt.Errorf("failed to create storage directory %q: %w", s.storage, err)
+	}
+
 	path := filepath.Join(s.storage, item.GetName())
 
 	if err := os.WriteFile(path, []byte(item.GetContent()), 0o644); err != nil {
