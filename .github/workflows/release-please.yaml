@@ -9,7 +9,7 @@ permissions:
   pull-requests: write
 
 env:
-  GO_VERSION: "1.27.0"
+  GO_VERSION: "1.27.3"
 
 jobs:
   release-please:
