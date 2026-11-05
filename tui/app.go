@@ -118,6 +118,8 @@ func New(config config.Config, url string) model {
 	textEditor.WithCompletionAutoTrigger(true)
 	textEditor.WithCompletionDebounce(100)
 	textEditor.SetCompletionMenuMaxVisibleItems(5)
+	textEditor.SetMoveAcrossLines(true)
+	textEditor.SetCommandLineHeight(0)
 
 	historyLogs, err := history.Get(config.Storage())
 	if err != nil {
