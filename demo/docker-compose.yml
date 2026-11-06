@@ -1,0 +1,21 @@
+# Throwaway PostgreSQL used only for recording the README demo (see demo/record.sh).
+name: perp-demo
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: bookshop
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U demo -d bookshop"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

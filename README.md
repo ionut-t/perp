@@ -2,6 +2,10 @@
 
 **perp** is a TUI application for interacting with PostgreSQL databases.
 
+![perp demo: connect to a server, list tables, describe a table, run a query, browse the results and export them as CSV](assets/demo.gif)
+
+<sub>Recorded with [VHS](https://github.com/charmbracelet/vhs) against a throwaway demo database. Regenerate with `./demo/record.sh`.</sub>
+
 ## Features
 
 - **Cross-platform**: works on Linux, macOS and Windows.
